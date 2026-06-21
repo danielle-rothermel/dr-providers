@@ -9,14 +9,10 @@ from pydantic import (
     Field,
 )
 
-from dr_providers.config import SamplingControls  # noqa: TC001
+from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
 from dr_providers.names import MessageRole, ProviderName  # noqa: TC001
-from dr_providers.query.provider_config import (
-    ProviderConfig,
-    ReasoningWarning,
-    resolve_api_key,
-)
-from dr_providers.query.reasoning import ReasoningSpec  # noqa: TC001
+from dr_providers.query.reasoning import ReasoningWarning  # noqa: TC001
+from dr_providers.query.transport_config import ProviderConfig, resolve_api_key
 
 
 class Message(BaseModel):

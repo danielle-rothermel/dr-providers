@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Protocol, Self
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -15,22 +14,17 @@ from tenacity import (
 
 from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
 from dr_providers.names import MessageRole, ProviderName
-from dr_providers.query.provider_config import (
-    ProviderConfig,
-    ProviderTransportError,
-    ReasoningWarning,
-)
-from dr_providers.query.reasoning import ReasoningExtraBody, ReasoningPayload
+from dr_providers.query.errors import ProviderTransportError
+from dr_providers.query.reasoning import ReasoningWarning, RequestControls
 from dr_providers.query.request import LlmRequest, Message, OpenAICompatRequest
 from dr_providers.query.response import (
     LlmResponse,
     OpenAICompatResponse,
 )
+from dr_providers.query.transport_config import ProviderConfig
 
 if TYPE_CHECKING:
-    from dr_providers.query.provider_config import (
-        ProviderAvailabilityStatus,
-    )
+    from dr_providers.query.transport_config import ProviderAvailabilityStatus
 
 
 class ProviderTransport(ABC):
@@ -148,24 +142,6 @@ class ApiProvider(ProviderTransport):
             latency_ms=latency_ms,
             warnings=provider_request.warnings,
         )
-
-
-class RequestControls(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    extra_body: dict[str, Any] = Field(default_factory=dict)
-    warnings: list[Any] = Field(default_factory=list)
-
-    @classmethod
-    def from_reasoning(
-        cls, reasoning: ReasoningSpec | None
-    ) -> RequestControls:
-        if reasoning is None:
-            return cls()
-
-        extra_body = ReasoningExtraBody(
-            reasoning=ReasoningPayload.from_spec(reasoning)
-        ).model_dump(mode="json", exclude_none=True)
-        return cls(extra_body=extra_body)
 
 
 class OpenRouterProvider(ApiProvider):

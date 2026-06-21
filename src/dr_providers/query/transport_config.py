@@ -1,6 +1,6 @@
 import os
 import shutil
-from typing import Any, Self
+from typing import Self
 
 from pydantic import (
     BaseModel,
@@ -10,25 +10,7 @@ from pydantic import (
     model_validator,
 )
 
-
-class ProviderError(Exception):
-    pass
-
-
-class ProviderTransportError(ProviderError):
-    pass
-
-
-class ProviderSemanticError(ProviderError):
-    pass
-
-
-class ReasoningWarning(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    message: str
-    provider: str | None = None
-    details: dict[str, Any] = Field(default_factory=dict)
+from dr_providers.query.errors import ProviderSemanticError
 
 
 class ProviderAvailabilityStatus(BaseModel):

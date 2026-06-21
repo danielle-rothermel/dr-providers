@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from dr_providers.query.provider_config import (
+from dr_providers.query.errors import (
     ProviderSemanticError,
     ProviderTransportError,
-    ReasoningWarning,
 )
+from dr_providers.query.reasoning import ReasoningWarning  # noqa: TC001
 
 if TYPE_CHECKING:
     import httpx
