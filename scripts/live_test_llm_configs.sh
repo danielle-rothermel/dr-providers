@@ -33,20 +33,10 @@ run_config() {
         "$@"
 }
 
-run_config_default_sampling() {
-    local label="$1"
-    shift
-
-    printf '\n==> %s\n' "${label}"
-    uv run python scripts/query_provider.py \
-        --message "${MESSAGE}" \
-        "$@"
-}
-
 failures=0
 
-run_config "openrouter/xiaomi/mimo-v2-flash/off/v1" \
-    --model "xiaomi/mimo-v2-flash" \
+run_config "openrouter/xiaomi/mimo-v2.5/off/v1" \
+    --model "xiaomi/mimo-v2.5" \
     --reasoning-disabled \
     || failures=$((failures + 1))
 
@@ -85,11 +75,6 @@ run_config "openrouter/openai/gpt-oss-20b/low/v1" \
     --effort low \
     || failures=$((failures + 1))
 
-run_config_default_sampling \
-    "google/gemini-3.1-flash-lite (reasoning disabled, default sampling)" \
-    --model "google/gemini-3.1-flash-lite" \
-    --reasoning-disabled \
-    || failures=$((failures + 1))
 
 printf '\n'
 if [[ "${failures}" -eq 0 ]]; then
