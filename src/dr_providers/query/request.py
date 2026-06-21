@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
+from uuid import uuid4
 
 from pydantic import (
     BaseModel,
@@ -8,9 +9,14 @@ from pydantic import (
     Field,
 )
 
-if TYPE_CHECKING:
-    from dr_providers.config import ReasoningSpec, SamplingControls
-    from dr_providers.names import MessageRole, ProviderName
+from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
+from dr_providers.names import MessageRole, ProviderName  # noqa: TC001
+from dr_providers.query.provider_config import (
+    OpenAICompatConfig,
+    ReasoningWarning,
+    resolve_api_key,
+)
+from dr_providers.query.reasoning import ReasoningExtraBody, ReasoningPayload
 
 
 class Message(BaseModel):
@@ -43,3 +49,119 @@ class LlmRequest(BaseModel):
     @property
     def sampling_top_p(self) -> float | None:
         return self.sampling.top_p if self.sampling is not None else None
+
+
+class RequestControls(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[Any] = Field(default_factory=list)
+
+    @classmethod
+    def from_reasoning(
+        cls, reasoning: ReasoningSpec | None
+    ) -> RequestControls:
+        if reasoning is None:
+            return cls()
+
+        extra_body = ReasoningExtraBody(
+            reasoning=ReasoningPayload.from_spec(reasoning)
+        ).model_dump(mode="json", exclude_none=True)
+        return cls(extra_body=extra_body)
+
+
+class OpenAICompatRequest(BaseModel):
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", arbitrary_types_allowed=True
+    )
+
+    provider: str = Field(exclude=True)
+    model: str
+    messages: list[dict[str, Any]]
+    temperature: float | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+    base_url: str = Field(exclude=True)
+    chat_path: str = Field(exclude=True)
+    max_completion_token_model_families: tuple[Any, ...] = Field(
+        exclude=True, default_factory=tuple
+    )
+    api_key_env: str = Field(exclude=True)
+    api_key: str = Field(exclude=True, repr=False)
+    idempotency_key: str = Field(exclude=True)
+    warnings: list[ReasoningWarning] = Field(
+        default_factory=list, exclude=True
+    )
+
+    @classmethod
+    def from_llm_request(
+        cls,
+        request: LlmRequest,
+        config: OpenAICompatConfig,
+        *,
+        reasoning_effort: str | None = None,
+        extra_body: dict[str, Any] | None = None,
+        warnings: list[ReasoningWarning] | None = None,
+    ) -> OpenAICompatRequest:
+        return cls(
+            provider=str(request.provider),
+            model=request.model,
+            messages=cls._to_openai_messages(request.messages),
+            temperature=request.sampling_temperature,
+            top_p=request.sampling_top_p,
+            max_tokens=request.max_tokens,
+            reasoning_effort=reasoning_effort,
+            extra_body=extra_body or {},
+            base_url=config.base_url,
+            chat_path=config.chat_path,
+            max_completion_token_model_families=(
+                config.max_completion_token_model_families
+            ),
+            api_key_env=config.api_key_env,
+            api_key=resolve_api_key(config, label=request.provider),
+            idempotency_key=cls._resolve_idempotency_key(request=request),
+            warnings=warnings or [],
+        )
+
+    @staticmethod
+    def _to_openai_messages(messages: list[Message]) -> list[dict[str, str]]:
+        return [
+            {"role": message.role, "content": message.content}
+            for message in messages
+        ]
+
+    @staticmethod
+    def _resolve_idempotency_key(*, request: LlmRequest) -> str:
+        raw_idempotency_key = request.metadata.get("idempotency_key")
+        if isinstance(raw_idempotency_key, str) and raw_idempotency_key:
+            return raw_idempotency_key
+        return uuid4().hex
+
+    def endpoint(self) -> str:
+        return self.base_url.rstrip("/") + self.chat_path
+
+    def headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Idempotency-Key": self.idempotency_key,
+        }
+
+    def json_payload(self) -> dict[str, Any]:
+        payload = self.model_dump(
+            mode="json", exclude_none=True, exclude={"extra_body"}
+        )
+        if "max_tokens" in payload:
+            # TODO: will this break things?
+            payload["max_completion_tokens"] = payload["max_tokens"]
+
+        overlapping_keys = sorted(set(self.extra_body) & set(payload))
+        if overlapping_keys:
+            conflicts = ", ".join(overlapping_keys)
+            raise ValueError(
+                "extra_body conflicts with "
+                f"validated payload keys: {conflicts}"
+            )
+        payload.update(self.extra_body)
+        return payload

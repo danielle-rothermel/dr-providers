@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from pydantic import BaseModel, ConfigDict
 
-if TYPE_CHECKING:
-    from dr_providers.names import EffortLevel, ProviderName
+from dr_providers.names import EffortLevel, ProviderName  # noqa: TC001
 
 
 class ReasoningSpec(BaseModel):
