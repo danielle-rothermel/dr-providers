@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "httpx>=0.28.1",
     "marimo[recommended]>=0.23.10",
     "pydantic>=2.13.4",
     "tenacity>=9.1.4",

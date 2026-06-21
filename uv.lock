@@ -212,6 +212,7 @@ name = "dr-providers"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "marimo", extra = ["recommended"] },
     { name = "pydantic" },
     { name = "tenacity" },
@@ -227,6 +228,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "marimo", extras = ["recommended"], specifier = ">=0.23.10" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "tenacity", specifier = ">=9.1.4" },
