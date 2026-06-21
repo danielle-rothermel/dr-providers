@@ -213,10 +213,16 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
-    { name = "marimo", extra = ["recommended"] },
     { name = "pydantic" },
     { name = "tenacity" },
+]
+
+[package.optional-dependencies]
+cli = [
     { name = "typer" },
+]
+notebooks = [
+    { name = "marimo", extra = ["recommended"] },
 ]
 
 [package.dev-dependencies]
@@ -224,22 +230,25 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
+    { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "marimo", extras = ["recommended"], specifier = ">=0.23.10" },
+    { name = "marimo", extras = ["recommended"], marker = "extra == 'notebooks'", specifier = ">=0.23.10" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "tenacity", specifier = ">=9.1.4" },
-    { name = "typer", specifier = ">=0.26.7" },
+    { name = "typer", marker = "extra == 'cli'", specifier = ">=0.26.7" },
 ]
+provides-extras = ["cli", "notebooks"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.15.18" },
     { name = "ty", specifier = ">=0.0.51" },
+    { name = "typer", specifier = ">=0.26.7" },
 ]
 
 [[package]]

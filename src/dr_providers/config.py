@@ -27,6 +27,5 @@ class LlmConfig(BaseModel):
     provider: ProviderName
     model: str
     max_tokens: int | None = None
-    effort: EffortLevel | None = None
     reasoning: ReasoningSpec | None = None
     sampling: SamplingControls | None = None
