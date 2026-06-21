@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Protocol, Self
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -12,17 +13,15 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from dr_providers.names import ProviderName
+from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
+from dr_providers.names import MessageRole, ProviderName
 from dr_providers.query.provider_config import (
-    OpenAICompatConfig,
+    ProviderConfig,
     ProviderTransportError,
     ReasoningWarning,
 )
-from dr_providers.query.request import (
-    LlmRequest,
-    OpenAICompatRequest,
-    RequestControls,
-)
+from dr_providers.query.reasoning import ReasoningExtraBody, ReasoningPayload
+from dr_providers.query.request import LlmRequest, Message, OpenAICompatRequest
 from dr_providers.query.response import (
     LlmResponse,
     OpenAICompatResponse,
@@ -31,7 +30,6 @@ from dr_providers.query.response import (
 if TYPE_CHECKING:
     from dr_providers.query.provider_config import (
         ProviderAvailabilityStatus,
-        ProviderConfig,
     )
 
 
@@ -152,8 +150,26 @@ class ApiProvider(ProviderTransport):
         )
 
 
+class RequestControls(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[Any] = Field(default_factory=list)
+
+    @classmethod
+    def from_reasoning(
+        cls, reasoning: ReasoningSpec | None
+    ) -> RequestControls:
+        if reasoning is None:
+            return cls()
+
+        extra_body = ReasoningExtraBody(
+            reasoning=ReasoningPayload.from_spec(reasoning)
+        ).model_dump(mode="json", exclude_none=True)
+        return cls(extra_body=extra_body)
+
+
 class OpenRouterProvider(ApiProvider):
-    _config: OpenAICompatConfig
+    _config: ProviderConfig
 
     def __init__(
         self,
@@ -161,7 +177,7 @@ class OpenRouterProvider(ApiProvider):
         client: httpx.Client | None = None,
     ) -> None:
         super().__init__(
-            config=OpenAICompatConfig(
+            config=ProviderConfig(
                 name=ProviderName.OPENROUTER,
                 base_url=ProviderName.OPENROUTER.api_base_url,
                 api_key_env=ProviderName.OPENROUTER.api_key_env(),
@@ -170,7 +186,7 @@ class OpenRouterProvider(ApiProvider):
         )
 
     @property
-    def config(self) -> OpenAICompatConfig:
+    def config(self) -> ProviderConfig:
         return self._config
 
     def _build_request(self, request: LlmRequest) -> OpenAICompatRequest:
@@ -186,3 +202,31 @@ class OpenRouterProvider(ApiProvider):
         self, response: httpx.Response
     ) -> OpenAICompatResponse:
         return OpenAICompatResponse.from_http_response(response)
+
+
+def execute_query(  # noqa: PLR0913
+    provider: ApiProvider,
+    provider_name: ProviderName,
+    model: str,
+    prompt: str,
+    *,
+    system: str | None = None,
+    max_tokens: int | None = None,
+    reasoning: ReasoningSpec | None = None,
+    sampling: SamplingControls | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> LlmResponse:
+    messages: list[Message] = []
+    if system is not None:
+        messages.append(Message(role=MessageRole.SYSTEM, content=system))
+    messages.append(Message(role=MessageRole.USER, content=prompt))
+    request = LlmRequest(
+        provider=provider_name,
+        model=model,
+        messages=messages,
+        max_tokens=max_tokens,
+        reasoning=reasoning,
+        sampling=sampling,
+        metadata=metadata or {},
+    )
+    return provider.generate(request)

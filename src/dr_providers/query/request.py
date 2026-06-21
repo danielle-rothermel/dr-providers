@@ -9,14 +9,14 @@ from pydantic import (
     Field,
 )
 
-from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
+from dr_providers.config import SamplingControls  # noqa: TC001
 from dr_providers.names import MessageRole, ProviderName  # noqa: TC001
 from dr_providers.query.provider_config import (
-    OpenAICompatConfig,
+    ProviderConfig,
     ReasoningWarning,
     resolve_api_key,
 )
-from dr_providers.query.reasoning import ReasoningExtraBody, ReasoningPayload
+from dr_providers.query.reasoning import ReasoningSpec  # noqa: TC001
 
 
 class Message(BaseModel):
@@ -51,24 +51,6 @@ class LlmRequest(BaseModel):
         return self.sampling.top_p if self.sampling is not None else None
 
 
-class RequestControls(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    extra_body: dict[str, Any] = Field(default_factory=dict)
-    warnings: list[Any] = Field(default_factory=list)
-
-    @classmethod
-    def from_reasoning(
-        cls, reasoning: ReasoningSpec | None
-    ) -> RequestControls:
-        if reasoning is None:
-            return cls()
-
-        extra_body = ReasoningExtraBody(
-            reasoning=ReasoningPayload.from_spec(reasoning)
-        ).model_dump(mode="json", exclude_none=True)
-        return cls(extra_body=extra_body)
-
-
 class OpenAICompatRequest(BaseModel):
     model_config = ConfigDict(
         frozen=True, extra="forbid", arbitrary_types_allowed=True
@@ -83,10 +65,7 @@ class OpenAICompatRequest(BaseModel):
     reasoning_effort: str | None = None
     extra_body: dict[str, Any] = Field(default_factory=dict)
     base_url: str = Field(exclude=True)
-    chat_path: str = Field(exclude=True)
-    max_completion_token_model_families: tuple[Any, ...] = Field(
-        exclude=True, default_factory=tuple
-    )
+    chat_path: str | None = Field(exclude=True)
     api_key_env: str = Field(exclude=True)
     api_key: str = Field(exclude=True, repr=False)
     idempotency_key: str = Field(exclude=True)
@@ -98,7 +77,7 @@ class OpenAICompatRequest(BaseModel):
     def from_llm_request(
         cls,
         request: LlmRequest,
-        config: OpenAICompatConfig,
+        config: ProviderConfig,
         *,
         reasoning_effort: str | None = None,
         extra_body: dict[str, Any] | None = None,
@@ -115,9 +94,6 @@ class OpenAICompatRequest(BaseModel):
             extra_body=extra_body or {},
             base_url=config.base_url,
             chat_path=config.chat_path,
-            max_completion_token_model_families=(
-                config.max_completion_token_model_families
-            ),
             api_key_env=config.api_key_env,
             api_key=resolve_api_key(config, label=request.provider),
             idempotency_key=cls._resolve_idempotency_key(request=request),
@@ -139,6 +115,8 @@ class OpenAICompatRequest(BaseModel):
         return uuid4().hex
 
     def endpoint(self) -> str:
+        if self.chat_path is None:
+            return self.base_url
         return self.base_url.rstrip("/") + self.chat_path
 
     def headers(self) -> dict[str, str]:

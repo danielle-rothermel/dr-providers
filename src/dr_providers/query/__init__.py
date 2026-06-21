@@ -9,10 +9,9 @@ from dr_providers.query.request import (
     LlmRequest,
     Message,
     OpenAICompatRequest,
-    RequestControls,
 )
 from dr_providers.query.response import LlmResponse
-from dr_providers.query.transport import OpenRouterProvider
+from dr_providers.query.transport import OpenRouterProvider, execute_query
 
 __all__ = [
     "LlmConfig",
@@ -29,26 +28,5 @@ __all__ = [
     "ReasoningSpec",
     "RequestControls",
     "SamplingControls",
-    "query",
+    "execute_query",
 ]
-
-
-def query(
-    prompt: str,
-    *,
-    model: str = "openai/gpt-4o-mini",
-    system: str | None = None,
-    max_tokens: int | None = None,
-) -> LlmResponse:
-    messages: list[Message] = []
-    if system is not None:
-        messages.append(Message(role=MessageRole.SYSTEM, content=system))
-    messages.append(Message(role=MessageRole.USER, content=prompt))
-    request = LlmRequest(
-        provider=ProviderName.OPENROUTER,
-        model=model,
-        messages=messages,
-        max_tokens=max_tokens,
-    )
-    with OpenRouterProvider() as provider:
-        return provider.generate(request)

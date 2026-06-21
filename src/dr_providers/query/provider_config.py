@@ -52,6 +52,16 @@ class ProviderConfig(BaseModel):
     base_url: str
     api_key_env: str
     api_key: str | None = None
+    chat_path: str | None = "/chat/completions"
+
+    @field_validator("chat_path")
+    @classmethod
+    def _ensure_leading_slash(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if not v.startswith("/"):
+            return f"/{v}"
+        return v
 
     @model_validator(mode="after")
     def _compute_api_env_requirements(self) -> Self:
@@ -87,20 +97,6 @@ class ProviderConfig(BaseModel):
             missing_executables=missing_exec,
             supports_structured_output=self.supports_structured_output,
         )
-
-
-class OpenAICompatConfig(ProviderConfig):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-
-    chat_path: str = "/chat/completions"
-    max_completion_token_model_families: tuple[Any, ...] = ()
-
-    @field_validator("chat_path")
-    @classmethod
-    def _ensure_leading_slash(cls, v: str) -> str:
-        if not v.startswith("/"):
-            return f"/{v}"
-        return v
 
 
 def resolve_api_key(
