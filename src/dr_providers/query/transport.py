@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Protocol, Self
+from typing import TYPE_CHECKING, Self
 
 import httpx
 from tenacity import (
@@ -12,16 +12,17 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
-from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
-from dr_providers.names import MessageRole, ProviderName
 from dr_providers.query.errors import ProviderTransportError
-from dr_providers.query.reasoning import ReasoningWarning, RequestControls
-from dr_providers.query.request import LlmRequest, Message, OpenAICompatRequest
-from dr_providers.query.response import LlmResponse, llm_response_from_http
-from dr_providers.query.transport_config import ProviderConfig
+from dr_providers.query.reasoning import RequestControls
+from dr_providers.query.response import llm_response_from_http
 
 if TYPE_CHECKING:
-    from dr_providers.query.transport_config import ProviderAvailabilityStatus
+    from dr_providers.query.request import LlmRequest
+    from dr_providers.query.response import LlmResponse
+    from dr_providers.query.transport_config import (
+        ProviderAvailabilityStatus,
+        ProviderConfig,
+    )
 
 
 class ProviderTransport(ABC):
@@ -47,16 +48,6 @@ class ProviderTransport(ABC):
 
     def close(self) -> None:
         return None
-
-
-class ApiProviderRequest(Protocol):
-    warnings: list[ReasoningWarning]
-
-    def endpoint(self) -> str: ...
-
-    def headers(self) -> dict[str, str]: ...
-
-    def json_payload(self) -> dict[str, Any]: ...
 
 
 class ApiProvider(ProviderTransport):
@@ -86,10 +77,6 @@ class ApiProvider(ProviderTransport):
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
-    @abstractmethod
-    def _build_request(self, request: LlmRequest) -> ApiProviderRequest:
-        """Translate an ``LlmRequest`` into an ``ApiProviderRequest``."""
-
     @retry(
         retry=retry_if_exception_type(
             (httpx.TimeoutException, httpx.TransportError)
@@ -98,20 +85,19 @@ class ApiProvider(ProviderTransport):
         stop=stop_after_attempt(3),
         reraise=True,
     )
-    def _post_with_retry(
-        self, provider_request: ApiProviderRequest
-    ) -> httpx.Response:
+    def _post_with_retry(self, prepared: LlmRequest) -> httpx.Response:
         return self._client.post(
-            provider_request.endpoint(),
-            headers=provider_request.headers(),
-            json=provider_request.json_payload(),
+            prepared.endpoint(),
+            headers=prepared.headers(),
+            json=prepared.json_payload(),
         )
 
     def generate(self, request: LlmRequest) -> LlmResponse:
-        provider_request = self._build_request(request)
+        controls = RequestControls.from_reasoning(request.reasoning)
+        prepared = request.prepare(self._config, controls=controls)
         started = time.perf_counter()
         try:
-            response = self._post_with_retry(provider_request)
+            response = self._post_with_retry(prepared)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             raise ProviderTransportError(
                 f"{self.name} HTTP request failed: {exc}"
@@ -121,64 +107,5 @@ class ApiProvider(ProviderTransport):
             response,
             request,
             latency_ms=latency_ms,
-            warnings=provider_request.warnings,
+            warnings=prepared.warnings,
         )
-
-
-class OpenRouterProvider(ApiProvider):
-    _config: ProviderConfig
-
-    def __init__(
-        self,
-        *,
-        client: httpx.Client | None = None,
-    ) -> None:
-        super().__init__(
-            config=ProviderConfig(
-                name=ProviderName.OPENROUTER,
-                base_url=ProviderName.OPENROUTER.api_base_url,
-                api_key_env=ProviderName.OPENROUTER.api_key_env(),
-            ),
-            client=client,
-        )
-
-    @property
-    def config(self) -> ProviderConfig:
-        return self._config
-
-    def _build_request(self, request: LlmRequest) -> OpenAICompatRequest:
-        request_controls = RequestControls.from_reasoning(request.reasoning)
-        return OpenAICompatRequest.from_llm_request(
-            request,
-            self._config,
-            extra_body=request_controls.extra_body,
-            warnings=request_controls.warnings,
-        )
-
-
-def execute_query(  # noqa: PLR0913
-    provider: ApiProvider,
-    provider_name: ProviderName,
-    model: str,
-    prompt: str,
-    *,
-    system: str | None = None,
-    max_tokens: int | None = None,
-    reasoning: ReasoningSpec | None = None,
-    sampling: SamplingControls | None = None,
-    metadata: dict[str, Any] | None = None,
-) -> LlmResponse:
-    messages: list[Message] = []
-    if system is not None:
-        messages.append(Message(role=MessageRole.SYSTEM, content=system))
-    messages.append(Message(role=MessageRole.USER, content=prompt))
-    request = LlmRequest(
-        provider=provider_name,
-        model=model,
-        messages=messages,
-        max_tokens=max_tokens,
-        reasoning=reasoning,
-        sampling=sampling,
-        metadata=metadata or {},
-    )
-    return provider.generate(request)

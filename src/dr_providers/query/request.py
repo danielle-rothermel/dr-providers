@@ -11,7 +11,7 @@ from pydantic import (
 
 from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
 from dr_providers.names import MessageRole, ProviderName  # noqa: TC001
-from dr_providers.query.reasoning import ReasoningWarning  # noqa: TC001
+from dr_providers.query.reasoning import ReasoningWarning, RequestControls
 from dr_providers.query.transport_config import ProviderConfig, resolve_api_key
 
 
@@ -29,10 +29,17 @@ class LlmRequest(BaseModel):
     model: str
     messages: list[Message]
     max_tokens: int | None = None
-    effort: Any | None = None
     reasoning: ReasoningSpec | None = None
     sampling: SamplingControls | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    base_url: str | None = Field(default=None, exclude=True)
+    chat_path: str | None = Field(default=None, exclude=True)
+    api_key: str | None = Field(default=None, exclude=True, repr=False)
+    idempotency_key: str | None = Field(default=None, exclude=True)
+    extra_body: dict[str, Any] = Field(default_factory=dict, exclude=True)
+    warnings: list[ReasoningWarning] = Field(
+        default_factory=list, exclude=True
+    )
 
     @property
     def has_sampling_controls(self) -> bool:
@@ -46,89 +53,70 @@ class LlmRequest(BaseModel):
     def sampling_top_p(self) -> float | None:
         return self.sampling.top_p if self.sampling is not None else None
 
-
-class OpenAICompatRequest(BaseModel):
-    model_config = ConfigDict(
-        frozen=True, extra="forbid", arbitrary_types_allowed=True
-    )
-
-    provider: str = Field(exclude=True)
-    model: str
-    messages: list[dict[str, Any]]
-    temperature: float | None = None
-    top_p: float | None = None
-    max_tokens: int | None = None
-    reasoning_effort: str | None = None
-    extra_body: dict[str, Any] = Field(default_factory=dict)
-    base_url: str = Field(exclude=True)
-    chat_path: str | None = Field(exclude=True)
-    api_key_env: str = Field(exclude=True)
-    api_key: str = Field(exclude=True, repr=False)
-    idempotency_key: str = Field(exclude=True)
-    warnings: list[ReasoningWarning] = Field(
-        default_factory=list, exclude=True
-    )
-
-    @classmethod
-    def from_llm_request(
-        cls,
-        request: LlmRequest,
+    def prepare(
+        self,
         config: ProviderConfig,
         *,
-        reasoning_effort: str | None = None,
-        extra_body: dict[str, Any] | None = None,
-        warnings: list[ReasoningWarning] | None = None,
-    ) -> OpenAICompatRequest:
-        return cls(
-            provider=str(request.provider),
-            model=request.model,
-            messages=cls._to_openai_messages(request.messages),
-            temperature=request.sampling_temperature,
-            top_p=request.sampling_top_p,
-            max_tokens=request.max_tokens,
-            reasoning_effort=reasoning_effort,
-            extra_body=extra_body or {},
-            base_url=config.base_url,
-            chat_path=config.chat_path,
-            api_key_env=config.api_key_env,
-            api_key=resolve_api_key(config, label=request.provider),
-            idempotency_key=cls._resolve_idempotency_key(request=request),
-            warnings=warnings or [],
+        controls: RequestControls | None = None,
+    ) -> LlmRequest:
+        request_controls = controls or RequestControls.from_reasoning(
+            self.reasoning
+        )
+        return self.model_copy(
+            update={
+                "base_url": config.base_url,
+                "chat_path": config.chat_path,
+                "api_key": resolve_api_key(config, label=self.provider),
+                "idempotency_key": self._resolve_idempotency_key(),
+                "extra_body": request_controls.extra_body,
+                "warnings": request_controls.warnings,
+            }
         )
 
-    @staticmethod
-    def _to_openai_messages(messages: list[Message]) -> list[dict[str, str]]:
-        return [
-            {"role": message.role, "content": message.content}
-            for message in messages
-        ]
-
-    @staticmethod
-    def _resolve_idempotency_key(*, request: LlmRequest) -> str:
-        raw_idempotency_key = request.metadata.get("idempotency_key")
+    def _resolve_idempotency_key(self) -> str:
+        raw_idempotency_key = self.metadata.get("idempotency_key")
         if isinstance(raw_idempotency_key, str) and raw_idempotency_key:
             return raw_idempotency_key
         return uuid4().hex
 
+    def _require_prepared(self) -> None:
+        if self.api_key is None or self.base_url is None:
+            raise ValueError("LlmRequest is not prepared for transport")
+
     def endpoint(self) -> str:
+        self._require_prepared()
+        base_url = self.base_url
+        if base_url is None:
+            raise ValueError("LlmRequest is not prepared for transport")
         if self.chat_path is None:
-            return self.base_url
-        return self.base_url.rstrip("/") + self.chat_path
+            return base_url
+        return base_url.rstrip("/") + self.chat_path
 
     def headers(self) -> dict[str, str]:
+        self._require_prepared()
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "Idempotency-Key": self.idempotency_key,
+            "Idempotency-Key": self.idempotency_key or "",
         }
 
     def json_payload(self) -> dict[str, Any]:
-        payload = self.model_dump(
-            mode="json", exclude_none=True, exclude={"extra_body"}
-        )
-        if "max_tokens" in payload:
+        self._require_prepared()
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {"role": message.role, "content": message.content}
+                for message in self.messages
+            ],
+        }
+        if self.sampling_temperature is not None:
+            payload["temperature"] = self.sampling_temperature
+        if self.sampling_top_p is not None:
+            payload["top_p"] = self.sampling_top_p
+        if self.max_tokens is not None:
             # TODO: will this break things?
-            payload["max_completion_tokens"] = payload["max_tokens"]
+            payload["max_tokens"] = self.max_tokens
+            payload["max_completion_tokens"] = self.max_tokens
 
         overlapping_keys = sorted(set(self.extra_body) & set(payload))
         if overlapping_keys:

@@ -5,22 +5,19 @@ from dr_providers.query.errors import (
     ProviderSemanticError,
     ProviderTransportError,
 )
-from dr_providers.query.request import (
-    LlmRequest,
-    Message,
-    OpenAICompatRequest,
-)
+from dr_providers.query.providers import OpenRouterProvider
 from dr_providers.query.reasoning import RequestControls
+from dr_providers.query.request import LlmRequest, Message
 from dr_providers.query.response import LlmResponse
-from dr_providers.query.transport import OpenRouterProvider, execute_query
+from dr_providers.query.transport import ApiProvider
 
 __all__ = [
+    "ApiProvider",
     "LlmConfig",
     "LlmRequest",
     "LlmResponse",
     "Message",
     "MessageRole",
-    "OpenAICompatRequest",
     "OpenRouterProvider",
     "ProviderError",
     "ProviderName",
@@ -29,5 +26,4 @@ __all__ = [
     "ReasoningSpec",
     "RequestControls",
     "SamplingControls",
-    "execute_query",
 ]

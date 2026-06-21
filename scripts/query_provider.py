@@ -5,9 +5,9 @@ import typer
 
 from dr_providers.config import ReasoningSpec, SamplingControls
 from dr_providers.names import EffortLevel, ProviderName
-from dr_providers.query import OpenRouterProvider
+from dr_providers.query.from_prompt import query_from_prompt
+from dr_providers.query.providers import OpenRouterProvider
 from dr_providers.query.response import LlmResponse
-from dr_providers.query.transport import execute_query
 
 
 def _parse_effort(value: str) -> EffortLevel:
@@ -65,7 +65,7 @@ def _query_provider(  # noqa: PLR0913
     )
     sampling = _build_sampling(temperature=temperature, top_p=top_p)
     with OpenRouterProvider() as provider:
-        return execute_query(
+        return query_from_prompt(
             provider=provider,
             provider_name=ProviderName.OPENROUTER,
             model=model,
