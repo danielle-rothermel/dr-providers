@@ -17,10 +17,7 @@ from dr_providers.names import MessageRole, ProviderName
 from dr_providers.query.errors import ProviderTransportError
 from dr_providers.query.reasoning import ReasoningWarning, RequestControls
 from dr_providers.query.request import LlmRequest, Message, OpenAICompatRequest
-from dr_providers.query.response import (
-    LlmResponse,
-    OpenAICompatResponse,
-)
+from dr_providers.query.response import LlmResponse, llm_response_from_http
 from dr_providers.query.transport_config import ProviderConfig
 
 if TYPE_CHECKING:
@@ -62,18 +59,6 @@ class ApiProviderRequest(Protocol):
     def json_payload(self) -> dict[str, Any]: ...
 
 
-class ApiProviderResponse(Protocol):
-    def event_payload(self, request: Any) -> dict[str, Any]: ...
-
-    def to_llm_response(
-        self,
-        request: LlmRequest,
-        *,
-        latency_ms: int,
-        warnings: list[ReasoningWarning],
-    ) -> LlmResponse: ...
-
-
 class ApiProvider(ProviderTransport):
     _config: ProviderConfig
 
@@ -105,10 +90,6 @@ class ApiProvider(ProviderTransport):
     def _build_request(self, request: LlmRequest) -> ApiProviderRequest:
         """Translate an ``LlmRequest`` into an ``ApiProviderRequest``."""
 
-    @abstractmethod
-    def _parse_response(self, response: httpx.Response) -> ApiProviderResponse:
-        """Decode ``httpx.Response`` into provider-specific response shape."""
-
     @retry(
         retry=retry_if_exception_type(
             (httpx.TimeoutException, httpx.TransportError)
@@ -136,8 +117,8 @@ class ApiProvider(ProviderTransport):
                 f"{self.name} HTTP request failed: {exc}"
             ) from exc
         latency_ms = int((time.perf_counter() - started) * 1000)
-        provider_response = self._parse_response(response)
-        return provider_response.to_llm_response(
+        return llm_response_from_http(
+            response,
             request,
             latency_ms=latency_ms,
             warnings=provider_request.warnings,
@@ -173,11 +154,6 @@ class OpenRouterProvider(ApiProvider):
             extra_body=request_controls.extra_body,
             warnings=request_controls.warnings,
         )
-
-    def _parse_response(
-        self, response: httpx.Response
-    ) -> OpenAICompatResponse:
-        return OpenAICompatResponse.from_http_response(response)
 
 
 def execute_query(  # noqa: PLR0913
