@@ -1,0 +1,80 @@
+[project]
+name = "dr-providers"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Danielle Rothermel", email = "danielle.rothermel@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "marimo[recommended]>=0.23.10",
+    "pydantic>=2.13.4",
+    "typer>=0.26.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.18",
+    "ty>=0.0.51",
+]
+
+[tool.ruff]
+include = ["scripts/**/*.py", "src/**/*.py"]
+line-length = 79
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ARG",
+    "ASYNC",
+    "B",
+    "BLE",
+    "C4",
+    "DTZ",
+    "E",
+    "F",
+    "FA",
+    "FBT",
+    "FLY",
+    "FURB",
+    "G",
+    "I",
+    "ICN",
+    "ISC",
+    "LOG",
+    "N",
+    "NPY",
+    "PD",
+    "PERF",
+    "PIE",
+    "PL",
+    "PTH",
+    "PT",
+    "RET",
+    "RSE",
+    "RUF",
+    "S",
+    "SIM",
+    "SLOT",
+    "T10",
+    "TC",
+    "TID",
+    "TRY",
+    "UP",
+    "W",
+    "YTT",
+]
+ignore = ["PLR1711", "S101", "TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"nbs/**/*.py" = ["E501", "F841", "RET503", "B018"]
+
+[tool.ty.src]
+include = ["scripts", "src"]
+exclude = ["nbs", "tests"]
