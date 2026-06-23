@@ -1,9 +1,12 @@
-name: CI
+# Depot CI Migration
+# Source: .github/workflows/ci.yml
+#
+# No changes were necessary.
 
+name: CI
 on:
   push:
   pull_request:
-
 jobs:
   check:
     runs-on: depot-ubuntu-24.04
