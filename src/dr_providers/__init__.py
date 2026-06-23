@@ -1,6 +1,7 @@
+from importlib.metadata import version
+
 from dr_providers.query import (
     ApiProvider,
-    LlmConfig,
     LlmRequest,
     LlmResponse,
     Message,
@@ -11,13 +12,13 @@ from dr_providers.query import (
     ProviderSemanticError,
     ProviderTransportError,
     ReasoningSpec,
-    RequestControls,
     SamplingControls,
 )
 
+PACKAGE_NAME = "dr-providers"
+
 __all__ = [
     "ApiProvider",
-    "LlmConfig",
     "LlmRequest",
     "LlmResponse",
     "Message",
@@ -28,7 +29,7 @@ __all__ = [
     "ProviderSemanticError",
     "ProviderTransportError",
     "ReasoningSpec",
-    "RequestControls",
     "SamplingControls",
 ]
-__version__ = "0.1.0"
+
+__version__ = version(PACKAGE_NAME)

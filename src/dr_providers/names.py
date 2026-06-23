@@ -1,26 +1,13 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+
+OPENROUTER_API_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
 
 
 class ProviderName(StrEnum):
-    _api_base_url: str
-
-    def __new__(cls, value: str, api_base_url: str) -> Self:
-        obj = str.__new__(cls, value)
-        obj._value_ = value
-        obj._api_base_url = api_base_url
-        return obj
-
-    OPENROUTER = "openrouter", "https://openrouter.ai/api/v1"
-
-    def api_key_env(self) -> str:
-        return f"{self.name}_API_KEY"
-
-    @property
-    def api_base_url(self) -> str:
-        return self._api_base_url
+    OPENROUTER = "openrouter"
 
 
 class EffortLevel(StrEnum):
@@ -29,20 +16,7 @@ class EffortLevel(StrEnum):
     HIGH = "high"
 
 
-class ControlRequestStyle(StrEnum):
-    NONE = "none"
-    ENABLED_FLAG = "enabled_flag"
-    EFFORT = "effort"
-
-
 class MessageRole(StrEnum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
-
-
-# TODO: remove this
-class OpenRouterReasoningKey(StrEnum):
-    REASONING = "reasoning"
-    ENABLED = "enabled"
-    EFFORT = "effort"

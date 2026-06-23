@@ -1,0 +1,23 @@
+# Depot CI Migration
+# Source: .github/workflows/ci.yml
+#
+# No changes were necessary.
+
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: depot-ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run ty check
+      - run: uv run pytest
+      - run: uv build --wheel --sdist

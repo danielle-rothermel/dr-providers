@@ -1,37 +1,33 @@
 [project]
 name = "dr-providers"
-version = "0.1.0"
+version = "0.1.1"
 description = "OpenRouter LLM query client with typed requests and responses."
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Danielle Rothermel", email = "danielle.rothermel@gmail.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
-    "tenacity>=9.1.4",
 ]
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
-notebooks = ["marimo[recommended]>=0.23.10"]
 
 [project.urls]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
 Issues = "https://github.com/danielle-rothermel/dr-providers/issues"
-
-[project.scripts]
-query-provider = "dr_providers.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -39,6 +35,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.6.0",
     "pytest>=9.1.1",
     "ruff>=0.15.18",
     "ty>=0.0.51",
@@ -46,21 +43,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = [
-    "/.env",
-    "/.env.example",
-    "/.gitignore",
-    "/.python-version",
-    "/uv.lock",
-    "/scripts",
-    "/nbs",
-    "/.cache",
-    "/.github",
-    "/tests",
-    "/dist",
-    "/AGENTS.md",
-    "/CLAUDE.md",
-]
+only-include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -114,9 +97,7 @@ select = [
 ignore = ["PLR1711", "S101", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
-"nbs/**/*.py" = ["E501", "F841", "RET503", "B018"]
 "tests/**/*.py" = ["PLR2004", "PLC0415"]
 
 [tool.ty.src]
 include = ["scripts", "src", "tests"]
-exclude = ["nbs"]

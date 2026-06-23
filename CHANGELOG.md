@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.2
+
+Breaking cleanup release.
+
+- Made `LlmRequest` pure request data; `ApiProvider` now builds endpoint, headers, idempotency key, and JSON payload internally.
+- Removed `LlmRequest.prepare()`, `endpoint()`, `headers()`, and `json_payload()`.
+- Removed unused provider availability and capability config surface.
+- Removed the `ProviderTransport` ABC while keeping public `ApiProvider` for upcoming providers.
+- Simplified `ProviderName`; OpenRouter API constants now live beside the enum.
+
+## 0.1.1
+
+Breaking cleanup release.
+
+- Removed public `LlmConfig`; construct `LlmRequest` directly.
+- Removed public `RequestControls` and `ReasoningWarning`; reasoning payloads are built internally by `LlmRequest.prepare()`.
+- Removed `LlmRequest.prepare(..., controls=...)`; call `prepare(config)`.
+- Removed unused request/response warning fields and the `warnings=` argument from `llm_response_from_http()`.
+- Removed the redundant `scripts/query_provider.py` wrapper; use `uv run python -m dr_providers.cli`.
+
 ## 0.1.0
 
 Initial release.

@@ -1,6 +1,6 @@
 # dr-providers
 
-OpenRouter LLM query client with typed requests and responses. Requires Python 3.13+.
+OpenRouter LLM query client with typed requests and responses. Requires Python 3.12+.
 
 ## Install
 
@@ -18,7 +18,7 @@ uv add dr-providers
 
 ```bash
 pip install "dr-providers[cli]"
-query-provider --help
+python -m dr_providers.cli --help
 ```
 
 ## Authentication
@@ -85,12 +85,25 @@ See `dr_providers.__all__` for the full list.
 ## Development
 
 ```bash
-uv sync
-scripts/pre-check.sh
+uv sync --frozen
+uv run pre-commit install
+uv run pre-commit run --all-files
 ```
 
 Run the CLI from the repo without installing:
 
 ```bash
-uv run python scripts/query_provider.py --model openai/gpt-4o-mini -m "hi"
+uv run python -m dr_providers.cli --model openai/gpt-4o-mini -m "hi"
+```
+
+### Audit corpus ground truth
+
+This repo includes a small audit-output corpus and curated ground-truth
+normalization artifacts under `data/audit-corpus/`. Regenerate the parsed audit
+and analysis files with:
+
+```bash
+uv run python scripts/generate_audit_ground_truth.py \
+  --corpus-dir data/audit-corpus \
+  --output-dir data/audit-corpus/ground-truth
 ```

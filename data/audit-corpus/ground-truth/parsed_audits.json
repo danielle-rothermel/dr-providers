@@ -1,0 +1,3131 @@
+{
+  "corpus_id": "dr-providers-ponytail-audit-gpt-5.5",
+  "generated_from_manifest": "data/audit-corpus/manifest.json",
+  "audits": [
+    {
+      "audit_id": "gpt-5.5/off/audit_0",
+      "source_path": "data/audit-corpus/gpt-5.5/off/audit_0.md",
+      "thinking_level": "off",
+      "stats": {
+        "input_tokens": 63000,
+        "output_tokens": 3500,
+        "reasoning_tokens": 217000,
+        "cache_hit_percent": 91.6,
+        "cost_usd": 0.53,
+        "cost_mode": "sub",
+        "context_percent": 11.6,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "off",
+        "status": "done",
+        "throughput_tok_s": 445.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -220,
+        "dependencies": -2
+      },
+      "suggestion_count": 10,
+      "suggestion_kind_counts": {
+        "delete": 6,
+        "shrink": 1,
+        "stdlib": 1,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s01",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 1,
+          "kind": "yagni",
+          "text": "provider framework for one provider. Inline `ProviderTransport`/`ApiProvider` into `OpenRouterProvider`.",
+          "rationale": "provider framework for one provider",
+          "action": "Inline `ProviderTransport`/`ApiProvider` into `OpenRouterProvider`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "src/dr_providers/query/providers/openrouter.py"
+          ],
+          "raw": "yagni: provider framework for one provider. Inline `ProviderTransport`/`ApiProvider` into `OpenRouterProvider`. [src/dr_providers/query/transport.py, src/dr_providers/query/providers/openrouter.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s02",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 2,
+          "kind": "yagni",
+          "text": "generic availability/executable/structured-output config nobody uses. Keep only API key/base URL/path.",
+          "rationale": "generic availability/executable/structured-output config nobody uses",
+          "action": "Keep only API key/base URL/path.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: generic availability/executable/structured-output config nobody uses. Keep only API key/base URL/path. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s03",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 3,
+          "kind": "stdlib",
+          "text": "`tenacity` for one retrying POST. Replace with a small bounded loop using `time.sleep`; drop dependency.",
+          "rationale": "`tenacity` for one retrying POST",
+          "action": "Replace with a small bounded loop using `time.sleep`; drop dependency.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: `tenacity` for one retrying POST. Replace with a small bounded loop using `time.sleep`; drop dependency. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s04",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 4,
+          "kind": "delete",
+          "text": "placeholder marimo notebook and `notebooks` extra. Replacement: nothing until there is a real notebook.",
+          "rationale": "placeholder marimo notebook and `notebooks` extra",
+          "action": null,
+          "replacement": "nothing until there is a real notebook.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: placeholder marimo notebook and `notebooks` extra. Replacement: nothing until there is a real notebook. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s05",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 5,
+          "kind": "delete",
+          "text": "warnings plumbing that never emits warnings. Replacement: add it back when a provider actually warns.",
+          "rationale": "warnings plumbing that never emits warnings",
+          "action": null,
+          "replacement": "add it back when a provider actually warns.",
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: warnings plumbing that never emits warnings. Replacement: add it back when a provider actually warns. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s06",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 6,
+          "kind": "delete",
+          "text": "unused public `LlmConfig`. Replacement: construct `LlmRequest` directly.",
+          "rationale": "unused public `LlmConfig`",
+          "action": null,
+          "replacement": "construct `LlmRequest` directly.",
+          "files": [
+            "src/dr_providers/config.py",
+            "src/dr_providers/__init__.py"
+          ],
+          "raw": "delete: unused public `LlmConfig`. Replacement: construct `LlmRequest` directly. [src/dr_providers/config.py, src/dr_providers/__init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s07",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 7,
+          "kind": "delete",
+          "text": "`query_from_prompt` helper wraps 6 lines of request construction. Replacement: build `LlmRequest` in the CLI/demo.",
+          "rationale": "`query_from_prompt` helper wraps 6 lines of request construction",
+          "action": null,
+          "replacement": "build `LlmRequest` in the CLI/demo.",
+          "files": [
+            "src/dr_providers/query/from_prompt.py"
+          ],
+          "raw": "delete: `query_from_prompt` helper wraps 6 lines of request construction. Replacement: build `LlmRequest` in the CLI/demo. [src/dr_providers/query/from_prompt.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s08",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 8,
+          "kind": "delete",
+          "text": "unused `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`. Replacement: nothing.",
+          "rationale": "unused `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py",
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete: unused `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`. Replacement: nothing. [src/dr_providers/query/response.py, src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s09",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 9,
+          "kind": "shrink",
+          "text": "`ProviderName.__new__` stores one base URL for one enum member. Replacement: plain enum + module constant.",
+          "rationale": "`ProviderName",
+          "action": "__new__` stores one base URL for one enum member.",
+          "replacement": "plain enum + module constant.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "shrink: `ProviderName.__new__` stores one base URL for one enum member. Replacement: plain enum + module constant. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s10",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 10,
+          "kind": "delete",
+          "text": "`scripts/query_provider.py` wrapper. Replacement: `uv run python -m dr_providers.cli`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` wrapper.",
+          "replacement": "`uv run python -m dr_providers.cli`.",
+          "files": [
+            "scripts/query_provider.py",
+            "README.md"
+          ],
+          "raw": "delete: `scripts/query_provider.py` wrapper. Replacement: `uv run python -m dr_providers.cli`. [scripts/query_provider.py, README.md]"
+        }
+      ],
+      "raw_header": "↑63k ↓3.5k R217k CH91.6% $0.530 (sub) 11.6%/272k (auto)                (openai-codex) gpt-5.5 • thinking off",
+      "raw_done_line": "done — 445 tok/s",
+      "raw_net_line": "net: ~-220 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/off/audit_1",
+      "source_path": "data/audit-corpus/gpt-5.5/off/audit_1.md",
+      "thinking_level": "off",
+      "stats": {
+        "input_tokens": 48000,
+        "output_tokens": 2200,
+        "reasoning_tokens": 131000,
+        "cache_hit_percent": 83.8,
+        "cost_usd": 0.372,
+        "cost_mode": "sub",
+        "context_percent": 10.9,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "off",
+        "status": "done",
+        "throughput_tok_s": 283.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -150,
+        "dependencies": -1
+      },
+      "suggestion_count": 10,
+      "suggestion_kind_counts": {
+        "delete": 4,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s01",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 1,
+          "kind": "yagni",
+          "text": "cut generic provider availability scaffolding (`ProviderAvailabilityStatus`, `required_executables`, `supports_structured_output`, `availability_status`, `is_available`). Replacement: fail on missing OpenRouter API key at request time.",
+          "rationale": "cut generic provider availability scaffolding (`ProviderAvailabilityStatus`, `required_executables`, `supports_structured_output`, `availability_status`, `is_available`)",
+          "action": null,
+          "replacement": "fail on missing OpenRouter API key at request time.",
+          "files": [
+            "src/dr_providers/query/transport_config.py",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: cut generic provider availability scaffolding (`ProviderAvailabilityStatus`, `required_executables`, `supports_structured_output`, `availability_status`, `is_available`). Replacement: fail on missing OpenRouter API key at request time. [src/dr_providers/query/transport_config.py, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s02",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 2,
+          "kind": "yagni",
+          "text": "cut `ProviderTransport` ABC; only `ApiProvider` implements it and it is not exported. Replacement: make `ApiProvider` the concrete base.",
+          "rationale": "cut `ProviderTransport` ABC; only `ApiProvider` implements it and it is not exported",
+          "action": null,
+          "replacement": "make `ApiProvider` the concrete base.",
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: cut `ProviderTransport` ABC; only `ApiProvider` implements it and it is not exported. Replacement: make `ApiProvider` the concrete base. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s03",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 3,
+          "kind": "stdlib",
+          "text": "cut `tenacity` dependency used once. Replacement: 3-attempt `for` loop + `time.sleep`/simple exponential delay, or no retry if callers should own retry.",
+          "rationale": "cut `tenacity` dependency used once",
+          "action": null,
+          "replacement": "3-attempt `for` loop + `time.sleep`/simple exponential delay, or no retry if callers should own retry.",
+          "files": [
+            "pyproject.toml",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "stdlib: cut `tenacity` dependency used once. Replacement: 3-attempt `for` loop + `time.sleep`/simple exponential delay, or no retry if callers should own retry. [pyproject.toml, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s04",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 4,
+          "kind": "delete",
+          "text": "cut unused `LlmConfig`; requests already carry the same fields and nothing consumes it. Replacement: nothing.",
+          "rationale": "cut unused `LlmConfig`; requests already carry the same fields and nothing consumes it",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/config.py"
+          ],
+          "raw": "delete: cut unused `LlmConfig`; requests already carry the same fields and nothing consumes it. Replacement: nothing. [src/dr_providers/config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s05",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 5,
+          "kind": "delete",
+          "text": "cut warning plumbing (`ReasoningWarning`, `RequestControls.warnings`, request/response `warnings`) because nothing ever emits a warning. Replacement: add it back when a provider actually returns non-fatal diagnostics.",
+          "rationale": "cut warning plumbing (`ReasoningWarning`, `RequestControls",
+          "action": "warnings`, request/response `warnings`) because nothing ever emits a warning.",
+          "replacement": "add it back when a provider actually returns non-fatal diagnostics.",
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: cut warning plumbing (`ReasoningWarning`, `RequestControls.warnings`, request/response `warnings`) because nothing ever emits a warning. Replacement: add it back when a provider actually returns non-fatal diagnostics. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s06",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 6,
+          "kind": "delete",
+          "text": "cut unused `CallError`. Replacement: nothing.",
+          "rationale": "cut unused `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: cut unused `CallError`. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s07",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 7,
+          "kind": "delete",
+          "text": "cut TODO enum `OpenRouterReasoningKey`. Replacement: nothing.",
+          "rationale": "cut TODO enum `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete: cut TODO enum `OpenRouterReasoningKey`. Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s08",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 8,
+          "kind": "shrink",
+          "text": "simplify `ProviderName` custom enum payload (`__new__`, `_api_base_url`, `Self`). Replacement: plain `StrEnum` + constant/property for the one OpenRouter URL.",
+          "rationale": "simplify `ProviderName` custom enum payload (`__new__`, `_api_base_url`, `Self`)",
+          "action": null,
+          "replacement": "plain `StrEnum` + constant/property for the one OpenRouter URL.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "shrink: simplify `ProviderName` custom enum payload (`__new__`, `_api_base_url`, `Self`). Replacement: plain `StrEnum` + constant/property for the one OpenRouter URL. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s09",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 9,
+          "kind": "shrink",
+          "text": "inline unused sampling helper properties (`has_sampling_controls`, `sampling_temperature`, `sampling_top_p`). Replacement: direct `self.sampling.temperature/top_p` checks in `json_payload`.",
+          "rationale": "inline unused sampling helper properties (`has_sampling_controls`, `sampling_temperature`, `sampling_top_p`)",
+          "action": null,
+          "replacement": "direct `self.sampling.temperature/top_p` checks in `json_payload`.",
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink: inline unused sampling helper properties (`has_sampling_controls`, `sampling_temperature`, `sampling_top_p`). Replacement: direct `self.sampling.temperature/top_p` checks in `json_payload`. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s10",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 10,
+          "kind": "yagni",
+          "text": "cut `query_from_prompt(provider_name=...)`; only OpenRouter exists. Replacement: default OpenRouter or derive from provider config.",
+          "rationale": "cut `query_from_prompt(provider_name=",
+          "action": "..)`; only OpenRouter exists.",
+          "replacement": "default OpenRouter or derive from provider config.",
+          "files": [
+            "src/dr_providers/query/from_prompt.py",
+            "src/dr_providers/cli.py"
+          ],
+          "raw": "yagni: cut `query_from_prompt(provider_name=...)`; only OpenRouter exists. Replacement: default OpenRouter or derive from provider config. [src/dr_providers/query/from_prompt.py, src/dr_providers/cli.py]"
+        }
+      ],
+      "raw_header": "↑48k ↓2.2k R131k CH83.8% $0.372 (sub) 10.9%/272k (auto)                (openai-codex) gpt-5.5 • thinking off",
+      "raw_done_line": "done — 283 tok/s",
+      "raw_net_line": "net: ~-150 lines, -1 dep possible."
+    },
+    {
+      "audit_id": "gpt-5.5/off/audit_2",
+      "source_path": "data/audit-corpus/gpt-5.5/off/audit_2.md",
+      "thinking_level": "off",
+      "stats": {
+        "input_tokens": 39000,
+        "output_tokens": 2100,
+        "reasoning_tokens": 163000,
+        "cache_hit_percent": 97.6,
+        "cost_usd": 0.339,
+        "cost_mode": "sub",
+        "context_percent": 10.6,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "off",
+        "status": "done",
+        "throughput_tok_s": 270.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -250,
+        "dependencies": -2
+      },
+      "suggestion_count": 10,
+      "suggestion_kind_counts": {
+        "delete": 4,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s01",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 1,
+          "kind": "delete",
+          "text": "placeholder marimo notebook + `notebooks` extra + nbs ruff/ty config. Replacement: nothing until a real notebook exists.",
+          "rationale": "placeholder marimo notebook + `notebooks` extra + nbs ruff/ty config",
+          "action": null,
+          "replacement": "nothing until a real notebook exists.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: placeholder marimo notebook + `notebooks` extra + nbs ruff/ty config. Replacement: nothing until a real notebook exists. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s02",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 2,
+          "kind": "stdlib",
+          "text": "`tenacity` for one POST retry. Replacement: tiny bounded `for range(3)` loop around `httpx` exceptions, or no retry if callers own retry policy.",
+          "rationale": "`tenacity` for one POST retry",
+          "action": null,
+          "replacement": "tiny bounded `for range(3)` loop around `httpx` exceptions, or no retry if callers own retry policy.",
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: `tenacity` for one POST retry. Replacement: tiny bounded `for range(3)` loop around `httpx` exceptions, or no retry if callers own retry policy. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s03",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 3,
+          "kind": "yagni",
+          "text": "`ProviderTransport` ABC with one concrete implementation. Replacement: make `ApiProvider` the base/concrete class directly, or just `OpenRouterProvider`.",
+          "rationale": "`ProviderTransport` ABC with one concrete implementation",
+          "action": null,
+          "replacement": "make `ApiProvider` the base/concrete class directly, or just `OpenRouterProvider`.",
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: `ProviderTransport` ABC with one concrete implementation. Replacement: make `ApiProvider` the base/concrete class directly, or just `OpenRouterProvider`. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s04",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 4,
+          "kind": "yagni",
+          "text": "provider availability/executable/structured-output machinery. Replacement: keep only API-key resolution; no executables or structured-output flags are used.",
+          "rationale": "provider availability/executable/structured-output machinery",
+          "action": null,
+          "replacement": "keep only API-key resolution; no executables or structured-output flags are used.",
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: provider availability/executable/structured-output machinery. Replacement: keep only API-key resolution; no executables or structured-output flags are used. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s05",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 5,
+          "kind": "yagni",
+          "text": "`RequestControls`, `ReasoningWarning`, `warnings`, and `extra_body` plumbing for one reasoning payload. Replacement: inline reasoning payload into `LlmRequest.json_payload()`.",
+          "rationale": "`RequestControls`, `ReasoningWarning`, `warnings`, and `extra_body` plumbing for one reasoning payload",
+          "action": null,
+          "replacement": "inline reasoning payload into `LlmRequest.json_payload()`.",
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "yagni: `RequestControls`, `ReasoningWarning`, `warnings`, and `extra_body` plumbing for one reasoning payload. Replacement: inline reasoning payload into `LlmRequest.json_payload()`. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s06",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 6,
+          "kind": "delete",
+          "text": "unused `LlmConfig` public model. Replacement: pass `LlmRequest` directly; it already contains the same config fields.",
+          "rationale": "unused `LlmConfig` public model",
+          "action": null,
+          "replacement": "pass `LlmRequest` directly; it already contains the same config fields.",
+          "files": [
+            "src/dr_providers/config.py",
+            "src/dr_providers/__init__.py"
+          ],
+          "raw": "delete: unused `LlmConfig` public model. Replacement: pass `LlmRequest` directly; it already contains the same config fields. [src/dr_providers/config.py, src/dr_providers/__init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s07",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 7,
+          "kind": "delete",
+          "text": "unused `CallError`. Replacement: nothing.",
+          "rationale": "unused `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: unused `CallError`. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s08",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 8,
+          "kind": "delete",
+          "text": "dead enums `ControlRequestStyle` and `OpenRouterReasoningKey` (`TODO: remove this`). Replacement: nothing.",
+          "rationale": "dead enums `ControlRequestStyle` and `OpenRouterReasoningKey` (`TODO: remove this`)",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete: dead enums `ControlRequestStyle` and `OpenRouterReasoningKey` (`TODO: remove this`). Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s09",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 9,
+          "kind": "shrink",
+          "text": "`ProviderName` custom `StrEnum.__new__` only stores one base URL. Replacement: plain enum plus `OPENROUTER_API_BASE_URL` constant, or just constant.",
+          "rationale": "`ProviderName` custom `StrEnum",
+          "action": "__new__` only stores one base URL.",
+          "replacement": "plain enum plus `OPENROUTER_API_BASE_URL` constant, or just constant.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "shrink: `ProviderName` custom `StrEnum.__new__` only stores one base URL. Replacement: plain enum plus `OPENROUTER_API_BASE_URL` constant, or just constant. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s10",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 10,
+          "kind": "shrink",
+          "text": "`scripts/query_provider.py` wrapper. Replacement: call `uv run python -m dr_providers.cli` from README/live script.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` wrapper.",
+          "replacement": "call `uv run python -m dr_providers.cli` from README/live script.",
+          "files": [
+            "scripts/query_provider.py"
+          ],
+          "raw": "shrink: `scripts/query_provider.py` wrapper. Replacement: call `uv run python -m dr_providers.cli` from README/live script. [scripts/query_provider.py]"
+        }
+      ],
+      "raw_header": "↑39k ↓2.1k R163k CH97.6% $0.339 (sub) 10.6%/272k (auto)                (openai-codex) gpt-5.5 • thinking off",
+      "raw_done_line": "done — 270 tok/s",
+      "raw_net_line": "net: ~-250 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/minimal/audit_0",
+      "source_path": "data/audit-corpus/gpt-5.5/minimal/audit_0.md",
+      "thinking_level": "minimal",
+      "stats": {
+        "input_tokens": 42000,
+        "output_tokens": 1300,
+        "reasoning_tokens": 62000,
+        "cache_hit_percent": 90.8,
+        "cost_usd": 0.282,
+        "cost_mode": "sub",
+        "context_percent": 8.9,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "minimal",
+        "status": "done",
+        "throughput_tok_s": 221.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -120,
+        "dependencies": -1
+      },
+      "suggestion_count": 8,
+      "suggestion_kind_counts": {
+        "delete": 1,
+        "shrink": 1,
+        "stdlib": 1,
+        "yagni": 5
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s01",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 1,
+          "kind": "yagni",
+          "text": "cut `ProviderTransport` ABC; one implementation can just be `ApiProvider`. Replacement: concrete class only.",
+          "rationale": "cut `ProviderTransport` ABC; one implementation can just be `ApiProvider`",
+          "action": null,
+          "replacement": "concrete class only.",
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: cut `ProviderTransport` ABC; one implementation can just be `ApiProvider`. Replacement: concrete class only. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s02",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 2,
+          "kind": "yagni",
+          "text": "cut `ProviderConfig.required_executables`, `missing_executables`, `supports_structured_output`; no provider uses them. Replacement: env-key availability only.",
+          "rationale": "cut `ProviderConfig",
+          "action": "required_executables`, `missing_executables`, `supports_structured_output`; no provider uses them.",
+          "replacement": "env-key availability only.",
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: cut `ProviderConfig.required_executables`, `missing_executables`, `supports_structured_output`; no provider uses them. Replacement: env-key availability only. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s03",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 3,
+          "kind": "yagni",
+          "text": "cut custom `ProviderName.__new__`/embedded base URL for one provider. Replacement: plain `StrEnum` plus constants in `OpenRouterProvider`.",
+          "rationale": "cut custom `ProviderName",
+          "action": "__new__`/embedded base URL for one provider.",
+          "replacement": "plain `StrEnum` plus constants in `OpenRouterProvider`.",
+          "files": [
+            "src/dr_providers/names.py",
+            "src/dr_providers/query/providers/openrouter.py"
+          ],
+          "raw": "yagni: cut custom `ProviderName.__new__`/embedded base URL for one provider. Replacement: plain `StrEnum` plus constants in `OpenRouterProvider`. [src/dr_providers/names.py, src/dr_providers/query/providers/openrouter.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s04",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 4,
+          "kind": "delete",
+          "text": "remove unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`. Replacement: nothing.",
+          "rationale": "remove unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: remove unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`. Replacement: nothing. [src/dr_providers/names.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s05",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 5,
+          "kind": "stdlib",
+          "text": "cut `tenacity` dependency for one retrying POST. Replacement: tiny `for attempt in range(3)` + `time.sleep`.",
+          "rationale": "cut `tenacity` dependency for one retrying POST",
+          "action": null,
+          "replacement": "tiny `for attempt in range(3)` + `time.sleep`.",
+          "files": [
+            "pyproject.toml",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "stdlib: cut `tenacity` dependency for one retrying POST. Replacement: tiny `for attempt in range(3)` + `time.sleep`. [pyproject.toml, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s06",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 6,
+          "kind": "shrink",
+          "text": "remove `sampling_temperature`, `sampling_top_p`, `has_sampling_controls` properties. Replacement: access `self.sampling.temperature/top_p` inline.",
+          "rationale": "remove `sampling_temperature`, `sampling_top_p`, `has_sampling_controls` properties",
+          "action": null,
+          "replacement": "access `self.sampling.temperature/top_p` inline.",
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink: remove `sampling_temperature`, `sampling_top_p`, `has_sampling_controls` properties. Replacement: access `self.sampling.temperature/top_p` inline. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s07",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 7,
+          "kind": "yagni",
+          "text": "`RequestControls` is a wrapper around `extra_body` with always-empty warnings. Replacement: `reasoning_extra_body(reasoning)`.",
+          "rationale": "`RequestControls` is a wrapper around `extra_body` with always-empty warnings",
+          "action": null,
+          "replacement": "`reasoning_extra_body(reasoning)`.",
+          "files": [
+            "src/dr_providers/query/reasoning.py"
+          ],
+          "raw": "yagni: `RequestControls` is a wrapper around `extra_body` with always-empty warnings. Replacement: `reasoning_extra_body(reasoning)`. [src/dr_providers/query/reasoning.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s08",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 8,
+          "kind": "yagni",
+          "text": "`LlmConfig` is exported/tested but not used by request flow. Replacement: delete unless external users rely on it.",
+          "rationale": "`LlmConfig` is exported/tested but not used by request flow",
+          "action": null,
+          "replacement": "delete unless external users rely on it.",
+          "files": [
+            "src/dr_providers/config.py"
+          ],
+          "raw": "yagni: `LlmConfig` is exported/tested but not used by request flow. Replacement: delete unless external users rely on it. [src/dr_providers/config.py]"
+        }
+      ],
+      "raw_header": "↑42k ↓1.3k R62k CH90.8% $0.282 (sub) 8.9%/272k (auto)                       (openai-codex) gpt-5.5 • minimal",
+      "raw_done_line": "done — 221 tok/s",
+      "raw_net_line": "net: ~-120 lines, -1 dep possible."
+    },
+    {
+      "audit_id": "gpt-5.5/minimal/audit_1",
+      "source_path": "data/audit-corpus/gpt-5.5/minimal/audit_1.md",
+      "thinking_level": "minimal",
+      "stats": {
+        "input_tokens": 37000,
+        "output_tokens": 1700,
+        "reasoning_tokens": 108000,
+        "cache_hit_percent": 96.9,
+        "cost_usd": 0.292,
+        "cost_mode": "sub",
+        "context_percent": 8.8,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "minimal",
+        "status": "done",
+        "throughput_tok_s": 117.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -120,
+        "dependencies": -2
+      },
+      "suggestion_count": 9,
+      "suggestion_kind_counts": {
+        "delete": 3,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s01",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 1,
+          "kind": "yagni",
+          "text": "cut `ProviderTransport` ABC; `ApiProvider` is the only implementation, so make it the base directly.",
+          "rationale": "cut `ProviderTransport` ABC; `ApiProvider` is the only implementation, so make it the base directly",
+          "action": null,
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: cut `ProviderTransport` ABC; `ApiProvider` is the only implementation, so make it the base directly. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s02",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 2,
+          "kind": "stdlib",
+          "text": "cut `tenacity`; a 3-attempt `for` loop with `time.sleep()` covers the one retry site.",
+          "rationale": "cut `tenacity`; a 3-attempt `for` loop with `time",
+          "action": "sleep()` covers the one retry site.",
+          "replacement": null,
+          "files": [
+            "pyproject.toml",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "stdlib: cut `tenacity`; a 3-attempt `for` loop with `time.sleep()` covers the one retry site. [pyproject.toml, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s03",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 3,
+          "kind": "delete",
+          "text": "unused `CallError` model. Replacement: nothing.",
+          "rationale": "unused `CallError` model",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: unused `CallError` model. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s04",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 4,
+          "kind": "delete",
+          "text": "unused `ControlRequestStyle` and TODO-marked `OpenRouterReasoningKey`. Replacement: nothing.",
+          "rationale": "unused `ControlRequestStyle` and TODO-marked `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete: unused `ControlRequestStyle` and TODO-marked `OpenRouterReasoningKey`. Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s05",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 5,
+          "kind": "yagni",
+          "text": "cut executable/supports-structured-output availability plumbing; no provider uses executables and only OpenRouter exists. Keep env var check only if needed.",
+          "rationale": "cut executable/supports-structured-output availability plumbing; no provider uses executables and only OpenRouter exists",
+          "action": "Keep env var check only if needed.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: cut executable/supports-structured-output availability plumbing; no provider uses executables and only OpenRouter exists. Keep env var check only if needed. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s06",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 6,
+          "kind": "delete",
+          "text": "empty generated marimo notebook and `notebooks` extra if it’s not part of the package story. Replacement: nothing.",
+          "rationale": "empty generated marimo notebook and `notebooks` extra if it’s not part of the package story",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: empty generated marimo notebook and `notebooks` extra if it’s not part of the package story. Replacement: nothing. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s07",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 7,
+          "kind": "shrink",
+          "text": "inline `sampling_temperature`, `sampling_top_p`, and unused `has_sampling_controls`; the properties add indirection for single-use values.",
+          "rationale": "inline `sampling_temperature`, `sampling_top_p`, and unused `has_sampling_controls`; the properties add indirection for single-use values",
+          "action": null,
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink: inline `sampling_temperature`, `sampling_top_p`, and unused `has_sampling_controls`; the properties add indirection for single-use values. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s08",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 8,
+          "kind": "yagni",
+          "text": "`LlmConfig` is exported but unused internally; either wire it into request construction or delete it from public API.",
+          "rationale": "`LlmConfig` is exported but unused internally; either wire it into request construction or delete it from public API",
+          "action": null,
+          "replacement": null,
+          "files": [
+            "src/dr_providers/config.py"
+          ],
+          "raw": "yagni: `LlmConfig` is exported but unused internally; either wire it into request construction or delete it from public API. [src/dr_providers/config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s09",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 9,
+          "kind": "shrink",
+          "text": "`scripts/query_provider.py` only calls `dr_providers.cli.main`; `python -m dr_providers.cli` already exists. Replacement: README command.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` only calls `dr_providers.cli.main`; `python -m dr_providers.cli` already exists.",
+          "replacement": "README command.",
+          "files": [
+            "scripts/query_provider.py"
+          ],
+          "raw": "shrink: `scripts/query_provider.py` only calls `dr_providers.cli.main`; `python -m dr_providers.cli` already exists. Replacement: README command. [scripts/query_provider.py]"
+        }
+      ],
+      "raw_header": "↑37k ↓1.7k R108k CH96.9% $0.292 (sub) 8.8%/272k (auto)                      (openai-codex) gpt-5.5 • minimal",
+      "raw_done_line": "done — 117 tok/s",
+      "raw_net_line": "net: ~-120 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/minimal/audit_2",
+      "source_path": "data/audit-corpus/gpt-5.5/minimal/audit_2.md",
+      "thinking_level": "minimal",
+      "stats": {
+        "input_tokens": 45000,
+        "output_tokens": 1300,
+        "reasoning_tokens": 125000,
+        "cache_hit_percent": 96.7,
+        "cost_usd": 0.327,
+        "cost_mode": "sub",
+        "context_percent": 9.5,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "minimal",
+        "status": "done",
+        "throughput_tok_s": 140.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -120,
+        "dependencies": 0
+      },
+      "suggestion_count": 8,
+      "suggestion_kind_counts": {
+        "delete": 4,
+        "shrink": 2,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s01",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 1,
+          "kind": "yagni",
+          "text": "`ProviderTransport` ABC has one implementation and only forwards config/availability/close. Fold into `ApiProvider`.",
+          "rationale": "`ProviderTransport` ABC has one implementation and only forwards config/availability/close",
+          "action": "Fold into `ApiProvider`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni `ProviderTransport` ABC has one implementation and only forwards config/availability/close. Fold into `ApiProvider`. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s02",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 2,
+          "kind": "delete",
+          "text": "`ProviderAvailabilityStatus`, `availability_status()`, `is_available()`, `required_executables`, `supports_structured_output`; only tested locally, not used by request flow. Replacement: fail on missing API key in `prepare()`.",
+          "rationale": "`ProviderAvailabilityStatus`, `availability_status()`, `is_available()`, `required_executables`, `supports_structured_output`; only tested locally, not used by request flow",
+          "action": null,
+          "replacement": "fail on missing API key in `prepare()`.",
+          "files": [
+            "src/dr_providers/query/transport_config.py",
+            "tests/test_transport_config.py"
+          ],
+          "raw": "delete `ProviderAvailabilityStatus`, `availability_status()`, `is_available()`, `required_executables`, `supports_structured_output`; only tested locally, not used by request flow. Replacement: fail on missing API key in `prepare()`. [src/dr_providers/query/transport_config.py, tests/test_transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s03",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 3,
+          "kind": "delete",
+          "text": "`LlmConfig`; exported but unused in code paths. Replacement: callers already pass `LlmRequest`.",
+          "rationale": "`LlmConfig`; exported but unused in code paths",
+          "action": null,
+          "replacement": "callers already pass `LlmRequest`.",
+          "files": [
+            "src/dr_providers/config.py"
+          ],
+          "raw": "delete `LlmConfig`; exported but unused in code paths. Replacement: callers already pass `LlmRequest`. [src/dr_providers/config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s04",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 4,
+          "kind": "delete",
+          "text": "`ControlRequestStyle` and `OpenRouterReasoningKey`; dead enums, one already marked TODO. Replacement: nothing.",
+          "rationale": "`ControlRequestStyle` and `OpenRouterReasoningKey`; dead enums, one already marked TODO",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete `ControlRequestStyle` and `OpenRouterReasoningKey`; dead enums, one already marked TODO. Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s05",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 5,
+          "kind": "delete",
+          "text": "`CallError`; dead model. Replacement: existing exceptions.",
+          "rationale": "`CallError`; dead model",
+          "action": null,
+          "replacement": "existing exceptions.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete `CallError`; dead model. Replacement: existing exceptions. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s06",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 6,
+          "kind": "shrink",
+          "text": "sampling properties on `LlmRequest`; `has_sampling_controls`, `sampling_temperature`, `sampling_top_p` add indirection for two reads. Replacement: inline `self.sampling.temperature/top_p` in `json_payload()`.",
+          "rationale": "sampling properties on `LlmRequest`; `has_sampling_controls`, `sampling_temperature`, `sampling_top_p` add indirection for two reads",
+          "action": null,
+          "replacement": "inline `self.sampling.temperature/top_p` in `json_payload()`.",
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink sampling properties on `LlmRequest`; `has_sampling_controls`, `sampling_temperature`, `sampling_top_p` add indirection for two reads. Replacement: inline `self.sampling.temperature/top_p` in `json_payload()`. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s07",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 7,
+          "kind": "shrink",
+          "text": "`RequestControls.from_reasoning` plumbing; `prepare()` and `generate()` both build/pass controls for one field. Replacement: let `prepare()` compute reasoning directly.",
+          "rationale": "`RequestControls",
+          "action": "from_reasoning` plumbing; `prepare()` and `generate()` both build/pass controls for one field.",
+          "replacement": "let `prepare()` compute reasoning directly.",
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink `RequestControls.from_reasoning` plumbing; `prepare()` and `generate()` both build/pass controls for one field. Replacement: let `prepare()` compute reasoning directly. [src/dr_providers/query/transport.py, src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s08",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 8,
+          "kind": "yagni",
+          "text": "`scripts/query_provider.py` is a wrapper around `python -m dr_providers.cli`. Replacement: call module directly from README/live-test script.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` is a wrapper around `python -m dr_providers.cli`.",
+          "replacement": "call module directly from README/live-test script.",
+          "files": [
+            "scripts/query_provider.py"
+          ],
+          "raw": "yagni `scripts/query_provider.py` is a wrapper around `python -m dr_providers.cli`. Replacement: call module directly from README/live-test script. [scripts/query_provider.py]"
+        }
+      ],
+      "raw_header": "↑45k ↓1.3k R125k CH96.7% $0.327 (sub) 9.5%/272k (auto)                      (openai-codex) gpt-5.5 • minimal",
+      "raw_done_line": "done — 140 tok/s",
+      "raw_net_line": "net: ~-120 lines, -0 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/low/audit_0",
+      "source_path": "data/audit-corpus/gpt-5.5/low/audit_0.md",
+      "thinking_level": "low",
+      "stats": {
+        "input_tokens": 49000,
+        "output_tokens": 1900,
+        "reasoning_tokens": 112000,
+        "cache_hit_percent": 96.5,
+        "cost_usd": 0.358,
+        "cost_mode": "sub",
+        "context_percent": 7.5,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "low",
+        "status": "done",
+        "throughput_tok_s": 168.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -180,
+        "dependencies": -1
+      },
+      "suggestion_count": 12,
+      "suggestion_kind_counts": {
+        "delete": 6,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s01",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 1,
+          "kind": "delete",
+          "text": "tracked build artifacts. Nothing in `dist/` belongs in source; rebuild on release.",
+          "rationale": "tracked build artifacts",
+          "action": "Nothing in `dist/` belongs in source; rebuild on release.",
+          "replacement": null,
+          "files": [
+            "dist/*"
+          ],
+          "raw": "`delete:` tracked build artifacts. Nothing in `dist/` belongs in source; rebuild on release. `[dist/*]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s02",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 2,
+          "kind": "delete",
+          "text": "unused enum `OpenRouterReasoningKey` already marked TODO. Replacement: nothing.",
+          "rationale": "unused enum `OpenRouterReasoningKey` already marked TODO",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "`delete:` unused enum `OpenRouterReasoningKey` already marked TODO. Replacement: nothing. `[src/dr_providers/names.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s03",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 3,
+          "kind": "delete",
+          "text": "unused enum `ControlRequestStyle`. Replacement: nothing.",
+          "rationale": "unused enum `ControlRequestStyle`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "`delete:` unused enum `ControlRequestStyle`. Replacement: nothing. `[src/dr_providers/names.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s04",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 4,
+          "kind": "delete",
+          "text": "unused model `CallError`. Replacement: nothing.",
+          "rationale": "unused model `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "`delete:` unused model `CallError`. Replacement: nothing. `[src/dr_providers/query/response.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s05",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 5,
+          "kind": "yagni",
+          "text": "`ProviderTransport` ABC has one real implementation and mostly delegates. Collapse into `ApiProvider` until there’s a second transport.",
+          "rationale": "`ProviderTransport` ABC has one real implementation and mostly delegates",
+          "action": "Collapse into `ApiProvider` until there’s a second transport.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "`yagni:` `ProviderTransport` ABC has one real implementation and mostly delegates. Collapse into `ApiProvider` until there’s a second transport. `[src/dr_providers/query/transport.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s06",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 6,
+          "kind": "yagni",
+          "text": "`LlmConfig` is exported/tested but unused by request/query flow. Delete or wire it into construction; right now it’s a parked shape.",
+          "rationale": "`LlmConfig` is exported/tested but unused by request/query flow",
+          "action": "Delete or wire it into construction; right now it’s a parked shape.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/config.py"
+          ],
+          "raw": "`yagni:` `LlmConfig` is exported/tested but unused by request/query flow. Delete or wire it into construction; right now it’s a parked shape. `[src/dr_providers/config.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s07",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 7,
+          "kind": "delete",
+          "text": "`ReasoningWarning` / `RequestControls.warnings` plumbing never produces warnings; every path passes `[]`. Remove until a warning exists.",
+          "rationale": "`ReasoningWarning` / `RequestControls",
+          "action": "warnings` plumbing never produces warnings; every path passes `[]`. Remove until a warning exists.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "request.py",
+            "response.py",
+            "transport.py"
+          ],
+          "raw": "`delete:` `ReasoningWarning` / `RequestControls.warnings` plumbing never produces warnings; every path passes `[]`. Remove until a warning exists. `[src/dr_providers/query/reasoning.py, request.py, response.py, transport.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s08",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 8,
+          "kind": "yagni",
+          "text": "`ProviderAvailabilityStatus.supports_structured_output`, `ProviderConfig.supports_structured_output`, and `required_executables` have no current provider/user. Keep env-var availability only.",
+          "rationale": "`ProviderAvailabilityStatus",
+          "action": "supports_structured_output`, `ProviderConfig.supports_structured_output`, and `required_executables` have no current provider/user. Keep env-var availability only.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "`yagni:` `ProviderAvailabilityStatus.supports_structured_output`, `ProviderConfig.supports_structured_output`, and `required_executables` have no current provider/user. Keep env-var availability only. `[src/dr_providers/query/transport_config.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s09",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 9,
+          "kind": "shrink",
+          "text": "`LlmRequest.sampling_temperature`, `sampling_top_p`, `has_sampling_controls` add indirection for two field reads. Inline `self.sampling.temperature/top_p`.",
+          "rationale": "`LlmRequest",
+          "action": "sampling_temperature`, `sampling_top_p`, `has_sampling_controls` add indirection for two field reads. Inline `self.sampling.temperature/top_p`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "`shrink:` `LlmRequest.sampling_temperature`, `sampling_top_p`, `has_sampling_controls` add indirection for two field reads. Inline `self.sampling.temperature/top_p`. `[src/dr_providers/query/request.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s10",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 10,
+          "kind": "shrink",
+          "text": "`ApiProvider.generate()` computes `RequestControls` then `prepare()` can compute it again. Pass reasoning once; let `prepare()` own it.",
+          "rationale": "`ApiProvider",
+          "action": "generate()` computes `RequestControls` then `prepare()` can compute it again. Pass reasoning once; let `prepare()` own it.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "request.py"
+          ],
+          "raw": "`shrink:` `ApiProvider.generate()` computes `RequestControls` then `prepare()` can compute it again. Pass reasoning once; let `prepare()` own it. `[src/dr_providers/query/transport.py, request.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s11",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 11,
+          "kind": "stdlib",
+          "text": "`tenacity` is used for one POST retry. A tiny `for attempt in range(3)` loop cuts a dependency if retry policy stays simple.",
+          "rationale": "`tenacity` is used for one POST retry",
+          "action": "A tiny `for attempt in range(3)` loop cuts a dependency if retry policy stays simple.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "`stdlib:` `tenacity` is used for one POST retry. A tiny `for attempt in range(3)` loop cuts a dependency if retry policy stays simple. `[src/dr_providers/query/transport.py, pyproject.toml]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s12",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 12,
+          "kind": "delete",
+          "text": "committed caches / local env dirs are untracked but present: `.pytest_cache`, `.ruff_cache`, `.venv`. Add/keep ignores and clean locally.",
+          "rationale": "committed caches / local env dirs are untracked but present: `",
+          "action": "pytest_cache`, `.ruff_cache`, `.venv`. Add/keep ignores and clean locally.",
+          "replacement": null,
+          "files": [
+            "repo root"
+          ],
+          "raw": "`delete:` committed caches / local env dirs are untracked but present: `.pytest_cache`, `.ruff_cache`, `.venv`. Add/keep ignores and clean locally. `[repo root]`"
+        }
+      ],
+      "raw_header": "↑49k ↓1.9k R112k CH96.5% $0.358 (sub) 7.5%/272k (auto)                          (openai-codex) gpt-5.5 • low",
+      "raw_done_line": "done — 168 tok/s",
+      "raw_net_line": "net: ~-180 lines, -1 dep possible."
+    },
+    {
+      "audit_id": "gpt-5.5/low/audit_1",
+      "source_path": "data/audit-corpus/gpt-5.5/low/audit_1.md",
+      "thinking_level": "low",
+      "stats": {
+        "input_tokens": 61000,
+        "output_tokens": 1300,
+        "reasoning_tokens": 102000,
+        "cache_hit_percent": 70.4,
+        "cost_usd": 0.398,
+        "cost_mode": "sub",
+        "context_percent": 9.5,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "low",
+        "status": "done",
+        "throughput_tok_s": 144.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -120,
+        "dependencies": -1
+      },
+      "suggestion_count": 7,
+      "suggestion_kind_counts": {
+        "delete": 3,
+        "shrink": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s01",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 1,
+          "kind": "yagni",
+          "text": "`ProviderTransport` ABC has one implementation. Delete ABC; keep `ApiProvider` concrete.",
+          "rationale": "`ProviderTransport` ABC has one implementation",
+          "action": "Delete ABC; keep `ApiProvider` concrete.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni `ProviderTransport` ABC has one implementation. Delete ABC; keep `ApiProvider` concrete. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s02",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 2,
+          "kind": "yagni",
+          "text": "`tenacity` for one POST retry path. Replace with a tiny 3-attempt loop; drop dependency.",
+          "rationale": "`tenacity` for one POST retry path",
+          "action": "Replace with a tiny 3-attempt loop; drop dependency.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "yagni `tenacity` for one POST retry path. Replace with a tiny 3-attempt loop; drop dependency. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s03",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 3,
+          "kind": "delete",
+          "text": "dead enums `ControlRequestStyle` and `OpenRouterReasoningKey`. Replacement: nothing.",
+          "rationale": "dead enums `ControlRequestStyle` and `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete dead enums `ControlRequestStyle` and `OpenRouterReasoningKey`. Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s04",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 4,
+          "kind": "delete",
+          "text": "unused `CallError`. Replacement: nothing.",
+          "rationale": "unused `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete unused `CallError`. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s05",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 5,
+          "kind": "yagni",
+          "text": "executable/structured-output availability plumbing is unused. Cut `required_executables`, `missing_executables`, `supports_structured_output`; env check is enough.",
+          "rationale": "executable/structured-output availability plumbing is unused",
+          "action": "Cut `required_executables`, `missing_executables`, `supports_structured_output`; env check is enough.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni executable/structured-output availability plumbing is unused. Cut `required_executables`, `missing_executables`, `supports_structured_output`; env check is enough. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s06",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 6,
+          "kind": "shrink",
+          "text": "`sampling_temperature` / `sampling_top_p` properties. Inline `self.sampling.temperature/top_p` in `json_payload`; delete unused `has_sampling_controls`.",
+          "rationale": "`sampling_temperature` / `sampling_top_p` properties",
+          "action": "Inline `self.sampling.temperature/top_p` in `json_payload`; delete unused `has_sampling_controls`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink `sampling_temperature` / `sampling_top_p` properties. Inline `self.sampling.temperature/top_p` in `json_payload`; delete unused `has_sampling_controls`. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s07",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 7,
+          "kind": "delete",
+          "text": "`scripts/query_provider.py` wrapper. Replacement: `python -m dr_providers.cli`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` wrapper.",
+          "replacement": "`python -m dr_providers.cli`.",
+          "files": [
+            "scripts/query_provider.py",
+            "README.md"
+          ],
+          "raw": "delete `scripts/query_provider.py` wrapper. Replacement: `python -m dr_providers.cli`. [scripts/query_provider.py, README.md]"
+        }
+      ],
+      "raw_header": "↑61k ↓1.3k R102k CH70.4% $0.398 (sub) 9.5%/272k (auto)                                                            (openai-codex) gpt-5.5 • low",
+      "raw_done_line": "done — 144 tok/s",
+      "raw_net_line": "net: ~-120 lines, -1 dep possible."
+    },
+    {
+      "audit_id": "gpt-5.5/low/audit_2",
+      "source_path": "data/audit-corpus/gpt-5.5/low/audit_2.md",
+      "thinking_level": "low",
+      "stats": {
+        "input_tokens": 40000,
+        "output_tokens": 1900,
+        "reasoning_tokens": 166000,
+        "cache_hit_percent": 98.4,
+        "cost_usd": 0.34,
+        "cost_mode": "sub",
+        "context_percent": 11.0,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "low",
+        "status": "done",
+        "throughput_tok_s": 141.0
+      },
+      "net_estimate": {
+        "approximate": false,
+        "lines": -120,
+        "dependencies": -1
+      },
+      "suggestion_count": 8,
+      "suggestion_kind_counts": {
+        "delete": 3,
+        "shrink": 1,
+        "stdlib": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s01",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 1,
+          "kind": "yagni",
+          "text": "cut `ProviderTransport` ABC; `ApiProvider` is the only real implementation. Inline the shared methods there.",
+          "rationale": "cut `ProviderTransport` ABC; `ApiProvider` is the only real implementation",
+          "action": "Inline the shared methods there.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: cut `ProviderTransport` ABC; `ApiProvider` is the only real implementation. Inline the shared methods there. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s02",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 2,
+          "kind": "yagni",
+          "text": "cut `ProviderConfig.required_executables`, `supports_structured_output`, availability plumbing; OpenRouter only needs API key + URL.",
+          "rationale": "cut `ProviderConfig",
+          "action": "required_executables`, `supports_structured_output`, availability plumbing; OpenRouter only needs API key + URL.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: cut `ProviderConfig.required_executables`, `supports_structured_output`, availability plumbing; OpenRouter only needs API key + URL. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s03",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 3,
+          "kind": "stdlib",
+          "text": "cut `tenacity`; one retry site can be a tiny bounded `for` loop around `httpx` exceptions.",
+          "rationale": "cut `tenacity`; one retry site can be a tiny bounded `for` loop around `httpx` exceptions",
+          "action": null,
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: cut `tenacity`; one retry site can be a tiny bounded `for` loop around `httpx` exceptions. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s04",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 4,
+          "kind": "delete",
+          "text": "remove unused `CallError`. Replacement: nothing.",
+          "rationale": "remove unused `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: remove unused `CallError`. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s05",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 5,
+          "kind": "delete",
+          "text": "remove unused `ControlRequestStyle` and `OpenRouterReasoningKey`. Replacement: nothing.",
+          "rationale": "remove unused `ControlRequestStyle` and `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete: remove unused `ControlRequestStyle` and `OpenRouterReasoningKey`. Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s06",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 6,
+          "kind": "delete",
+          "text": "remove unused `LlmRequest.has_sampling_controls`. Replacement: nothing.",
+          "rationale": "remove unused `LlmRequest",
+          "action": "has_sampling_controls`.",
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "delete: remove unused `LlmRequest.has_sampling_controls`. Replacement: nothing. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s07",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 7,
+          "kind": "shrink",
+          "text": "collapse duplicate export barrels if `dr_providers.query` is not public API. Keep top-level `dr_providers` only.",
+          "rationale": "collapse duplicate export barrels if `dr_providers",
+          "action": "query` is not public API. Keep top-level `dr_providers` only.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/__init__.py"
+          ],
+          "raw": "shrink: collapse duplicate export barrels if `dr_providers.query` is not public API. Keep top-level `dr_providers` only. [src/dr_providers/query/__init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s08",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 8,
+          "kind": "yagni",
+          "text": "`OpenRouterProvider` is a 1-method subclass just filling constants; either keep `ApiProvider.openrouter()` or construct `ApiProvider` directly.",
+          "rationale": "`OpenRouterProvider` is a 1-method subclass just filling constants; either keep `ApiProvider",
+          "action": "openrouter()` or construct `ApiProvider` directly.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/providers/openrouter.py"
+          ],
+          "raw": "yagni: `OpenRouterProvider` is a 1-method subclass just filling constants; either keep `ApiProvider.openrouter()` or construct `ApiProvider` directly. [src/dr_providers/query/providers/openrouter.py]"
+        }
+      ],
+      "raw_header": "↑40k ↓1.9k R166k CH98.4% $0.340 (sub) 11.0%/272k (auto)                         (openai-codex) gpt-5.5 • low",
+      "raw_done_line": "done — 141 tok/s",
+      "raw_net_line": "net: -120 lines, -1 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/medium/audit_0",
+      "source_path": "data/audit-corpus/gpt-5.5/medium/audit_0.md",
+      "thinking_level": "medium",
+      "stats": {
+        "input_tokens": 45000,
+        "output_tokens": 2600,
+        "reasoning_tokens": 204000,
+        "cache_hit_percent": 98.1,
+        "cost_usd": 0.405,
+        "cost_mode": "sub",
+        "context_percent": 12.8,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "medium",
+        "status": "done",
+        "throughput_tok_s": 109.0
+      },
+      "net_estimate": {
+        "approximate": false,
+        "lines": -150,
+        "dependencies": -2
+      },
+      "suggestion_count": 10,
+      "suggestion_kind_counts": {
+        "delete": 5,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s01",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 1,
+          "kind": "yagni",
+          "text": "cut `ProviderTransport` ABC; `ApiProvider` is the only implementation. Use concrete class directly.",
+          "rationale": "cut `ProviderTransport` ABC; `ApiProvider` is the only implementation",
+          "action": "Use concrete class directly.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni cut `ProviderTransport` ABC; `ApiProvider` is the only implementation. Use concrete class directly. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s02",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 2,
+          "kind": "yagni",
+          "text": "cut provider availability/executable/structured-output config; only API-key availability is real today. Replace with `resolve_api_key`.",
+          "rationale": "cut provider availability/executable/structured-output config; only API-key availability is real today",
+          "action": "Replace with `resolve_api_key`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni cut provider availability/executable/structured-output config; only API-key availability is real today. Replace with `resolve_api_key`. [src/dr_providers/query/transport_config.py, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s03",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 3,
+          "kind": "delete",
+          "text": "empty marimo notebook + `notebooks` extra. Replacement: nothing until there’s a real notebook.",
+          "rationale": "empty marimo notebook + `notebooks` extra",
+          "action": null,
+          "replacement": "nothing until there’s a real notebook.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete empty marimo notebook + `notebooks` extra. Replacement: nothing until there’s a real notebook. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s04",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 4,
+          "kind": "delete",
+          "text": "unused response/warning plumbing; no code populates warnings. Replacement: add it back when a provider emits warnings.",
+          "rationale": "unused response/warning plumbing; no code populates warnings",
+          "action": null,
+          "replacement": "add it back when a provider emits warnings.",
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "request.py",
+            "response.py"
+          ],
+          "raw": "delete unused response/warning plumbing; no code populates warnings. Replacement: add it back when a provider emits warnings. [src/dr_providers/query/reasoning.py, request.py, response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s05",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 5,
+          "kind": "delete",
+          "text": "unused public `LlmConfig`; callers use `LlmRequest`/`query_from_prompt`. Replacement: nothing.",
+          "rationale": "unused public `LlmConfig`; callers use `LlmRequest`/`query_from_prompt`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/config.py",
+            "__init__.py"
+          ],
+          "raw": "delete unused public `LlmConfig`; callers use `LlmRequest`/`query_from_prompt`. Replacement: nothing. [src/dr_providers/config.py, __init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s06",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 6,
+          "kind": "delete",
+          "text": "`CallError`; never referenced. Replacement: nothing.",
+          "rationale": "`CallError`; never referenced",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete `CallError`; never referenced. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s07",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 7,
+          "kind": "delete",
+          "text": "unused `ControlRequestStyle` and TODO `OpenRouterReasoningKey`. Replacement: nothing.",
+          "rationale": "unused `ControlRequestStyle` and TODO `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete unused `ControlRequestStyle` and TODO `OpenRouterReasoningKey`. Replacement: nothing. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s08",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 8,
+          "kind": "shrink",
+          "text": "one-provider enum metadata; custom `ProviderName.__new__` is overkill. Replace with constants or a simple property.",
+          "rationale": "one-provider enum metadata; custom `ProviderName",
+          "action": "__new__` is overkill. Replace with constants or a simple property.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "shrink one-provider enum metadata; custom `ProviderName.__new__` is overkill. Replace with constants or a simple property. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s09",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 9,
+          "kind": "stdlib",
+          "text": "cut `HttpStatusCode` enum. Replace with `http.HTTPStatus`.",
+          "rationale": "cut `HttpStatusCode` enum",
+          "action": "Replace with `http.HTTPStatus`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "stdlib cut `HttpStatusCode` enum. Replace with `http.HTTPStatus`. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s10",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 10,
+          "kind": "shrink",
+          "text": "`tenacity` for one retry decorator if dependency count matters. Replace with a tiny bounded `for`/`time.sleep` loop.",
+          "rationale": "`tenacity` for one retry decorator if dependency count matters",
+          "action": "Replace with a tiny bounded `for`/`time.sleep` loop.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "shrink `tenacity` for one retry decorator if dependency count matters. Replace with a tiny bounded `for`/`time.sleep` loop. [src/dr_providers/query/transport.py, pyproject.toml]"
+        }
+      ],
+      "raw_header": "↑45k ↓2.6k R204k CH98.1% $0.405 (sub) 12.8%/272k (auto)                      (openai-codex) gpt-5.5 • medium",
+      "raw_done_line": "done — 109 tok/s",
+      "raw_net_line": "net: -150 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/medium/audit_1",
+      "source_path": "data/audit-corpus/gpt-5.5/medium/audit_1.md",
+      "thinking_level": "medium",
+      "stats": {
+        "input_tokens": 63000,
+        "output_tokens": 2400,
+        "reasoning_tokens": 214000,
+        "cache_hit_percent": 91.5,
+        "cost_usd": 0.496,
+        "cost_mode": "sub",
+        "context_percent": 11.5,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "medium",
+        "status": "done",
+        "throughput_tok_s": 163.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -230,
+        "dependencies": -2
+      },
+      "suggestion_count": 11,
+      "suggestion_kind_counts": {
+        "delete": 7,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 1
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s01",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 1,
+          "kind": "delete",
+          "text": "availability framework (`ProviderAvailabilityStatus`, executables, structured-output flags, `availability_status/is_available`). Resolve API key at send time.",
+          "rationale": "availability framework (`ProviderAvailabilityStatus`, executables, structured-output flags, `availability_status/is_available`)",
+          "action": "Resolve API key at send time.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "delete: availability framework (`ProviderAvailabilityStatus`, executables, structured-output flags, `availability_status/is_available`). Resolve API key at send time. [src/dr_providers/query/transport_config.py, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s02",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 2,
+          "kind": "yagni",
+          "text": "`ProviderTransport` ABC with one implementation. Make `ApiProvider` the concrete base.",
+          "rationale": "`ProviderTransport` ABC with one implementation",
+          "action": "Make `ApiProvider` the concrete base.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: `ProviderTransport` ABC with one implementation. Make `ApiProvider` the concrete base. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s03",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 3,
+          "kind": "delete",
+          "text": "empty warning plumbing (`ReasoningWarning`, `warnings` on controls/request/response). Add back when a provider emits real warnings.",
+          "rationale": "empty warning plumbing (`ReasoningWarning`, `warnings` on controls/request/response)",
+          "action": "Add back when a provider emits real warnings.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: empty warning plumbing (`ReasoningWarning`, `warnings` on controls/request/response). Add back when a provider emits real warnings. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s04",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 4,
+          "kind": "delete",
+          "text": "unused public `LlmConfig`. Request already carries the same fields.",
+          "rationale": "unused public `LlmConfig`",
+          "action": "Request already carries the same fields.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/config.py",
+            "src/dr_providers/__init__.py"
+          ],
+          "raw": "delete: unused public `LlmConfig`. Request already carries the same fields. [src/dr_providers/config.py, src/dr_providers/__init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s05",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 5,
+          "kind": "stdlib",
+          "text": "`tenacity` for one retrying POST. Replace with a tiny bounded loop around `httpx` exceptions if you want fewer deps.",
+          "rationale": "`tenacity` for one retrying POST",
+          "action": "Replace with a tiny bounded loop around `httpx` exceptions if you want fewer deps.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: `tenacity` for one retrying POST. Replace with a tiny bounded loop around `httpx` exceptions if you want fewer deps. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s06",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 6,
+          "kind": "delete",
+          "text": "unused `CallError`. Replacement: nothing.",
+          "rationale": "unused `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: unused `CallError`. Replacement: nothing. [src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s07",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 7,
+          "kind": "delete",
+          "text": "unused `ControlRequestStyle` and TODO `OpenRouterReasoningKey`. Replacement: literals already live in one function.",
+          "rationale": "unused `ControlRequestStyle` and TODO `OpenRouterReasoningKey`",
+          "action": null,
+          "replacement": "literals already live in one function.",
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete: unused `ControlRequestStyle` and TODO `OpenRouterReasoningKey`. Replacement: literals already live in one function. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s08",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 8,
+          "kind": "shrink",
+          "text": "sampling proxy properties (`has_sampling_controls`, `sampling_temperature`, `sampling_top_p`). Inline `self.sampling.temperature/top_p`.",
+          "rationale": "sampling proxy properties (`has_sampling_controls`, `sampling_temperature`, `sampling_top_p`)",
+          "action": "Inline `self.sampling.temperature/top_p`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink: sampling proxy properties (`has_sampling_controls`, `sampling_temperature`, `sampling_top_p`). Inline `self.sampling.temperature/top_p`. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s09",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 9,
+          "kind": "delete",
+          "text": "blank marimo notebook + `notebooks` optional dependency. Add when there’s a real notebook.",
+          "rationale": "blank marimo notebook + `notebooks` optional dependency",
+          "action": "Add when there’s a real notebook.",
+          "replacement": null,
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: blank marimo notebook + `notebooks` optional dependency. Add when there’s a real notebook. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s10",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 10,
+          "kind": "shrink",
+          "text": "`scripts/query_provider.py` wrapper. Use `uv run python -m dr_providers.cli`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` wrapper. Use `uv run python -m dr_providers.cli`.",
+          "replacement": null,
+          "files": [
+            "scripts/query_provider.py",
+            "README.md",
+            "scripts/live_test_llm_configs.sh"
+          ],
+          "raw": "shrink: `scripts/query_provider.py` wrapper. Use `uv run python -m dr_providers.cli`. [scripts/query_provider.py, README.md, scripts/live_test_llm_configs.sh]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s11",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 11,
+          "kind": "delete",
+          "text": "ignored build/cache artifacts in working tree. Replacement: nothing.",
+          "rationale": "ignored build/cache artifacts in working tree",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "dist/",
+            ".cache/",
+            ".pytest_cache/",
+            ".ruff_cache/",
+            "**/__pycache__/"
+          ],
+          "raw": "delete: ignored build/cache artifacts in working tree. Replacement: nothing. [dist/, .cache/, .pytest_cache/, .ruff_cache/, **/__pycache__/]"
+        }
+      ],
+      "raw_header": "↑63k ↓2.4k R214k CH91.5% $0.496 (sub) 11.5%/272k (auto)                      (openai-codex) gpt-5.5 • medium",
+      "raw_done_line": "done — 163 tok/s",
+      "raw_net_line": "net: ~-230 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/medium/audit_2",
+      "source_path": "data/audit-corpus/gpt-5.5/medium/audit_2.md",
+      "thinking_level": "medium",
+      "stats": {
+        "input_tokens": 41000,
+        "output_tokens": 2800,
+        "reasoning_tokens": 236000,
+        "cache_hit_percent": 98.7,
+        "cost_usd": 0.406,
+        "cost_mode": "sub",
+        "context_percent": 10.8,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "medium",
+        "status": "done",
+        "throughput_tok_s": 104.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -180,
+        "dependencies": -2
+      },
+      "suggestion_count": 7,
+      "suggestion_kind_counts": {
+        "delete": 3,
+        "shrink": 1,
+        "stdlib": 1,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s01",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 1,
+          "kind": "yagni",
+          "text": "generic provider stack for one provider (`ProviderTransport` ABC, provider package shim, `ProviderName` base-url machinery). Inline into `ApiProvider`/`OpenRouterProvider` until a second provider exists.",
+          "rationale": "generic provider stack for one provider (`ProviderTransport` ABC, provider package shim, `ProviderName` base-url machinery)",
+          "action": "Inline into `ApiProvider`/`OpenRouterProvider` until a second provider exists.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "src/dr_providers/query/providers/*",
+            "src/dr_providers/names.py"
+          ],
+          "raw": "yagni: generic provider stack for one provider (`ProviderTransport` ABC, provider package shim, `ProviderName` base-url machinery). Inline into `ApiProvider`/`OpenRouterProvider` until a second provider exists. [src/dr_providers/query/transport.py, src/dr_providers/query/providers/*, src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s02",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 2,
+          "kind": "delete",
+          "text": "availability/structured-output/executable probing with no current provider using it. Keep only API-key resolution.",
+          "rationale": "availability/structured-output/executable probing with no current provider using it",
+          "action": "Keep only API-key resolution.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "delete: availability/structured-output/executable probing with no current provider using it. Keep only API-key resolution. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s03",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 3,
+          "kind": "yagni",
+          "text": "warnings pipeline never emits warnings (`ReasoningWarning`, `RequestControls.warnings`, request/response warning plumbing). Add back when a real warning exists.",
+          "rationale": "warnings pipeline never emits warnings (`ReasoningWarning`, `RequestControls",
+          "action": "warnings`, request/response warning plumbing). Add back when a real warning exists.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "yagni: warnings pipeline never emits warnings (`ReasoningWarning`, `RequestControls.warnings`, request/response warning plumbing). Add back when a real warning exists. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s04",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 4,
+          "kind": "stdlib",
+          "text": "`tenacity` for one HTTP retry. Replace with a tiny three-attempt loop using `time.sleep`; drop dependency.",
+          "rationale": "`tenacity` for one HTTP retry",
+          "action": "Replace with a tiny three-attempt loop using `time.sleep`; drop dependency.",
+          "replacement": null,
+          "files": [
+            "pyproject.toml",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "stdlib: `tenacity` for one HTTP retry. Replace with a tiny three-attempt loop using `time.sleep`; drop dependency. [pyproject.toml, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s05",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 5,
+          "kind": "delete",
+          "text": "unused public-ish config/model leftovers: `LlmConfig`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `CallError`, `has_sampling_controls`. Replacement: nothing.",
+          "rationale": "unused public-ish config/model leftovers: `LlmConfig`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `CallError`, `has_sampling_controls`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/config.py",
+            "src/dr_providers/names.py",
+            "src/dr_providers/query/response.py",
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "delete: unused public-ish config/model leftovers: `LlmConfig`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `CallError`, `has_sampling_controls`. Replacement: nothing. [src/dr_providers/config.py, src/dr_providers/names.py, src/dr_providers/query/response.py, src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s06",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 6,
+          "kind": "delete",
+          "text": "blank generated marimo notebook plus optional `notebooks` extra. Replacement: create notebooks when needed.",
+          "rationale": "blank generated marimo notebook plus optional `notebooks` extra",
+          "action": null,
+          "replacement": "create notebooks when needed.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: blank generated marimo notebook plus optional `notebooks` extra. Replacement: create notebooks when needed. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s07",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 7,
+          "kind": "shrink",
+          "text": "`scripts/query_provider.py` only delegates to `dr_providers.cli.main`. Use `uv run python -m dr_providers.cli ...`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` only delegates to `dr_providers.cli.main`. Use `uv run python -m dr_providers.cli ...`.",
+          "replacement": null,
+          "files": [
+            "scripts/query_provider.py",
+            "README.md",
+            "scripts/live_test_llm_configs.sh"
+          ],
+          "raw": "shrink: `scripts/query_provider.py` only delegates to `dr_providers.cli.main`. Use `uv run python -m dr_providers.cli ...`. [scripts/query_provider.py, README.md, scripts/live_test_llm_configs.sh]"
+        }
+      ],
+      "raw_header": "↑41k ↓2.8k R236k CH98.7% $0.406 (sub) 10.8%/272k (auto)                      (openai-codex) gpt-5.5 • medium",
+      "raw_done_line": "done — 104 tok/s",
+      "raw_net_line": "net: ~-180 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/high/audit_0",
+      "source_path": "data/audit-corpus/gpt-5.5/high/audit_0.md",
+      "thinking_level": "high",
+      "stats": {
+        "input_tokens": 57000,
+        "output_tokens": 5400,
+        "reasoning_tokens": 137000,
+        "cache_hit_percent": 93.3,
+        "cost_usd": 0.515,
+        "cost_mode": "sub",
+        "context_percent": 13.1,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "high",
+        "status": "done",
+        "throughput_tok_s": 111.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -230,
+        "dependencies": -2
+      },
+      "suggestion_count": 10,
+      "suggestion_kind_counts": {
+        "delete": 4,
+        "shrink": 3,
+        "stdlib": 1,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s01",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 1,
+          "kind": "yagni",
+          "text": "generic provider stack for one provider. Replace `ProviderTransport`/`ApiProvider`/`ProviderConfig` with one concrete `OpenRouterProvider` plus constants.",
+          "rationale": "generic provider stack for one provider",
+          "action": "Replace `ProviderTransport`/`ApiProvider`/`ProviderConfig` with one concrete `OpenRouterProvider` plus constants.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni generic provider stack for one provider. Replace `ProviderTransport`/`ApiProvider`/`ProviderConfig` with one concrete `OpenRouterProvider` plus constants. `[src/dr_providers/query/transport.py, src/dr_providers/query/transport_config.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s02",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 2,
+          "kind": "shrink",
+          "text": "prepared-request state on `LlmRequest`. Build URL/headers/idempotency locally in provider instead of storing `base_url/api_key/chat_path/extra_body/warnings` on the model.",
+          "rationale": "prepared-request state on `LlmRequest`",
+          "action": "Build URL/headers/idempotency locally in provider instead of storing `base_url/api_key/chat_path/extra_body/warnings` on the model.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink prepared-request state on `LlmRequest`. Build URL/headers/idempotency locally in provider instead of storing `base_url/api_key/chat_path/extra_body/warnings` on the model. `[src/dr_providers/query/request.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s03",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 3,
+          "kind": "yagni",
+          "text": "`RequestControls`, `ReasoningWarning`, and warnings plumbing that always stays empty. Replace with `_reasoning_extra_body(reasoning) -> dict`.",
+          "rationale": "`RequestControls`, `ReasoningWarning`, and warnings plumbing that always stays empty",
+          "action": "Replace with `_reasoning_extra_body(reasoning) -> dict`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py"
+          ],
+          "raw": "yagni `RequestControls`, `ReasoningWarning`, and warnings plumbing that always stays empty. Replace with `_reasoning_extra_body(reasoning) -> dict`. `[src/dr_providers/query/reasoning.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s04",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 4,
+          "kind": "delete",
+          "text": "empty generated marimo notebook. Replacement: create a notebook when there’s real notebook content.",
+          "rationale": "empty generated marimo notebook",
+          "action": null,
+          "replacement": "create a notebook when there’s real notebook content.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete empty generated marimo notebook. Replacement: create a notebook when there’s real notebook content. `[nbs/hello_world.py, pyproject.toml]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s05",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 5,
+          "kind": "shrink",
+          "text": "`tenacity` for one HTTP retry decorator. Replace with a tiny bounded loop around `httpx` transport exceptions.",
+          "rationale": "`tenacity` for one HTTP retry decorator",
+          "action": "Replace with a tiny bounded loop around `httpx` transport exceptions.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "shrink `tenacity` for one HTTP retry decorator. Replace with a tiny bounded loop around `httpx` transport exceptions. `[src/dr_providers/query/transport.py, pyproject.toml]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s06",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 6,
+          "kind": "delete",
+          "text": "unused `LlmConfig`. Replacement: construct `LlmRequest` directly.",
+          "rationale": "unused `LlmConfig`",
+          "action": null,
+          "replacement": "construct `LlmRequest` directly.",
+          "files": [
+            "src/dr_providers/config.py"
+          ],
+          "raw": "delete unused `LlmConfig`. Replacement: construct `LlmRequest` directly. `[src/dr_providers/config.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s07",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 7,
+          "kind": "delete",
+          "text": "unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`. Replacement: nothing.",
+          "rationale": "unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`. Replacement: nothing. `[src/dr_providers/names.py, src/dr_providers/query/response.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s08",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 8,
+          "kind": "stdlib",
+          "text": "custom `HttpStatusCode` enum. Replace with `http.HTTPStatus` or local literals.",
+          "rationale": "custom `HttpStatusCode` enum",
+          "action": "Replace with `http.HTTPStatus` or local literals.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "stdlib custom `HttpStatusCode` enum. Replace with `http.HTTPStatus` or local literals. `[src/dr_providers/query/response.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s09",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 9,
+          "kind": "shrink",
+          "text": "sampling convenience properties used once. Inline `self.sampling.temperature/top_p` in payload building.",
+          "rationale": "sampling convenience properties used once",
+          "action": "Inline `self.sampling.temperature/top_p` in payload building.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink sampling convenience properties used once. Inline `self.sampling.temperature/top_p` in payload building. `[src/dr_providers/query/request.py]`"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s10",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 10,
+          "kind": "delete",
+          "text": "CLI wrapper script. Replacement: `uv run python -m dr_providers.cli ...`.",
+          "rationale": "CLI wrapper script",
+          "action": null,
+          "replacement": "`uv run python -m dr_providers.cli ...`.",
+          "files": [
+            "scripts/query_provider.py",
+            "README.md"
+          ],
+          "raw": "delete CLI wrapper script. Replacement: `uv run python -m dr_providers.cli ...`. `[scripts/query_provider.py, README.md]`"
+        }
+      ],
+      "raw_header": "↑57k ↓5.4k R137k CH93.3% $0.515 (sub) 13.1%/272k (auto)                        (openai-codex) gpt-5.5 • high",
+      "raw_done_line": "done — 111 tok/s",
+      "raw_net_line": "net: ~-230 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/high/audit_1",
+      "source_path": "data/audit-corpus/gpt-5.5/high/audit_1.md",
+      "thinking_level": "high",
+      "stats": {
+        "input_tokens": 55000,
+        "output_tokens": 5300,
+        "reasoning_tokens": 331000,
+        "cache_hit_percent": 97.4,
+        "cost_usd": 0.602,
+        "cost_mode": "sub",
+        "context_percent": 20.0,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "high",
+        "status": "done",
+        "throughput_tok_s": 136.0
+      },
+      "net_estimate": {
+        "approximate": false,
+        "lines": -190,
+        "dependencies": -2
+      },
+      "suggestion_count": 9,
+      "suggestion_kind_counts": {
+        "delete": 5,
+        "shrink": 1,
+        "stdlib": 1,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s01",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 1,
+          "kind": "delete",
+          "text": "Empty generated marimo notebook + notebooks extra. Replacement: nothing; create a notebook when it has content.",
+          "rationale": "Empty generated marimo notebook + notebooks extra",
+          "action": null,
+          "replacement": "nothing; create a notebook when it has content.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: Empty generated marimo notebook + notebooks extra. Replacement: nothing; create a notebook when it has content. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s02",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 2,
+          "kind": "yagni",
+          "text": "Single-provider transport hierarchy (`ProviderTransport` ABC, `ApiProvider`, `providers/` package) for one OpenRouter backend. Replacement: one concrete provider class; add a base when provider #2 lands.",
+          "rationale": "Single-provider transport hierarchy (`ProviderTransport` ABC, `ApiProvider`, `providers/` package) for one OpenRouter backend",
+          "action": null,
+          "replacement": "one concrete provider class; add a base when provider #2 lands.",
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "src/dr_providers/query/providers/"
+          ],
+          "raw": "yagni: Single-provider transport hierarchy (`ProviderTransport` ABC, `ApiProvider`, `providers/` package) for one OpenRouter backend. Replacement: one concrete provider class; add a base when provider #2 lands. [src/dr_providers/query/transport.py, src/dr_providers/query/providers/]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s03",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 3,
+          "kind": "yagni",
+          "text": "Availability/executable/structured-output config for unused provider status checks. Replacement: keep only API-key/base-url/timeout config.",
+          "rationale": "Availability/executable/structured-output config for unused provider status checks",
+          "action": null,
+          "replacement": "keep only API-key/base-url/timeout config.",
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: Availability/executable/structured-output config for unused provider status checks. Replacement: keep only API-key/base-url/timeout config. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s04",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 4,
+          "kind": "delete",
+          "text": "Dead models/enums/helpers (`LlmConfig`, `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `has_sampling_controls`). Replacement: nothing; remove public `LlmConfig` only with an API break.",
+          "rationale": "Dead models/enums/helpers (`LlmConfig`, `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `has_sampling_controls`)",
+          "action": null,
+          "replacement": "nothing; remove public `LlmConfig` only with an API break.",
+          "files": [
+            "src/dr_providers/config.py",
+            "src/dr_providers/names.py",
+            "src/dr_providers/query/response.py",
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "delete: Dead models/enums/helpers (`LlmConfig`, `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `has_sampling_controls`). Replacement: nothing; remove public `LlmConfig` only with an API break. [src/dr_providers/config.py, src/dr_providers/names.py, src/dr_providers/query/response.py, src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s05",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 5,
+          "kind": "delete",
+          "text": "Warning plumbing where no warning is ever produced. Replacement: remove `ReasoningWarning`, `warnings` fields, and pass-through args.",
+          "rationale": "Warning plumbing where no warning is ever produced",
+          "action": null,
+          "replacement": "remove `ReasoningWarning`, `warnings` fields, and pass-through args.",
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: Warning plumbing where no warning is ever produced. Replacement: remove `ReasoningWarning`, `warnings` fields, and pass-through args. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s06",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 6,
+          "kind": "stdlib",
+          "text": "Tenacity for one retrying POST. Replacement: small bounded loop with `time.sleep`/jitter; drop `tenacity`.",
+          "rationale": "Tenacity for one retrying POST",
+          "action": null,
+          "replacement": "small bounded loop with `time.sleep`/jitter; drop `tenacity`.",
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: Tenacity for one retrying POST. Replacement: small bounded loop with `time.sleep`/jitter; drop `tenacity`. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s07",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 7,
+          "kind": "shrink",
+          "text": "Sampling accessor properties only wrap two optional fields. Replacement: inline `self.sampling.temperature/top_p` in `json_payload`.",
+          "rationale": "Sampling accessor properties only wrap two optional fields",
+          "action": null,
+          "replacement": "inline `self.sampling.temperature/top_p` in `json_payload`.",
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink: Sampling accessor properties only wrap two optional fields. Replacement: inline `self.sampling.temperature/top_p` in `json_payload`. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s08",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 8,
+          "kind": "delete",
+          "text": "Dev wrapper script only calls package main. Replacement: `uv run python -m dr_providers.cli ...`; update live test/README.",
+          "rationale": "Dev wrapper script only calls package main",
+          "action": null,
+          "replacement": "`uv run python -m dr_providers.cli ...`; update live test/README.",
+          "files": [
+            "scripts/query_provider.py",
+            "scripts/live_test_llm_configs.sh",
+            "README.md"
+          ],
+          "raw": "delete: Dev wrapper script only calls package main. Replacement: `uv run python -m dr_providers.cli ...`; update live test/README. [scripts/query_provider.py, scripts/live_test_llm_configs.sh, README.md]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s09",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 9,
+          "kind": "delete",
+          "text": "`tests/.gitkeep` in a non-empty tests dir. Replacement: nothing.",
+          "rationale": "`tests/",
+          "action": "gitkeep` in a non-empty tests dir.",
+          "replacement": "nothing.",
+          "files": [
+            "tests/.gitkeep"
+          ],
+          "raw": "delete: `tests/.gitkeep` in a non-empty tests dir. Replacement: nothing. [tests/.gitkeep]"
+        }
+      ],
+      "raw_header": "↑55k ↓5.3k R331k CH97.4% $0.602 (sub) 20.0%/272k (auto)                        (openai-codex) gpt-5.5 • high",
+      "raw_done_line": "done — 136 tok/s",
+      "raw_net_line": "net: -190 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/high/audit_2",
+      "source_path": "data/audit-corpus/gpt-5.5/high/audit_2.md",
+      "thinking_level": "high",
+      "stats": {
+        "input_tokens": 61000,
+        "output_tokens": 5500,
+        "reasoning_tokens": 207000,
+        "cache_hit_percent": 97.0,
+        "cost_usd": 0.573,
+        "cost_mode": "sub",
+        "context_percent": 15.3,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "high",
+        "status": "done",
+        "throughput_tok_s": 100.0
+      },
+      "net_estimate": {
+        "approximate": false,
+        "lines": -300,
+        "dependencies": -3
+      },
+      "suggestion_count": 11,
+      "suggestion_kind_counts": {
+        "delete": 4,
+        "shrink": 1,
+        "stdlib": 2,
+        "yagni": 4
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s01",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 1,
+          "kind": "yagni",
+          "text": "delete empty marimo notebook scaffold and `notebooks` extra. Nothing until a real notebook exists.",
+          "rationale": "delete empty marimo notebook scaffold and `notebooks` extra",
+          "action": "Nothing until a real notebook exists.",
+          "replacement": null,
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "yagni delete empty marimo notebook scaffold and `notebooks` extra. Nothing until a real notebook exists. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s02",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 2,
+          "kind": "stdlib",
+          "text": "replace one-command Typer CLI with `argparse`. Removes Typer/Rich chain.",
+          "rationale": "replace one-command Typer CLI with `argparse`",
+          "action": "Removes Typer/Rich chain.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/cli.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib replace one-command Typer CLI with `argparse`. Removes Typer/Rich chain. [src/dr_providers/cli.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s03",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 3,
+          "kind": "yagni",
+          "text": "delete availability/status machinery (`ProviderAvailabilityStatus`, executables, structured-output flag, `is_available`). Request path only needs API-key resolution.",
+          "rationale": "delete availability/status machinery (`ProviderAvailabilityStatus`, executables, structured-output flag, `is_available`)",
+          "action": "Request path only needs API-key resolution.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni delete availability/status machinery (`ProviderAvailabilityStatus`, executables, structured-output flag, `is_available`). Request path only needs API-key resolution. [src/dr_providers/query/transport_config.py, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s04",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 4,
+          "kind": "yagni",
+          "text": "delete warnings plumbing (`ReasoningWarning`, `RequestControls.warnings`, request/response warnings fields). No code emits warnings.",
+          "rationale": "delete warnings plumbing (`ReasoningWarning`, `RequestControls",
+          "action": "warnings`, request/response warnings fields). No code emits warnings.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "yagni delete warnings plumbing (`ReasoningWarning`, `RequestControls.warnings`, request/response warnings fields). No code emits warnings. [src/dr_providers/query/reasoning.py, src/dr_providers/query/request.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s05",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 5,
+          "kind": "yagni",
+          "text": "merge `ProviderTransport` ABC into `ApiProvider`. One subclass, no real polymorphism.",
+          "rationale": "merge `ProviderTransport` ABC into `ApiProvider`",
+          "action": "One subclass, no real polymorphism.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni merge `ProviderTransport` ABC into `ApiProvider`. One subclass, no real polymorphism. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s06",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 6,
+          "kind": "delete",
+          "text": "unused public-ish models/enums: `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `LlmConfig`. Replacement: nothing until a caller exists.",
+          "rationale": "unused public-ish models/enums: `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `LlmConfig`",
+          "action": null,
+          "replacement": "nothing until a caller exists.",
+          "files": [
+            "src/dr_providers/query/response.py",
+            "src/dr_providers/names.py",
+            "src/dr_providers/config.py"
+          ],
+          "raw": "delete unused public-ish models/enums: `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `LlmConfig`. Replacement: nothing until a caller exists. [src/dr_providers/query/response.py, src/dr_providers/names.py, src/dr_providers/config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s07",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 7,
+          "kind": "stdlib",
+          "text": "replace Tenacity retry decorator with a tiny local loop, or no retry policy. One call site does not need a dependency.",
+          "rationale": "replace Tenacity retry decorator with a tiny local loop, or no retry policy",
+          "action": "One call site does not need a dependency.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib replace Tenacity retry decorator with a tiny local loop, or no retry policy. One call site does not need a dependency. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s08",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 8,
+          "kind": "delete",
+          "text": "`dr_providers.query.__init__` re-export mirror. Top-level `dr_providers.__init__` already defines the package API.",
+          "rationale": "`dr_providers",
+          "action": "query.__init__` re-export mirror. Top-level `dr_providers.__init__` already defines the package API.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/__init__.py"
+          ],
+          "raw": "delete `dr_providers.query.__init__` re-export mirror. Top-level `dr_providers.__init__` already defines the package API. [src/dr_providers/query/__init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s09",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 9,
+          "kind": "shrink",
+          "text": "`live_test_llm_configs.sh` repeated `run_config` blocks into a simple array loop. Same behavior, fewer lines.",
+          "rationale": "`live_test_llm_configs",
+          "action": "sh` repeated `run_config` blocks into a simple array loop. Same behavior, fewer lines.",
+          "replacement": null,
+          "files": [
+            "scripts/live_test_llm_configs.sh"
+          ],
+          "raw": "shrink `live_test_llm_configs.sh` repeated `run_config` blocks into a simple array loop. Same behavior, fewer lines. [scripts/live_test_llm_configs.sh]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s10",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 10,
+          "kind": "delete",
+          "text": "unused request helpers `has_sampling_controls`, `sampling_temperature`, `sampling_top_p`. Inline `self.sampling` in `json_payload`.",
+          "rationale": "unused request helpers `has_sampling_controls`, `sampling_temperature`, `sampling_top_p`",
+          "action": "Inline `self.sampling` in `json_payload`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "delete unused request helpers `has_sampling_controls`, `sampling_temperature`, `sampling_top_p`. Inline `self.sampling` in `json_payload`. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s11",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 11,
+          "kind": "delete",
+          "text": "`scripts/query_provider.py` wrapper. Use `uv run python -m dr_providers.cli ...`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` wrapper. Use `uv run python -m dr_providers.cli ...`.",
+          "replacement": null,
+          "files": [
+            "scripts/query_provider.py"
+          ],
+          "raw": "delete `scripts/query_provider.py` wrapper. Use `uv run python -m dr_providers.cli ...`. [scripts/query_provider.py]"
+        }
+      ],
+      "raw_header": "↑61k ↓5.5k R207k CH97.0% $0.573 (sub) 15.3%/272k (auto)                        (openai-codex) gpt-5.5 • high",
+      "raw_done_line": "done — 100 tok/s",
+      "raw_net_line": "net: -300 lines, -3 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/xhigh/audit_0",
+      "source_path": "data/audit-corpus/gpt-5.5/xhigh/audit_0.md",
+      "thinking_level": "xhigh",
+      "stats": {
+        "input_tokens": 73000,
+        "output_tokens": 7000,
+        "reasoning_tokens": 216000,
+        "cache_hit_percent": 97.1,
+        "cost_usd": 0.683,
+        "cost_mode": "sub",
+        "context_percent": 14.1,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "xhigh",
+        "status": "done",
+        "throughput_tok_s": 111.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -190,
+        "dependencies": -2
+      },
+      "suggestion_count": 9,
+      "suggestion_kind_counts": {
+        "delete": 2,
+        "native": 1,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 3
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 1,
+          "kind": "yagni",
+          "text": "Generic provider/config/availability layer for one OpenRouter client. Collapse `ProviderTransport`/availability/config extras into concrete `OpenRouterProvider` + constants.",
+          "rationale": "Generic provider/config/availability layer for one OpenRouter client",
+          "action": "Collapse `ProviderTransport`/availability/config extras into concrete `OpenRouterProvider` + constants.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "transport_config.py",
+            "providers/openrouter.py"
+          ],
+          "raw": "yagni Generic provider/config/availability layer for one OpenRouter client. Collapse `ProviderTransport`/availability/config extras into concrete `OpenRouterProvider` + constants. [`src/dr_providers/query/transport.py`, `transport_config.py`, `providers/openrouter.py`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s02",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 2,
+          "kind": "yagni",
+          "text": "`RequestControls`/`ReasoningWarning` plumbing never emits warnings. Replace with one `reasoning_extra_body()` dict helper.",
+          "rationale": "`RequestControls`/`ReasoningWarning` plumbing never emits warnings",
+          "action": "Replace with one `reasoning_extra_body()` dict helper.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py",
+            "request.py",
+            "response.py"
+          ],
+          "raw": "yagni `RequestControls`/`ReasoningWarning` plumbing never emits warnings. Replace with one `reasoning_extra_body()` dict helper. [`src/dr_providers/query/reasoning.py`, `request.py`, `response.py`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s03",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 3,
+          "kind": "delete",
+          "text": "Placeholder marimo notebook and optional notebook extra. Recreate when there is real notebook content.",
+          "rationale": "Placeholder marimo notebook and optional notebook extra",
+          "action": "Recreate when there is real notebook content.",
+          "replacement": null,
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete Placeholder marimo notebook and optional notebook extra. Recreate when there is real notebook content. [`nbs/hello_world.py`, `pyproject.toml`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s04",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 4,
+          "kind": "stdlib",
+          "text": "`tenacity` for one bounded HTTP retry. Replace with a small stdlib retry loop.",
+          "rationale": "`tenacity` for one bounded HTTP retry",
+          "action": "Replace with a small stdlib retry loop.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib `tenacity` for one bounded HTTP retry. Replace with a small stdlib retry loop. [`src/dr_providers/query/transport.py`, `pyproject.toml`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s05",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 5,
+          "kind": "shrink",
+          "text": "Long hand-maintained sdist exclude list. Replace with a positive include/package list.",
+          "rationale": "Long hand-maintained sdist exclude list",
+          "action": "Replace with a positive include/package list.",
+          "replacement": null,
+          "files": [
+            "pyproject.toml"
+          ],
+          "raw": "shrink Long hand-maintained sdist exclude list. Replace with a positive include/package list. [`pyproject.toml`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s06",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 6,
+          "kind": "delete",
+          "text": "Unused models/enums: `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`. Nothing.",
+          "rationale": "Unused models/enums: `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`",
+          "action": "Nothing.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/response.py",
+            "src/dr_providers/names.py"
+          ],
+          "raw": "delete Unused models/enums: `CallError`, `ControlRequestStyle`, `OpenRouterReasoningKey`. Nothing. [`src/dr_providers/query/response.py`, `src/dr_providers/names.py`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 7,
+          "kind": "yagni",
+          "text": "`LlmConfig` mirrors `LlmRequest` fields and has no caller. Build `LlmRequest` directly.",
+          "rationale": "`LlmConfig` mirrors `LlmRequest` fields and has no caller",
+          "action": "Build `LlmRequest` directly.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/config.py",
+            "exports/tests/docs"
+          ],
+          "raw": "yagni `LlmConfig` mirrors `LlmRequest` fields and has no caller. Build `LlmRequest` directly. [`src/dr_providers/config.py`, exports/tests/docs]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s08",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 8,
+          "kind": "native",
+          "text": "`scripts/query_provider.py` only delegates to the module CLI. Use `python -m dr_providers.cli`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` only delegates to the module CLI. Use `python -m dr_providers.cli`.",
+          "replacement": null,
+          "files": [
+            "scripts/query_provider.py",
+            "scripts/live_test_llm_configs.sh"
+          ],
+          "raw": "native `scripts/query_provider.py` only delegates to the module CLI. Use `python -m dr_providers.cli`. [`scripts/query_provider.py`, `scripts/live_test_llm_configs.sh`]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s09",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 9,
+          "kind": "shrink",
+          "text": "Sampling convenience properties are single-use indirection. Inline `self.sampling` checks in `json_payload()`.",
+          "rationale": "Sampling convenience properties are single-use indirection",
+          "action": "Inline `self.sampling` checks in `json_payload()`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "shrink Sampling convenience properties are single-use indirection. Inline `self.sampling` checks in `json_payload()`. [`src/dr_providers/query/request.py`]"
+        }
+      ],
+      "raw_header": "↑73k ↓7.0k R216k CH97.1% $0.683 (sub) 14.1%/272k (auto)                       (openai-codex) gpt-5.5 • xhigh",
+      "raw_done_line": "done — 111 tok/s",
+      "raw_net_line": "net: ~-190 lines, -2 deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/xhigh/audit_1",
+      "source_path": "data/audit-corpus/gpt-5.5/xhigh/audit_1.md",
+      "thinking_level": "xhigh",
+      "stats": {
+        "input_tokens": 70000,
+        "output_tokens": 7500,
+        "reasoning_tokens": 154000,
+        "cache_hit_percent": 47.6,
+        "cost_usd": 0.654,
+        "cost_mode": "sub",
+        "context_percent": 15.4,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "xhigh",
+        "status": "done",
+        "throughput_tok_s": 140.0
+      },
+      "net_estimate": {
+        "approximate": false,
+        "lines": -250,
+        "dependencies": -3
+      },
+      "suggestion_count": 10,
+      "suggestion_kind_counts": {
+        "delete": 3,
+        "shrink": 2,
+        "stdlib": 1,
+        "yagni": 4
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 1,
+          "kind": "delete",
+          "text": "placeholder marimo notebook + notebooks extra. Remove `nbs/hello_world.py` and `marimo[recommended]`.",
+          "rationale": "placeholder marimo notebook + notebooks extra",
+          "action": "Remove `nbs/hello_world.py` and `marimo[recommended]`.",
+          "replacement": null,
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: placeholder marimo notebook + notebooks extra. Remove `nbs/hello_world.py` and `marimo[recommended]`. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s02",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 2,
+          "kind": "stdlib",
+          "text": "Typer for one command. Replace with `argparse`; delete `typer` optional/dev dep.",
+          "rationale": "Typer for one command",
+          "action": "Replace with `argparse`; delete `typer` optional/dev dep.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/cli.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: Typer for one command. Replace with `argparse`; delete `typer` optional/dev dep. [src/dr_providers/cli.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s03",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 3,
+          "kind": "yagni",
+          "text": "“prepared” `LlmRequest` copy carrying `base_url`, `api_key`, `headers()`, `endpoint()`, `json_payload()`. Build transport details inside `ApiProvider.generate()`.",
+          "rationale": "“prepared” `LlmRequest` copy carrying `base_url`, `api_key`, `headers()`, `endpoint()`, `json_payload()`",
+          "action": "Build transport details inside `ApiProvider.generate()`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py",
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: “prepared” `LlmRequest` copy carrying `base_url`, `api_key`, `headers()`, `endpoint()`, `json_payload()`. Build transport details inside `ApiProvider.generate()`. [src/dr_providers/query/request.py, src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s04",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 4,
+          "kind": "yagni",
+          "text": "provider availability/config surface for one provider. Cut `ProviderAvailabilityStatus`, executables, structured-output flag, availability methods.",
+          "rationale": "provider availability/config surface for one provider",
+          "action": "Cut `ProviderAvailabilityStatus`, executables, structured-output flag, availability methods.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport_config.py"
+          ],
+          "raw": "yagni: provider availability/config surface for one provider. Cut `ProviderAvailabilityStatus`, executables, structured-output flag, availability methods. [src/dr_providers/query/transport_config.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s05",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 5,
+          "kind": "yagni",
+          "text": "`ProviderTransport` ABC with one concrete implementation. Keep `ApiProvider` concrete; add a protocol only when a second transport appears.",
+          "rationale": "`ProviderTransport` ABC with one concrete implementation",
+          "action": "Keep `ApiProvider` concrete; add a protocol only when a second transport appears.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py"
+          ],
+          "raw": "yagni: `ProviderTransport` ABC with one concrete implementation. Keep `ApiProvider` concrete; add a protocol only when a second transport appears. [src/dr_providers/query/transport.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s06",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 6,
+          "kind": "shrink",
+          "text": "`RequestControls`/`ReasoningWarning`/`warnings` layer is a no-op wrapper. Replace with one `reasoning_extra_body()` function.",
+          "rationale": "`RequestControls`/`ReasoningWarning`/`warnings` layer is a no-op wrapper",
+          "action": "Replace with one `reasoning_extra_body()` function.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py"
+          ],
+          "raw": "shrink: `RequestControls`/`ReasoningWarning`/`warnings` layer is a no-op wrapper. Replace with one `reasoning_extra_body()` function. [src/dr_providers/query/reasoning.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 7,
+          "kind": "delete",
+          "text": "dead symbols: `LlmConfig`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `CallError`, `has_sampling_controls`. Replacement: nothing.",
+          "rationale": "dead symbols: `LlmConfig`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `CallError`, `has_sampling_controls`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers"
+          ],
+          "raw": "delete: dead symbols: `LlmConfig`, `ControlRequestStyle`, `OpenRouterReasoningKey`, `CallError`, `has_sampling_controls`. Replacement: nothing. [src/dr_providers]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s08",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 8,
+          "kind": "yagni",
+          "text": "Tenacity retry decorator around one POST. Let callers retry or use a tiny local loop later; delete `tenacity`.",
+          "rationale": "Tenacity retry decorator around one POST",
+          "action": "Let callers retry or use a tiny local loop later; delete `tenacity`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "yagni: Tenacity retry decorator around one POST. Let callers retry or use a tiny local loop later; delete `tenacity`. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s09",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 9,
+          "kind": "shrink",
+          "text": "custom `ProviderName.__new__` stores one URL. Use constants.",
+          "rationale": "custom `ProviderName",
+          "action": "__new__` stores one URL. Use constants.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/names.py"
+          ],
+          "raw": "shrink: custom `ProviderName.__new__` stores one URL. Use constants. [src/dr_providers/names.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s10",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 10,
+          "kind": "delete",
+          "text": "`scripts/query_provider.py` just calls `dr_providers.cli.main`. Use `uv run python -m dr_providers.cli`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` just calls `dr_providers.cli.main`. Use `uv run python -m dr_providers.cli`.",
+          "replacement": null,
+          "files": [
+            "scripts/query_provider.py"
+          ],
+          "raw": "delete: `scripts/query_provider.py` just calls `dr_providers.cli.main`. Use `uv run python -m dr_providers.cli`. [scripts/query_provider.py]"
+        }
+      ],
+      "raw_header": "↑70k ↓7.5k R154k CH47.6% $0.654 (sub) 15.4%/272k (auto)                       (openai-codex) gpt-5.5 • xhigh",
+      "raw_done_line": "done — 140 tok/s",
+      "raw_net_line": "net: -250 lines, -3 direct deps possible."
+    },
+    {
+      "audit_id": "gpt-5.5/xhigh/audit_2",
+      "source_path": "data/audit-corpus/gpt-5.5/xhigh/audit_2.md",
+      "thinking_level": "xhigh",
+      "stats": {
+        "input_tokens": 52000,
+        "output_tokens": 7600,
+        "reasoning_tokens": 197000,
+        "cache_hit_percent": 87.3,
+        "cost_usd": 0.588,
+        "cost_mode": "sub",
+        "context_percent": 14.3,
+        "context_limit_tokens": 272000,
+        "context_mode": "auto",
+        "agent": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking_level": "xhigh",
+        "status": "done",
+        "throughput_tok_s": 117.0
+      },
+      "net_estimate": {
+        "approximate": true,
+        "lines": -350,
+        "dependencies": -2
+      },
+      "suggestion_count": 8,
+      "suggestion_kind_counts": {
+        "delete": 4,
+        "shrink": 1,
+        "stdlib": 1,
+        "yagni": 2
+      },
+      "suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 1,
+          "kind": "yagni",
+          "text": "generic multi-provider framework around one OpenRouter implementation. Replace `ProviderTransport`/`ApiProvider`/`ProviderConfig` with one concrete `OpenRouterProvider`; add generic layer when provider #2 lands.",
+          "rationale": "generic multi-provider framework around one OpenRouter implementation",
+          "action": "Replace `ProviderTransport`/`ApiProvider`/`ProviderConfig` with one concrete `OpenRouterProvider`; add generic layer when provider #2 lands.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "src/dr_providers/query/transport_config.py",
+            "src/dr_providers/query/providers/openrouter.py"
+          ],
+          "raw": "yagni: generic multi-provider framework around one OpenRouter implementation. Replace `ProviderTransport`/`ApiProvider`/`ProviderConfig` with one concrete `OpenRouterProvider`; add generic layer when provider #2 lands. [src/dr_providers/query/transport.py, src/dr_providers/query/transport_config.py, src/dr_providers/query/providers/openrouter.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s02",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 2,
+          "kind": "yagni",
+          "text": "two-phase prepared request state on `LlmRequest`. Keep request as data; build endpoint/headers/payload as locals in the provider.",
+          "rationale": "two-phase prepared request state on `LlmRequest`",
+          "action": "Keep request as data; build endpoint/headers/payload as locals in the provider.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/request.py"
+          ],
+          "raw": "yagni: two-phase prepared request state on `LlmRequest`. Keep request as data; build endpoint/headers/payload as locals in the provider. [src/dr_providers/query/request.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s03",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 3,
+          "kind": "delete",
+          "text": "empty marimo notebook plus `notebooks` extra. Replacement: nothing until a real notebook exists.",
+          "rationale": "empty marimo notebook plus `notebooks` extra",
+          "action": null,
+          "replacement": "nothing until a real notebook exists.",
+          "files": [
+            "nbs/hello_world.py",
+            "pyproject.toml"
+          ],
+          "raw": "delete: empty marimo notebook plus `notebooks` extra. Replacement: nothing until a real notebook exists. [nbs/hello_world.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s04",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 4,
+          "kind": "stdlib",
+          "text": "`tenacity` used once for one retry decorator. Replace with a tiny bounded stdlib loop, or caller-owned retry.",
+          "rationale": "`tenacity` used once for one retry decorator",
+          "action": "Replace with a tiny bounded stdlib loop, or caller-owned retry.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/transport.py",
+            "pyproject.toml"
+          ],
+          "raw": "stdlib: `tenacity` used once for one retry decorator. Replace with a tiny bounded stdlib loop, or caller-owned retry. [src/dr_providers/query/transport.py, pyproject.toml]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s05",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 5,
+          "kind": "shrink",
+          "text": "`RequestControls` + `ReasoningWarning` plumbing carries one dict and always-empty warnings. Replace with `reasoning_extra_body(reasoning)`.",
+          "rationale": "`RequestControls` + `ReasoningWarning` plumbing carries one dict and always-empty warnings",
+          "action": "Replace with `reasoning_extra_body(reasoning)`.",
+          "replacement": null,
+          "files": [
+            "src/dr_providers/query/reasoning.py"
+          ],
+          "raw": "shrink: `RequestControls` + `ReasoningWarning` plumbing carries one dict and always-empty warnings. Replace with `reasoning_extra_body(reasoning)`. [src/dr_providers/query/reasoning.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s06",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 6,
+          "kind": "delete",
+          "text": "unused public `LlmConfig`. Replacement: `LlmRequest` or direct args.",
+          "rationale": "unused public `LlmConfig`",
+          "action": null,
+          "replacement": "`LlmRequest` or direct args.",
+          "files": [
+            "src/dr_providers/config.py",
+            "src/dr_providers/__init__.py"
+          ],
+          "raw": "delete: unused public `LlmConfig`. Replacement: `LlmRequest` or direct args. [src/dr_providers/config.py, src/dr_providers/__init__.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 7,
+          "kind": "delete",
+          "text": "unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`. Replacement: nothing.",
+          "rationale": "unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`",
+          "action": null,
+          "replacement": "nothing.",
+          "files": [
+            "src/dr_providers/names.py",
+            "src/dr_providers/query/response.py"
+          ],
+          "raw": "delete: unused `ControlRequestStyle`, `OpenRouterReasoningKey`, and `CallError`. Replacement: nothing. [src/dr_providers/names.py, src/dr_providers/query/response.py]"
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s08",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 8,
+          "kind": "delete",
+          "text": "`scripts/query_provider.py` wrapper. Use `uv run python -m dr_providers.cli ...`.",
+          "rationale": "`scripts/query_provider",
+          "action": "py` wrapper. Use `uv run python -m dr_providers.cli ...`.",
+          "replacement": null,
+          "files": [
+            "scripts/query_provider.py"
+          ],
+          "raw": "delete: `scripts/query_provider.py` wrapper. Use `uv run python -m dr_providers.cli ...`. [scripts/query_provider.py]"
+        }
+      ],
+      "raw_header": "↑52k ↓7.6k R197k CH87.3% $0.588 (sub) 14.3%/272k (auto)                       (openai-codex) gpt-5.5 • xhigh",
+      "raw_done_line": "done — 117 tok/s",
+      "raw_net_line": "net: ~-350 lines, -2 deps possible."
+    }
+  ]
+}

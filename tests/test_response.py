@@ -49,7 +49,6 @@ def _parse(
         response,
         llm_request,
         latency_ms=latency_ms,
-        warnings=[],
     )
 
 
@@ -65,9 +64,7 @@ def test_llm_response_from_http_success(llm_request: LlmRequest) -> None:
         },
         text='{"choices":[{"message":{"content":"hello"}}]}',
     )
-    result = llm_response_from_http(
-        response, llm_request, latency_ms=42, warnings=[]
-    )
+    result = llm_response_from_http(response, llm_request, latency_ms=42)
     assert result.text == "hello"
     assert result.finish_reason == "stop"
     assert result.latency_ms == 42
