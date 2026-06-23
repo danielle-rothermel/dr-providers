@@ -2,15 +2,10 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from secrets import randbelow
 from typing import TYPE_CHECKING, Self
 
 import httpx
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential_jitter,
-)
 
 from dr_providers.query.errors import ProviderTransportError
 from dr_providers.query.reasoning import RequestControls
@@ -23,6 +18,20 @@ if TYPE_CHECKING:
         ProviderAvailabilityStatus,
         ProviderConfig,
     )
+
+
+POST_ATTEMPTS = 3
+INITIAL_RETRY_DELAY_SECONDS = 0.5
+MAX_RETRY_DELAY_SECONDS = 8.0
+RETRY_JITTER_SECONDS = 1.0
+RETRY_JITTER_STEPS = 1000
+
+
+def _retry_delay_seconds(attempt_index: int) -> float:
+    base_delay = INITIAL_RETRY_DELAY_SECONDS * (2**attempt_index)
+    jitter = randbelow(RETRY_JITTER_STEPS) / RETRY_JITTER_STEPS
+    delay_with_jitter = base_delay + (jitter * RETRY_JITTER_SECONDS)
+    return min(delay_with_jitter, MAX_RETRY_DELAY_SECONDS)
 
 
 class ProviderTransport(ABC):
@@ -77,20 +86,19 @@ class ApiProvider(ProviderTransport):
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
-    @retry(
-        retry=retry_if_exception_type(
-            (httpx.TimeoutException, httpx.TransportError)
-        ),
-        wait=wait_exponential_jitter(initial=0.5, max=8),
-        stop=stop_after_attempt(3),
-        reraise=True,
-    )
     def _post_with_retry(self, prepared: LlmRequest) -> httpx.Response:
-        return self._client.post(
-            prepared.endpoint(),
-            headers=prepared.headers(),
-            json=prepared.json_payload(),
-        )
+        for attempt_index in range(POST_ATTEMPTS):
+            try:
+                return self._client.post(
+                    prepared.endpoint(),
+                    headers=prepared.headers(),
+                    json=prepared.json_payload(),
+                )
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt_index == POST_ATTEMPTS - 1:
+                    raise
+                time.sleep(_retry_delay_seconds(attempt_index))
+        raise RuntimeError("unreachable post retry state")
 
     def generate(self, request: LlmRequest) -> LlmResponse:
         controls = RequestControls.from_reasoning(request.reasoning)
