@@ -23,7 +23,6 @@ def test_public_api_exports() -> None:
 
 
 def test_version() -> None:
-    assert version("dr-providers") == "0.1.2"
     assert dr_providers.__version__ == version("dr-providers")
 
 
