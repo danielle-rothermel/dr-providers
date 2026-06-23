@@ -85,8 +85,9 @@ See `dr_providers.__all__` for the full list.
 ## Development
 
 ```bash
-uv sync
-scripts/pre-check.sh
+uv sync --frozen
+uv run pre-commit install
+uv run pre-commit run --all-files
 ```
 
 Run the CLI from the repo without installing:
