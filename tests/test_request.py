@@ -6,7 +6,6 @@ from dr_providers import (
     MessageRole,
     ProviderName,
     ReasoningSpec,
-    RequestControls,
     SamplingControls,
 )
 from dr_providers.names import EffortLevel
@@ -39,13 +38,12 @@ def llm_request() -> LlmRequest:
 def test_prepare_populates_transport_fields(
     llm_request: LlmRequest, config: ProviderConfig
 ) -> None:
-    controls = RequestControls.from_reasoning(llm_request.reasoning)
-    prepared = llm_request.prepare(config, controls=controls)
+    prepared = llm_request.prepare(config)
 
     assert prepared.api_key == "test-key"
     assert prepared.base_url == config.base_url
     assert prepared.idempotency_key
-    assert prepared.extra_body == controls.extra_body
+    assert prepared.extra_body == {"reasoning": {"effort": EffortLevel.LOW}}
     assert llm_request.api_key is None
 
 
@@ -97,9 +95,8 @@ def test_json_payload_extra_body_conflict(config: ProviderConfig) -> None:
         model="test-model",
         messages=[Message(role=MessageRole.USER, content="hi")],
     )
-    prepared = llm_request.prepare(
-        config,
-        controls=RequestControls(extra_body={"model": "override"}),
+    prepared = llm_request.prepare(config).model_copy(
+        update={"extra_body": {"model": "override"}}
     )
     with pytest.raises(ValueError, match="extra_body conflicts"):
         prepared.json_payload()

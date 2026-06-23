@@ -11,7 +11,7 @@ from pydantic import (
 
 from dr_providers.config import ReasoningSpec, SamplingControls  # noqa: TC001
 from dr_providers.names import MessageRole, ProviderName  # noqa: TC001
-from dr_providers.query.reasoning import ReasoningWarning, RequestControls
+from dr_providers.query.reasoning import _reasoning_extra_body
 from dr_providers.query.transport_config import ProviderConfig, resolve_api_key
 
 
@@ -37,39 +37,15 @@ class LlmRequest(BaseModel):
     api_key: str | None = Field(default=None, exclude=True, repr=False)
     idempotency_key: str | None = Field(default=None, exclude=True)
     extra_body: dict[str, Any] = Field(default_factory=dict, exclude=True)
-    warnings: list[ReasoningWarning] = Field(
-        default_factory=list, exclude=True
-    )
 
-    @property
-    def has_sampling_controls(self) -> bool:
-        return self.sampling is not None and not self.sampling.is_empty()
-
-    @property
-    def sampling_temperature(self) -> float | None:
-        return self.sampling.temperature if self.sampling is not None else None
-
-    @property
-    def sampling_top_p(self) -> float | None:
-        return self.sampling.top_p if self.sampling is not None else None
-
-    def prepare(
-        self,
-        config: ProviderConfig,
-        *,
-        controls: RequestControls | None = None,
-    ) -> LlmRequest:
-        request_controls = controls or RequestControls.from_reasoning(
-            self.reasoning
-        )
+    def prepare(self, config: ProviderConfig) -> LlmRequest:
         return self.model_copy(
             update={
                 "base_url": config.base_url,
                 "chat_path": config.chat_path,
                 "api_key": resolve_api_key(config, label=self.provider),
                 "idempotency_key": self._resolve_idempotency_key(),
-                "extra_body": request_controls.extra_body,
-                "warnings": request_controls.warnings,
+                "extra_body": _reasoning_extra_body(self.reasoning),
             }
         )
 
@@ -109,10 +85,10 @@ class LlmRequest(BaseModel):
                 for message in self.messages
             ],
         }
-        if self.sampling_temperature is not None:
-            payload["temperature"] = self.sampling_temperature
-        if self.sampling_top_p is not None:
-            payload["top_p"] = self.sampling_top_p
+        if self.sampling is not None and self.sampling.temperature is not None:
+            payload["temperature"] = self.sampling.temperature
+        if self.sampling is not None and self.sampling.top_p is not None:
+            payload["top_p"] = self.sampling.top_p
         if self.max_tokens is not None:
             # TODO: will this break things?
             payload["max_tokens"] = self.max_tokens

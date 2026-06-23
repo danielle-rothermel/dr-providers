@@ -10,7 +10,6 @@ from dr_providers.query.errors import (
     ProviderSemanticError,
     ProviderTransportError,
 )
-from dr_providers.query.reasoning import ReasoningWarning  # noqa: TC001
 
 if TYPE_CHECKING:
     import httpx
@@ -65,7 +64,6 @@ class LlmResponse(BaseModel):
     latency_ms: int
     text: str
     finish_reason: str | None = None
-    warnings: list[Any] = Field(default_factory=list)
 
 
 def _parse_response_json(
@@ -110,7 +108,6 @@ def llm_response_from_http(
     request: LlmRequest,
     *,
     latency_ms: int,
-    warnings: list[ReasoningWarning],
 ) -> LlmResponse:
     provider_label = str(request.provider)
     response_text_preview = response.text[:500]
@@ -136,5 +133,4 @@ def llm_response_from_http(
         raw_json=body_raw,
         provider=provider_label,
         model=request.model,
-        warnings=warnings,
     )

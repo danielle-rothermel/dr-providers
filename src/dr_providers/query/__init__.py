@@ -1,4 +1,4 @@
-from dr_providers.config import LlmConfig, ReasoningSpec, SamplingControls
+from dr_providers.config import ReasoningSpec, SamplingControls
 from dr_providers.names import MessageRole, ProviderName
 from dr_providers.query.errors import (
     ProviderError,
@@ -6,14 +6,12 @@ from dr_providers.query.errors import (
     ProviderTransportError,
 )
 from dr_providers.query.providers import OpenRouterProvider
-from dr_providers.query.reasoning import RequestControls
 from dr_providers.query.request import LlmRequest, Message
 from dr_providers.query.response import LlmResponse
 from dr_providers.query.transport import ApiProvider
 
 __all__ = [
     "ApiProvider",
-    "LlmConfig",
     "LlmRequest",
     "LlmResponse",
     "Message",
@@ -24,6 +22,5 @@ __all__ = [
     "ProviderSemanticError",
     "ProviderTransportError",
     "ReasoningSpec",
-    "RequestControls",
     "SamplingControls",
 ]

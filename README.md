@@ -93,5 +93,5 @@ uv run pre-commit run --all-files
 Run the CLI from the repo without installing:
 
 ```bash
-uv run python scripts/query_provider.py --model openai/gpt-4o-mini -m "hi"
+uv run python -m dr_providers.cli --model openai/gpt-4o-mini -m "hi"
 ```

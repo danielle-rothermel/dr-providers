@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Self
 import httpx
 
 from dr_providers.query.errors import ProviderTransportError
-from dr_providers.query.reasoning import RequestControls
 from dr_providers.query.response import llm_response_from_http
 
 if TYPE_CHECKING:
@@ -101,8 +100,7 @@ class ApiProvider(ProviderTransport):
         raise RuntimeError("unreachable post retry state")
 
     def generate(self, request: LlmRequest) -> LlmResponse:
-        controls = RequestControls.from_reasoning(request.reasoning)
-        prepared = request.prepare(self._config, controls=controls)
+        prepared = request.prepare(self._config)
         started = time.perf_counter()
         try:
             response = self._post_with_retry(prepared)
@@ -115,5 +113,4 @@ class ApiProvider(ProviderTransport):
             response,
             request,
             latency_ms=latency_ms,
-            warnings=prepared.warnings,
         )

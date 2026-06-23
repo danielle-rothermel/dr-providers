@@ -26,7 +26,7 @@ run_config() {
     shift
 
     printf '\n==> %s\n' "${label}"
-    uv run python scripts/query_provider.py \
+    uv run python -m dr_providers.cli \
         --message "${MESSAGE}" \
         --temperature "${TEMPERATURE}" \
         --top-p "${TOP_P}" \
