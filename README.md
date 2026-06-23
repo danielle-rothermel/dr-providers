@@ -1,6 +1,6 @@
 # dr-providers
 
-OpenRouter LLM query client with typed requests and responses. Requires Python 3.13+.
+OpenRouter LLM query client with typed requests and responses. Requires Python 3.12+.
 
 ## Install
 
