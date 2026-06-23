@@ -22,6 +22,11 @@ data/
   audit-corpus/
     README.md
     manifest.json
+    ground-truth/
+      canonical_suggestions.json
+      parsed_audits.json
+      analysis.json
+      analysis.md
     gpt-5.5/
       off/
         audit_0.md
@@ -202,3 +207,31 @@ The normalized data should support benchmark questions such as:
 - Which suggestions are repeatedly produced but intentionally not addressed?
 - Which settings produce more duplicates, broader suggestions, or more
   actionable suggestions?
+
+## Ground Truth Artifacts
+
+The curated ground-truth outputs live in `ground-truth/`:
+
+- `canonical_suggestions.json`: the hand-curated subjective layer. It defines
+  the atomic unique suggestions, maps each raw audit suggestion back to one or
+  more canonical ids, and records the final resolution decision.
+- `parsed_audits.json`: deterministic parse of the raw audit markdown files,
+  including run metadata, suggestion text, file references, kind counts, and
+  net estimates.
+- `analysis.json`: machine-readable answers to the first-pass benchmark
+  questions.
+- `analysis.md`: the same first-pass answers in a compact human-readable form.
+
+Regenerate the deterministic artifacts after changing the parser, raw corpus,
+or canonical mapping:
+
+```bash
+uv run python scripts/generate_audit_ground_truth.py \
+  --corpus-dir data/audit-corpus \
+  --output-dir data/audit-corpus/ground-truth
+```
+
+The generator overwrites `parsed_audits.json`, `analysis.json`, and
+`analysis.md`. It validates `canonical_suggestions.json` but does not overwrite
+it because the canonical grouping and resolution labels are the curated ground
+truth.

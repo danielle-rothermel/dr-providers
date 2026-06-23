@@ -1,0 +1,256 @@
+{
+  "corpus_id": "dr-providers-ponytail-audit-gpt-5.5",
+  "audit_count": 18,
+  "parsed_suggestion_count": 167,
+  "canonical_suggestion_count": 21,
+  "questions": [
+    {
+      "question_id": "cost_off_vs_high",
+      "question": "How much cheaper is thinking off than high thinking?",
+      "method": "Compare mean run cost across the three off and high audits.",
+      "answer": "Thinking off averages $0.414, high averages $0.563; off is 26.5% cheaper.",
+      "values": {
+        "off_mean_cost_usd": 0.414,
+        "high_mean_cost_usd": 0.563,
+        "savings_percent": 26.5
+      }
+    },
+    {
+      "question_id": "speed_low_vs_minimal",
+      "question": "How much faster is low thinking than minimal thinking?",
+      "method": "Compare mean throughput in tokens per second across the three low and minimal audits.",
+      "answer": "Low averages 151.0 tok/s, minimal averages 159.3 tok/s; low is 5.2% slower.",
+      "values": {
+        "low_mean_tok_s": 151.0,
+        "minimal_mean_tok_s": 159.333,
+        "speedup_ratio": 0.948,
+        "percent_delta": -5.2
+      }
+    },
+    {
+      "question_id": "raw_suggestion_counts",
+      "question": "How many raw suggestions did each run produce?",
+      "method": "Count parsed suggestion lines in each audit.",
+      "answer": "Runs produced between 7 and 12 raw suggestions.",
+      "values": {
+        "gpt-5.5/off/audit_0": 10,
+        "gpt-5.5/off/audit_1": 10,
+        "gpt-5.5/off/audit_2": 10,
+        "gpt-5.5/minimal/audit_0": 8,
+        "gpt-5.5/minimal/audit_1": 9,
+        "gpt-5.5/minimal/audit_2": 8,
+        "gpt-5.5/low/audit_0": 12,
+        "gpt-5.5/low/audit_1": 7,
+        "gpt-5.5/low/audit_2": 8,
+        "gpt-5.5/medium/audit_0": 10,
+        "gpt-5.5/medium/audit_1": 11,
+        "gpt-5.5/medium/audit_2": 7,
+        "gpt-5.5/high/audit_0": 10,
+        "gpt-5.5/high/audit_1": 9,
+        "gpt-5.5/high/audit_2": 11,
+        "gpt-5.5/xhigh/audit_0": 9,
+        "gpt-5.5/xhigh/audit_1": 10,
+        "gpt-5.5/xhigh/audit_2": 8
+      }
+    },
+    {
+      "question_id": "canonical_coverage_by_run",
+      "question": "How many unique canonical suggestions did each run cover?",
+      "method": "Map each raw suggestion to canonical ids and count uniques.",
+      "answer": "The best single run is gpt-5.5/high/audit_2 with 12 unique canonical suggestions.",
+      "values": {
+        "gpt-5.5/off/audit_0": 10,
+        "gpt-5.5/off/audit_1": 10,
+        "gpt-5.5/off/audit_2": 10,
+        "gpt-5.5/minimal/audit_0": 8,
+        "gpt-5.5/minimal/audit_1": 8,
+        "gpt-5.5/minimal/audit_2": 7,
+        "gpt-5.5/low/audit_0": 8,
+        "gpt-5.5/low/audit_1": 6,
+        "gpt-5.5/low/audit_2": 7,
+        "gpt-5.5/medium/audit_0": 10,
+        "gpt-5.5/medium/audit_1": 10,
+        "gpt-5.5/medium/audit_2": 10,
+        "gpt-5.5/high/audit_0": 11,
+        "gpt-5.5/high/audit_1": 11,
+        "gpt-5.5/high/audit_2": 12,
+        "gpt-5.5/xhigh/audit_0": 11,
+        "gpt-5.5/xhigh/audit_1": 12,
+        "gpt-5.5/xhigh/audit_2": 9
+      }
+    },
+    {
+      "question_id": "coverage_at_k_by_level",
+      "question": "At k=3, does minimal thinking produce the same canonical coverage as xhigh?",
+      "method": "For each thinking level, union canonical ids over sorted runs audit_0 through audit_2.",
+      "answer": "Minimal covers 10 canonical suggestions at k=3; xhigh covers 14.",
+      "values": {
+        "high": {
+          "k=1": 11,
+          "k=2": 14,
+          "k=3": 17
+        },
+        "low": {
+          "k=1": 8,
+          "k=2": 9,
+          "k=3": 11
+        },
+        "medium": {
+          "k=1": 10,
+          "k=2": 13,
+          "k=3": 13
+        },
+        "minimal": {
+          "k=1": 8,
+          "k=2": 10,
+          "k=3": 10
+        },
+        "off": {
+          "k=1": 10,
+          "k=2": 12,
+          "k=3": 13
+        },
+        "xhigh": {
+          "k=1": 11,
+          "k=2": 14,
+          "k=3": 14
+        }
+      }
+    },
+    {
+      "question_id": "cost_per_unique_addressed_suggestion",
+      "question": "What is the cost per unique addressed suggestion?",
+      "method": "For each run, divide cost by the number of covered canonical suggestions whose resolution is not not_addressed.",
+      "answer": "The lowest cost per unique addressed suggestion is gpt-5.5/off/audit_2 at $0.0339.",
+      "values": {
+        "gpt-5.5/off/audit_0": 0.0589,
+        "gpt-5.5/off/audit_1": 0.0413,
+        "gpt-5.5/off/audit_2": 0.0339,
+        "gpt-5.5/minimal/audit_0": 0.0352,
+        "gpt-5.5/minimal/audit_1": 0.0365,
+        "gpt-5.5/minimal/audit_2": 0.0467,
+        "gpt-5.5/low/audit_0": 0.0511,
+        "gpt-5.5/low/audit_1": 0.0663,
+        "gpt-5.5/low/audit_2": 0.068,
+        "gpt-5.5/medium/audit_0": 0.0506,
+        "gpt-5.5/medium/audit_1": 0.0551,
+        "gpt-5.5/medium/audit_2": 0.0406,
+        "gpt-5.5/high/audit_0": 0.0515,
+        "gpt-5.5/high/audit_1": 0.0547,
+        "gpt-5.5/high/audit_2": 0.0637,
+        "gpt-5.5/xhigh/audit_0": 0.0621,
+        "gpt-5.5/xhigh/audit_1": 0.0595,
+        "gpt-5.5/xhigh/audit_2": 0.0653
+      }
+    },
+    {
+      "question_id": "repeated_not_addressed_suggestions",
+      "question": "Which suggestions are repeatedly produced but intentionally not addressed?",
+      "method": "Filter canonical suggestions to not_addressed items with more than one source suggestion.",
+      "answer": "5 not-addressed suggestions appeared in more than one audit.",
+      "values": {
+        "clean_build_cache_artifacts": 3,
+        "remove_query_from_prompt_helper": 3,
+        "remove_query_package_reexport_barrel": 2,
+        "replace_http_status_code_enum": 2,
+        "replace_typer_cli_with_argparse": 2
+      }
+    },
+    {
+      "question_id": "duplicate_pressure",
+      "question": "Which settings produce more duplicates?",
+      "method": "Summarize how many raw suggestions map to each canonical suggestion across the full corpus.",
+      "answer": "The most repeated canonical suggestions have 28 source suggestions.",
+      "values": {
+        "mean_sources_per_canonical": 8.857,
+        "max_sources_per_canonical": 28,
+        "canonical_ids_with_max_sources": [
+          "remove_dead_response_and_reasoning_symbols"
+        ]
+      }
+    },
+    {
+      "question_id": "broad_suggestion_rate_by_level",
+      "question": "Which settings produce broader suggestions?",
+      "method": "Count raw suggestions that map to more than one atomic canonical suggestion.",
+      "answer": "Broad-suggestion rates are reported by thinking level.",
+      "values": {
+        "high": {
+          "raw_suggestions": 30,
+          "multi_canonical_suggestions": 5,
+          "rate": 0.167
+        },
+        "low": {
+          "raw_suggestions": 27,
+          "multi_canonical_suggestions": 0,
+          "rate": 0.0
+        },
+        "medium": {
+          "raw_suggestions": 28,
+          "multi_canonical_suggestions": 3,
+          "rate": 0.107
+        },
+        "minimal": {
+          "raw_suggestions": 25,
+          "multi_canonical_suggestions": 1,
+          "rate": 0.04
+        },
+        "off": {
+          "raw_suggestions": 30,
+          "multi_canonical_suggestions": 3,
+          "rate": 0.1
+        },
+        "xhigh": {
+          "raw_suggestions": 27,
+          "multi_canonical_suggestions": 3,
+          "rate": 0.111
+        }
+      }
+    },
+    {
+      "question_id": "suggestion_kind_mix_by_level",
+      "question": "Which thinking level produced each kind of suggestion?",
+      "method": "Sum parsed suggestion kinds across runs for each level.",
+      "answer": "Suggestion kind counts are reported by thinking level.",
+      "values": {
+        "high": {
+          "delete": 13,
+          "shrink": 5,
+          "stdlib": 4,
+          "yagni": 8
+        },
+        "low": {
+          "delete": 12,
+          "shrink": 4,
+          "stdlib": 2,
+          "yagni": 9
+        },
+        "medium": {
+          "delete": 15,
+          "shrink": 5,
+          "stdlib": 3,
+          "yagni": 5
+        },
+        "minimal": {
+          "delete": 8,
+          "shrink": 5,
+          "stdlib": 2,
+          "yagni": 10
+        },
+        "off": {
+          "delete": 14,
+          "shrink": 5,
+          "stdlib": 3,
+          "yagni": 8
+        },
+        "xhigh": {
+          "delete": 9,
+          "native": 1,
+          "shrink": 5,
+          "stdlib": 3,
+          "yagni": 9
+        }
+      }
+    }
+  ]
+}

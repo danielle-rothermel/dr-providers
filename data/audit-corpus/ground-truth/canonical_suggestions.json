@@ -1,0 +1,1209 @@
+{
+  "schema_version": 1,
+  "corpus_id": "dr-providers-ponytail-audit-gpt-5.5",
+  "canonical_suggestions": [
+    {
+      "canonical_id": "remove_placeholder_notebook_extra",
+      "canonical_kind": "delete",
+      "summary": "Remove the placeholder marimo notebook and notebooks extra until there is real notebook content.",
+      "files": [
+        "nbs/hello_world.py",
+        "pyproject.toml"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "The placeholder notebook and notebook optional dependency were removed in the cleanup.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s04",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s01",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s06",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s03",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s09",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s06",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s04",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s01",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s01",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s03",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s03",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 3
+        }
+      ]
+    },
+    {
+      "canonical_id": "replace_tenacity_retry_dependency",
+      "canonical_kind": "stdlib",
+      "summary": "Replace the single Tenacity retry decorator with a small bounded local retry loop and drop the dependency.",
+      "files": [
+        "src/dr_providers/query/transport.py",
+        "pyproject.toml"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "The HTTP retry path now uses a bounded local loop and Tenacity is no longer a dependency.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s03",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s03",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s02",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s05",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s02",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s11",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 11
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s02",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s03",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s10",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s05",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s04",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s05",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s06",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s07",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s04",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s08",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s04",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_provider_transport_abc",
+      "canonical_kind": "yagni",
+      "summary": "Remove the generic ProviderTransport abstraction because the repo has one concrete provider path.",
+      "files": [
+        "src/dr_providers/query/transport.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "ProviderTransport was removed; ApiProvider is now the concrete transport/provider class.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s01",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s02",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s03",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s01",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s01",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s01",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s05",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s01",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s01",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s01",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s02",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s01",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s01",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s02",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s05",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s05",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 1
+        }
+      ]
+    },
+    {
+      "canonical_id": "shrink_provider_config_availability_surface",
+      "canonical_kind": "yagni",
+      "summary": "Remove unused provider availability, executable, and structured-output configuration surface.",
+      "files": [
+        "src/dr_providers/query/transport_config.py",
+        "src/dr_providers/query/transport.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "ProviderConfig now keeps only the fields needed for API key resolution, base URL, path, and timeout.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s02",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s01",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s04",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s02",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s05",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s01",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s02",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s08",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s05",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s02",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s02",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s01",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s02",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s03",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s03",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s04",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 4
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_provider_config_model",
+      "canonical_kind": "yagni",
+      "summary": "Remove ProviderConfig entirely and replace it with OpenRouter constants or direct provider construction.",
+      "files": [
+        "src/dr_providers/query/transport_config.py",
+        "src/dr_providers/query/providers/openrouter.py"
+      ],
+      "resolution": "partially_or_differently_addressed",
+      "resolution_notes": "The unused config surface was removed, but a small ProviderConfig model remains as the provider construction boundary.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s10",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s01",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s01",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 1
+        }
+      ],
+      "scope_notes": "Some source suggestions mention this as part of a broader provider/request simplification rather than as a standalone item."
+    },
+    {
+      "canonical_id": "collapse_openrouter_provider_convenience_layer",
+      "canonical_kind": "yagni",
+      "summary": "Remove the one-method OpenRouterProvider subclass and construct ApiProvider directly or through a factory.",
+      "files": [
+        "src/dr_providers/query/providers/openrouter.py"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "OpenRouterProvider remains as the public convenience provider class.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s08",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 8
+        }
+      ],
+      "scope_notes": "Some source suggestions mention this as part of a broader provider/request simplification rather than as a standalone item."
+    },
+    {
+      "canonical_id": "simplify_provider_name_base_url_metadata",
+      "canonical_kind": "shrink",
+      "summary": "Simplify ProviderName by removing custom enum payload/base-url storage and using constants.",
+      "files": [
+        "src/dr_providers/names.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "ProviderName is now a plain StrEnum and OpenRouter URL/key values are module constants.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s02",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s09",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s08",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s09",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s03",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s08",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s01",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s03",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s09",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 9
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_reasoning_warning_plumbing",
+      "canonical_kind": "delete",
+      "summary": "Remove RequestControls, ReasoningWarning, and no-op warning plumbing that never emits warnings.",
+      "files": [
+        "src/dr_providers/query/reasoning.py",
+        "src/dr_providers/query/request.py",
+        "src/dr_providers/query/response.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "Reasoning handling now produces only the extra request body; warning fields and models were removed.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s05",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s05",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s05",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s07",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s07",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s07",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s10",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s04",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s03",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s03",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s02",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s03",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s05",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s04",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s02",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s06",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s05",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_llm_config",
+      "canonical_kind": "delete",
+      "summary": "Remove unused public LlmConfig because request construction uses LlmRequest directly.",
+      "files": [
+        "src/dr_providers/config.py",
+        "src/dr_providers/__init__.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "LlmConfig was removed from the package and public exports.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s06",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s04",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s06",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s08",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s08",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s03",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s06",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s05",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s04",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s05",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s06",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s04",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s06",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s06",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 6
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_dead_response_and_reasoning_symbols",
+      "canonical_kind": "delete",
+      "summary": "Remove dead symbols such as CallError, ControlRequestStyle, and OpenRouterReasoningKey.",
+      "files": [
+        "src/dr_providers/query/response.py",
+        "src/dr_providers/names.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "The unused response model and reasoning/control enums were removed.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s08",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s06",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s07",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s07",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s08",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s04",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s03",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s04",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s04",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s05",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s02",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s03",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s04",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s03",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s04",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s04",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s05",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s06",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s07",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s06",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s07",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s05",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s07",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s04",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s06",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s06",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "canonical_id": "inline_sampling_request_helpers",
+      "canonical_kind": "shrink",
+      "summary": "Inline single-use sampling helper properties on LlmRequest.",
+      "files": [
+        "src/dr_providers/query/request.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "Payload construction now reads sampling fields directly and the helper properties were removed.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s09",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_0#s06",
+          "audit_id": "gpt-5.5/minimal/audit_0",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s07",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s06",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s09",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s06",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s06",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 6
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s08",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s05",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s09",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s04",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 4
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s07",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s10",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s09",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s07",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 7
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_query_provider_script",
+      "canonical_kind": "delete",
+      "summary": "Remove scripts/query_provider.py and use python -m dr_providers.cli instead.",
+      "files": [
+        "scripts/query_provider.py",
+        "README.md",
+        "scripts/live_test_llm_configs.sh"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "The wrapper script was removed and docs/scripts use the module CLI.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s10",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s10",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_1#s09",
+          "audit_id": "gpt-5.5/minimal/audit_1",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/minimal/audit_2#s08",
+          "audit_id": "gpt-5.5/minimal/audit_2",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_1#s07",
+          "audit_id": "gpt-5.5/low/audit_1",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s10",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_2#s07",
+          "audit_id": "gpt-5.5/medium/audit_2",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s10",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s08",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s11",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 11
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s08",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 8
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s10",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s08",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_query_from_prompt_helper",
+      "canonical_kind": "delete",
+      "summary": "Remove or narrow the query_from_prompt helper because it only wraps simple request construction.",
+      "files": [
+        "src/dr_providers/query/from_prompt.py",
+        "src/dr_providers/cli.py"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "query_from_prompt remains as a documented script/demo convenience helper.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_0#s07",
+          "audit_id": "gpt-5.5/off/audit_0",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/off/audit_1#s10",
+          "audit_id": "gpt-5.5/off/audit_1",
+          "index": 10
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s05",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "canonical_id": "replace_typer_cli_with_argparse",
+      "canonical_kind": "stdlib",
+      "summary": "Replace the small Typer CLI with argparse to remove the Typer dependency chain.",
+      "files": [
+        "src/dr_providers/cli.py",
+        "pyproject.toml"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "The project intentionally keeps Typer for the CLI per local Python conventions.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s02",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s02",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 2
+        }
+      ]
+    },
+    {
+      "canonical_id": "replace_http_status_code_enum",
+      "canonical_kind": "stdlib",
+      "summary": "Replace the custom HttpStatusCode enum with http.HTTPStatus or local literals.",
+      "files": [
+        "src/dr_providers/query/response.py"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "The small local HttpStatusCode enum remains.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_0#s09",
+          "audit_id": "gpt-5.5/medium/audit_0",
+          "index": 9
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s08",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_query_package_reexport_barrel",
+      "canonical_kind": "delete",
+      "summary": "Remove the dr_providers.query re-export barrel and keep only the top-level public API.",
+      "files": [
+        "src/dr_providers/query/__init__.py"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "The query package still exposes a small subpackage API.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/low/audit_2#s07",
+          "audit_id": "gpt-5.5/low/audit_2",
+          "index": 7
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s08",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 8
+        }
+      ]
+    },
+    {
+      "canonical_id": "simplify_live_test_script",
+      "canonical_kind": "shrink",
+      "summary": "Simplify repeated live_test_llm_configs.sh run_config blocks into a loop.",
+      "files": [
+        "scripts/live_test_llm_configs.sh"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "The live-test script was updated for the module CLI but not refactored into a loop.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/high/audit_2#s09",
+          "audit_id": "gpt-5.5/high/audit_2",
+          "index": 9
+        }
+      ]
+    },
+    {
+      "canonical_id": "clean_build_cache_artifacts",
+      "canonical_kind": "delete",
+      "summary": "Remove committed or local build/cache artifacts and keep them ignored.",
+      "files": [
+        "dist/",
+        ".cache/",
+        ".pytest_cache/",
+        ".ruff_cache/",
+        "**/__pycache__/",
+        ".venv/"
+      ],
+      "resolution": "not_addressed",
+      "resolution_notes": "The repo ignore rules already cover these paths; no tracked build/cache artifact cleanup was part of the final work.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s01",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 1
+        },
+        {
+          "suggestion_id": "gpt-5.5/low/audit_0#s12",
+          "audit_id": "gpt-5.5/low/audit_0",
+          "index": 12
+        },
+        {
+          "suggestion_id": "gpt-5.5/medium/audit_1#s11",
+          "audit_id": "gpt-5.5/medium/audit_1",
+          "index": 11
+        }
+      ]
+    },
+    {
+      "canonical_id": "remove_tests_gitkeep",
+      "canonical_kind": "delete",
+      "summary": "Remove tests/.gitkeep now that the tests directory contains real tests.",
+      "files": [
+        "tests/.gitkeep"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "tests/.gitkeep is no longer tracked.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/high/audit_1#s09",
+          "audit_id": "gpt-5.5/high/audit_1",
+          "index": 9
+        }
+      ]
+    },
+    {
+      "canonical_id": "simplify_hatch_build_include_config",
+      "canonical_kind": "shrink",
+      "summary": "Use a positive Hatch build include list instead of long hand-maintained excludes.",
+      "files": [
+        "pyproject.toml"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "The build config now uses a positive sdist include for src.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_0#s05",
+          "audit_id": "gpt-5.5/xhigh/audit_0",
+          "index": 5
+        }
+      ]
+    },
+    {
+      "canonical_id": "move_prepared_request_transport_state",
+      "canonical_kind": "shrink",
+      "summary": "Keep LlmRequest as request data and build endpoint, headers, idempotency, and payload details in the provider.",
+      "files": [
+        "src/dr_providers/query/request.py",
+        "src/dr_providers/query/transport.py"
+      ],
+      "resolution": "fully_addressed",
+      "resolution_notes": "Endpoint, headers, idempotency, and JSON payload are now provider-side helpers instead of prepared request state.",
+      "source_suggestions": [
+        {
+          "suggestion_id": "gpt-5.5/off/audit_2#s05",
+          "audit_id": "gpt-5.5/off/audit_2",
+          "index": 5
+        },
+        {
+          "suggestion_id": "gpt-5.5/high/audit_0#s02",
+          "audit_id": "gpt-5.5/high/audit_0",
+          "index": 2
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_1#s03",
+          "audit_id": "gpt-5.5/xhigh/audit_1",
+          "index": 3
+        },
+        {
+          "suggestion_id": "gpt-5.5/xhigh/audit_2#s02",
+          "audit_id": "gpt-5.5/xhigh/audit_2",
+          "index": 2
+        }
+      ],
+      "scope_notes": "Some source suggestions mention this as part of a broader provider/request simplification rather than as a standalone item."
+    }
+  ]
+}

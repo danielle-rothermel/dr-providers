@@ -95,3 +95,15 @@ Run the CLI from the repo without installing:
 ```bash
 uv run python -m dr_providers.cli --model openai/gpt-4o-mini -m "hi"
 ```
+
+### Audit corpus ground truth
+
+This repo includes a small audit-output corpus and curated ground-truth
+normalization artifacts under `data/audit-corpus/`. Regenerate the parsed audit
+and analysis files with:
+
+```bash
+uv run python scripts/generate_audit_ground_truth.py \
+  --corpus-dir data/audit-corpus \
+  --output-dir data/audit-corpus/ground-truth
+```
