@@ -1,6 +1,6 @@
 [project]
 name = "dr-providers"
-version = "0.1.1"
+version = "0.1.2"
 description = "OpenRouter LLM query client with typed requests and responses."
 readme = "README.md"
 license = "MIT"

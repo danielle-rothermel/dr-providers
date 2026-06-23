@@ -9,7 +9,10 @@ from dr_providers import (
     MessageRole,
     ProviderName,
     ProviderTransportError,
+    ReasoningSpec,
+    SamplingControls,
 )
+from dr_providers.names import EffortLevel
 from dr_providers.query import transport as transport_module
 from dr_providers.query.transport import ApiProvider
 from dr_providers.query.transport_config import ProviderConfig
@@ -74,6 +77,68 @@ def test_generate_retries_transport_errors_then_succeeds(
     assert response.text == "hello"
     assert client.post.call_count == 3
     assert sleep.call_count == 2
+    idempotency_keys = {
+        call.kwargs["headers"]["Idempotency-Key"]
+        for call in client.post.call_args_list
+    }
+    assert len(idempotency_keys) == 1
+    assert next(iter(idempotency_keys))
+
+
+def test_generate_posts_endpoint_headers_and_payload(
+    config: ProviderConfig,
+) -> None:
+    client = Mock(spec=httpx.Client)
+    client.post.return_value = _success_response()
+    request = LlmRequest(
+        provider=ProviderName.OPENROUTER,
+        model="test-model",
+        messages=[Message(role=MessageRole.USER, content="hi")],
+        max_tokens=100,
+        sampling=SamplingControls(temperature=0.5, top_p=0.9),
+        reasoning=ReasoningSpec(effort=EffortLevel.LOW),
+        metadata={"idempotency_key": "fixed-key"},
+    )
+
+    provider = ApiProvider(config=config, client=client)
+    provider.generate(request)
+
+    client.post.assert_called_once()
+    call = client.post.call_args
+    assert call.args == ("https://example.com/api/v1/chat/completions",)
+    assert call.kwargs["headers"] == {
+        "Authorization": "Bearer test-key",
+        "Content-Type": "application/json",
+        "Idempotency-Key": "fixed-key",
+    }
+    assert call.kwargs["json"] == {
+        "model": "test-model",
+        "messages": [{"role": "user", "content": "hi"}],
+        "temperature": 0.5,
+        "top_p": 0.9,
+        "max_tokens": 100,
+        "max_completion_tokens": 100,
+        "reasoning": {"effort": EffortLevel.LOW},
+    }
+
+
+def test_generate_posts_base_url_when_chat_path_is_none(
+    llm_request: LlmRequest,
+) -> None:
+    config = ProviderConfig(
+        name="test",
+        base_url="https://example.com/api/v1",
+        api_key_env="TEST_API_KEY",
+        api_key="test-key",
+        chat_path=None,
+    )
+    client = Mock(spec=httpx.Client)
+    client.post.return_value = _success_response()
+
+    provider = ApiProvider(config=config, client=client)
+    provider.generate(llm_request)
+
+    assert client.post.call_args.args == ("https://example.com/api/v1",)
 
 
 def test_generate_stops_retrying_transport_errors(

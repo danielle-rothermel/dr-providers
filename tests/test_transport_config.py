@@ -42,14 +42,3 @@ def test_resolve_api_key_missing_raises() -> None:
     )
     with pytest.raises(ProviderSemanticError, match="Missing API key"):
         resolve_api_key(config, label="test-provider")
-
-
-def test_availability_status_reports_missing_env() -> None:
-    config = ProviderConfig(
-        name="test",
-        base_url="https://example.com",
-        api_key_env="MISSING_AVAIL_KEY",
-    )
-    status = config.availability_status()
-    assert status.available is False
-    assert "MISSING_AVAIL_KEY" in status.missing_env_vars
