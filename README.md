@@ -18,7 +18,7 @@ uv add dr-providers
 
 ```bash
 pip install "dr-providers[cli]"
-query-provider --help
+python -m dr_providers.cli --help
 ```
 
 ## Authentication

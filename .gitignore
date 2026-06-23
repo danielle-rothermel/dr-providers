@@ -1,6 +1,7 @@
 .worktrees
 .DS_Store
 *.swp
+.env
 .cache/
 .ruff_cache/
 .venv/

@@ -31,9 +31,6 @@ notebooks = ["marimo[recommended]>=0.23.10"]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
 Issues = "https://github.com/danielle-rothermel/dr-providers/issues"
 
-[project.scripts]
-query-provider = "dr_providers.cli:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
