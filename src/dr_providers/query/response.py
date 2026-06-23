@@ -56,15 +56,6 @@ def validate_http_response(
         )
 
 
-class CallError(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    error_type: str
-    message: str
-    retryable: bool = False
-    raw_json: dict[str, Any] | None = None
-
-
 class LlmResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

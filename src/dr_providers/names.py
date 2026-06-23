@@ -29,20 +29,7 @@ class EffortLevel(StrEnum):
     HIGH = "high"
 
 
-class ControlRequestStyle(StrEnum):
-    NONE = "none"
-    ENABLED_FLAG = "enabled_flag"
-    EFFORT = "effort"
-
-
 class MessageRole(StrEnum):
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
-
-
-# TODO: remove this
-class OpenRouterReasoningKey(StrEnum):
-    REASONING = "reasoning"
-    ENABLED = "enabled"
-    EFFORT = "effort"

@@ -25,7 +25,6 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
-notebooks = ["marimo[recommended]>=0.23.10"]
 
 [project.urls]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
@@ -53,7 +52,6 @@ exclude = [
     "/.pre-commit-config.yaml",
     "/uv.lock",
     "/scripts",
-    "/nbs",
     "/.cache",
     "/.depot",
     "/.github",
@@ -128,9 +126,7 @@ select = [
 ignore = ["PLR1711", "S101", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
-"nbs/**/*.py" = ["E501", "F841", "RET503", "B018"]
 "tests/**/*.py" = ["PLR2004", "PLC0415"]
 
 [tool.ty.src]
 include = ["scripts", "src", "tests"]
-exclude = ["nbs"]
