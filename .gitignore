@@ -20,5 +20,6 @@ htmlcov/
 .hypothesis/
 .nox/
 .tox/
+.docs/
 **/__pycache__/
 *.py[cod]
