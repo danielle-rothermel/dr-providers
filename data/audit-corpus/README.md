@@ -102,3 +102,103 @@ Recommended repo roles:
 Keep model selection configurable. Cheap model availability and pricing change,
 so runs should capture the selected model ids and price snapshot instead of
 assuming that the committed corpus determines the model set.
+
+## Ground Truth Extraction Design
+
+The target curated artifact is a ground-truth normalization layer over the raw
+audit markdown files. It should make the corpus useful for testing different
+LLM-based parsing, normalization, and review-deduplication workflows.
+
+The extraction should preserve four related layers.
+
+### Per-Audit Parsed Records
+
+Each raw `audit_*.md` file should have a structured JSON record that captures
+the source path, run metadata, aggregate stats, and parsed suggestions.
+
+Useful metadata includes:
+
+- Source path and stable audit id.
+- Model id, provider or agent, and thinking level.
+- Completion status.
+- Token stats from the run header, including input, output, reasoning, cache
+  hit rate, and context-window usage when present.
+- Cost and cost mode.
+- Throughput in tokens per second.
+- Footer estimates such as net line-count and dependency changes.
+- Suggestion count.
+- Counts by suggestion kind, such as `delete`, `yagni`, `stdlib`, and
+  `shrink`.
+
+The goal is that questions about cost, speed, token usage, and suggestion mix
+can be answered without reparsing the markdown.
+
+### Per-Suggestion Parsed Records
+
+Each audit suggestion should also be represented as a structured object. The
+parsed form should keep the raw line while extracting the fields needed for
+comparison.
+
+Useful suggestion fields include:
+
+- Source audit id and suggestion index.
+- Suggestion kind.
+- Main text.
+- Rationale, when the line contains an explicit reason.
+- Proposed action or replacement, when present.
+- Referenced files.
+- Raw source text.
+
+This layer should stay close to the original model output. It is the faithful
+parse of what each audit said, not yet the subjective deduplicated answer.
+
+### Canonical Suggestion Set
+
+Across the full corpus, the parsed suggestions should be deduplicated into a
+canonical list of unique underlying suggestions. This is the main subjective
+ground-truth step.
+
+Each canonical suggestion should include:
+
+- Stable canonical id.
+- Canonical summary.
+- Canonical kind.
+- Relevant files.
+- Links back to every source audit suggestion that expressed the idea.
+- Notes about scope differences, such as one audit naming only a helper while
+  another names the broader abstraction it belongs to.
+
+The deduplication should distinguish between identical, overlapping, and
+distinct suggestions. For example, "inline `ProviderTransport`" and "remove the
+transport abstraction for one provider" likely map to the same canonical
+suggestion. A broader suggestion like "delete the query framework" may need to
+map to several canonical suggestions if it covers transport, config, request,
+and response concerns at once.
+
+### Resolution Labels
+
+Because the repo has already been cleaned up, each canonical suggestion should
+be labeled with the final decision:
+
+- `fully_addressed`: the final repo change directly handled the issue.
+- `partially_or_differently_addressed`: the issue was real, but the final
+  change handled a narrower scope, a broader scope, or used a different design.
+- `not_addressed`: the suggestion was intentionally discarded.
+
+Resolution notes should briefly explain the decision, especially for partial or
+different fixes.
+
+## Example Questions
+
+The normalized data should support benchmark questions such as:
+
+- How much cheaper is running the audit with thinking off than with high
+  thinking?
+- How much faster is low thinking than minimal thinking?
+- How many raw suggestions did each run produce?
+- How many unique canonical suggestions did each run cover?
+- What is the cost per unique addressed suggestion?
+- At `k=3`, does minimal thinking produce the same canonical coverage as xhigh?
+- Which suggestions are repeatedly produced but intentionally not addressed?
+- Which settings produce more duplicates, broader suggestions, or more
+  actionable suggestions?
