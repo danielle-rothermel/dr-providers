@@ -12,9 +12,6 @@
   `uv run pre-commit run --all-files` as in scope to fix, even when the issue
   is outside the files you touched.
 
-## Tests
-
-- Do not add tests unless the user explicitly asks for tests.
 
 ## Commits
 
