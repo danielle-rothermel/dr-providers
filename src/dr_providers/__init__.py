@@ -1,3 +1,5 @@
+from importlib.metadata import version
+
 from dr_providers.query import (
     ApiProvider,
     LlmConfig,
@@ -15,6 +17,8 @@ from dr_providers.query import (
     SamplingControls,
 )
 
+PACKAGE_NAME = "dr-providers"
+
 __all__ = [
     "ApiProvider",
     "LlmConfig",
@@ -31,4 +35,5 @@ __all__ = [
     "RequestControls",
     "SamplingControls",
 ]
-__version__ = "0.1.0"
+
+__version__ = version(PACKAGE_NAME)

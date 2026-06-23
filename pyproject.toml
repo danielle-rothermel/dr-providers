@@ -43,35 +43,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = [
-    "/.env",
-    "/.env.example",
-    "/.gitignore",
-    "/.python-version",
-    "/.pre-commit-config.yaml",
-    "/uv.lock",
-    "/scripts",
-    "/.cache",
-    "/.depot",
-    "/.github",
-    "/.hypothesis",
-    "/.mypy_cache",
-    "/.nox",
-    "/.pyre",
-    "/.pyright",
-    "/.pytest_cache",
-    "/.ruff_cache",
-    "/.tox",
-    "/.coverage",
-    "/.coverage.*",
-    "/tests",
-    "/build",
-    "/dist",
-    "/htmlcov",
-    "/*.egg-info",
-    "/AGENTS.md",
-    "/CLAUDE.md",
-]
+only-include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
