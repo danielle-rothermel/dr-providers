@@ -25,6 +25,10 @@ from dr_providers.kernel.config import (
     openai_responses_config,
     openrouter_chat_config,
 )
+from dr_providers.kernel.conformance import (
+    conformance_warnings,
+    with_conformance_warnings,
+)
 from dr_providers.kernel.failures import (
     FAILURE_ERROR_TYPES,
     RECOVERABLE_FAILURE_CLASSES,
@@ -66,6 +70,10 @@ from dr_providers.kernel.response import (
     parse_responses_body,
     token_usage_from_body,
 )
+from dr_providers.kernel.transport import (
+    HttpProvider,
+    TransportPolicy,
+)
 
 __all__ = [
     "FAILURE_ERROR_TYPES",
@@ -83,6 +91,7 @@ __all__ = [
     "FailureClass",
     "FixtureOutcome",
     "FixtureProvider",
+    "HttpProvider",
     "LlmRequest",
     "LlmResponse",
     "LlmWarning",
@@ -101,11 +110,13 @@ __all__ = [
     "TokenLimitParameter",
     "TokenUsage",
     "TransientProviderError",
+    "TransportPolicy",
     "UnknownProviderError",
     "UnsupportedControlError",
     "WarningSeverity",
     "build_payload",
     "classify_status_code",
+    "conformance_warnings",
     "cost_from_body",
     "endpoint_path",
     "failure_record",
@@ -119,4 +130,5 @@ __all__ = [
     "raise_failure",
     "sanitize_kwargs",
     "token_usage_from_body",
+    "with_conformance_warnings",
 ]
