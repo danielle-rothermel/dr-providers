@@ -3,7 +3,14 @@
 The stable intersection of four provider-implementation lineages:
 request, response, usage, warning, failure record, provider config,
 transport. See whetstone-ai ``docs/composable/llm_provider.md``.
+
+``HttpProvider`` / ``TransportPolicy`` load lazily so importing the
+kernel's pure modules (failure taxonomy, config records, payloads)
+never pulls in httpx — consumers with import-hygiene contracts rely
+on this.
 """
+
+from typing import Any
 
 from dr_providers.kernel.config import (
     GEMINI_API_KEY_ENV,
@@ -70,10 +77,6 @@ from dr_providers.kernel.response import (
     parse_responses_body,
     token_usage_from_body,
 )
-from dr_providers.kernel.transport import (
-    HttpProvider,
-    TransportPolicy,
-)
 
 __all__ = [
     "FAILURE_ERROR_TYPES",
@@ -132,3 +135,16 @@ __all__ = [
     "token_usage_from_body",
     "with_conformance_warnings",
 ]
+
+
+_LAZY_TRANSPORT_EXPORTS = frozenset({"HttpProvider", "TransportPolicy"})
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_TRANSPORT_EXPORTS:
+        from dr_providers.kernel import (  # noqa: PLC0415 -- lazy
+            transport,
+        )
+
+        return getattr(transport, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
