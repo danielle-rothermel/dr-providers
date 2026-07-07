@@ -24,6 +24,11 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
+serve = [
+    "fastapi>=0.121",
+    "typer>=0.26.7",
+    "uvicorn>=0.35",
+]
 
 [project.urls]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
@@ -35,6 +40,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pre-commit>=4.6.0",
     "pytest>=9.1.1",
     "ruff>=0.15.18",
