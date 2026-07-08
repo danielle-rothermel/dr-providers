@@ -14,15 +14,11 @@ from importlib.metadata import version
 from typing import Any
 
 from dr_providers.config import (
-    GEMINI_API_KEY_ENV,
-    GEMINI_OPENAI_COMPAT_BASE_URL,
-    OPENAI_API_KEY_ENV,
-    OPENAI_BASE_URL,
-    OPENROUTER_API_KEY_ENV,
-    OPENROUTER_BASE_URL,
+    ApiKeyEnv,
     EndpointKind,
     MessageRole,
     PromptMessage,
+    ProviderBaseUrl,
     ProviderConfig,
     ProviderKind,
     ReasoningEffort,
@@ -84,15 +80,10 @@ PACKAGE_NAME = "dr-providers"
 
 __all__ = [
     "FAILURE_ERROR_TYPES",
-    "GEMINI_API_KEY_ENV",
-    "GEMINI_OPENAI_COMPAT_BASE_URL",
-    "OPENAI_API_KEY_ENV",
-    "OPENAI_BASE_URL",
-    "OPENROUTER_API_KEY_ENV",
-    "OPENROUTER_BASE_URL",
     "RECOVERABLE_FAILURE_CLASSES",
     "RETRYABLE_FAILURE_CLASSES",
     "SANITIZE_KEYS",
+    "ApiKeyEnv",
     "CostInfo",
     "EndpointKind",
     "FailureClass",
@@ -106,6 +97,7 @@ __all__ = [
     "PermanentProviderError",
     "PromptMessage",
     "Provider",
+    "ProviderBaseUrl",
     "ProviderConfig",
     "ProviderFailure",
     "ProviderFailureError",

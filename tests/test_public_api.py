@@ -6,15 +6,10 @@ import dr_providers
 
 EXPECTED_ALL = {
     "FAILURE_ERROR_TYPES",
-    "GEMINI_API_KEY_ENV",
-    "GEMINI_OPENAI_COMPAT_BASE_URL",
-    "OPENAI_API_KEY_ENV",
-    "OPENAI_BASE_URL",
-    "OPENROUTER_API_KEY_ENV",
-    "OPENROUTER_BASE_URL",
     "RECOVERABLE_FAILURE_CLASSES",
     "RETRYABLE_FAILURE_CLASSES",
     "SANITIZE_KEYS",
+    "ApiKeyEnv",
     "CostInfo",
     "EndpointKind",
     "FailureClass",
@@ -28,6 +23,7 @@ EXPECTED_ALL = {
     "PermanentProviderError",
     "PromptMessage",
     "Provider",
+    "ProviderBaseUrl",
     "ProviderConfig",
     "ProviderFailure",
     "ProviderFailureError",
@@ -100,3 +96,8 @@ def test_import_pure_modules_does_not_load_httpx() -> None:
     subprocess.run(  # noqa: S603
         [sys.executable, "-c", code], check=True
     )
+
+
+def test_api_key_env_names_follow_provider_convention() -> None:
+    for member in dr_providers.ApiKeyEnv:
+        assert member.value == f"{member.name}_API_KEY"

@@ -19,14 +19,29 @@ from pydantic import (
     StrictStr,
 )
 
-OPENROUTER_API_KEY_ENV = "OPENROUTER_API_KEY"
-OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
-GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-OPENAI_BASE_URL = "https://api.openai.com/v1"
-GEMINI_OPENAI_COMPAT_BASE_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/openai"
-)
+
+class ApiKeyEnv(StrEnum):
+    """Environment variables the preset configs read API keys from.
+
+    Member names follow ``{name}_API_KEY`` by convention (enforced in
+    tests); values stay explicit literals so they remain greppable.
+    """
+
+    OPENROUTER = "OPENROUTER_API_KEY"
+    OPENAI = "OPENAI_API_KEY"
+    GEMINI = "GEMINI_API_KEY"
+
+
+class ProviderBaseUrl(StrEnum):
+    """Default base URLs used by the preset provider configs."""
+
+    OPENROUTER = "https://openrouter.ai/api/v1"
+    OPENAI = "https://api.openai.com/v1"
+    # The OpenAI-compat surface, not "Gemini's URL": a future native
+    # Gemini endpoint would be a sibling member, not this one.
+    GEMINI_OPENAI_COMPAT = (
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    )
 
 
 class ProviderKind(StrEnum):
@@ -131,13 +146,13 @@ class ProviderConfig(BaseModel):
 def openrouter_chat_config(
     *,
     model: str,
-    base_url: str = OPENROUTER_BASE_URL,
+    base_url: str = ProviderBaseUrl.OPENROUTER,
 ) -> ProviderConfig:
     return ProviderConfig(
         provider_kind=ProviderKind.OPENROUTER,
         endpoint_kind=EndpointKind.CHAT_COMPLETIONS,
         model=model,
-        api_key_env=OPENROUTER_API_KEY_ENV,
+        api_key_env=ApiKeyEnv.OPENROUTER,
         base_url=base_url,
         reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
         token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
@@ -149,8 +164,8 @@ def openai_chat_config(*, model: str) -> ProviderConfig:
         provider_kind=ProviderKind.OPENAI,
         endpoint_kind=EndpointKind.CHAT_COMPLETIONS,
         model=model,
-        api_key_env=OPENAI_API_KEY_ENV,
-        base_url=OPENAI_BASE_URL,
+        api_key_env=ApiKeyEnv.OPENAI,
+        base_url=ProviderBaseUrl.OPENAI,
         reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
         token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
     )
@@ -161,8 +176,8 @@ def openai_responses_config(*, model: str) -> ProviderConfig:
         provider_kind=ProviderKind.OPENAI,
         endpoint_kind=EndpointKind.RESPONSES,
         model=model,
-        api_key_env=OPENAI_API_KEY_ENV,
-        base_url=OPENAI_BASE_URL,
+        api_key_env=ApiKeyEnv.OPENAI,
+        base_url=ProviderBaseUrl.OPENAI,
         reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
         token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
     )
@@ -174,8 +189,8 @@ def gemini_chat_config(*, model: str) -> ProviderConfig:
         provider_kind=ProviderKind.GEMINI,
         endpoint_kind=EndpointKind.CHAT_COMPLETIONS,
         model=model,
-        api_key_env=GEMINI_API_KEY_ENV,
-        base_url=GEMINI_OPENAI_COMPAT_BASE_URL,
+        api_key_env=ApiKeyEnv.GEMINI,
+        base_url=ProviderBaseUrl.GEMINI_OPENAI_COMPAT,
         # The compat endpoint takes a flat reasoning_effort field, not an
         # OpenAI-style nested reasoning object; thinking budgets need the
         # native API (deferred until compat gaps require it).
