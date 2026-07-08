@@ -69,7 +69,10 @@ key env var, endpoint, and reasoning wire shape:
 
 `ReasoningEffort` is a shared enum (`NONE`, `MINIMAL`, `LOW`, `MEDIUM`,
 `HIGH`, `XHIGH`); each config's `reasoning_shape` determines how
-`build_payload()` serializes it on the wire.
+`build_payload()` serializes it on the wire. For the full story — how
+each provider actually accepts reasoning/effort/thinking, Gemini's
+generation-dependent thinking configs, and links to the provider docs —
+see [docs/reasoning-controls.md](docs/reasoning-controls.md).
 
 ## Testing with FixtureProvider
 
