@@ -1,5 +1,13 @@
 # Agent Instructions
 
+## Model style
+
+- Pydantic BaseModels at parse/serialize/consumer boundaries (anything
+  validated, dumped, or constructed by another repo or FastAPI).
+- Plain frozen dataclasses are preferred for internal structures that never
+  cross such a boundary. This deliberately loosens the user-level "always
+  prefer pydantic" rule for this repo.
+
 ## Verification
 
 - **Cursor agents:** Do not run `uv run pre-commit run --all-files` unless the
