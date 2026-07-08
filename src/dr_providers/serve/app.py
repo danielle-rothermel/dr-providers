@@ -34,7 +34,7 @@ from dr_providers.serve.runner import (
 from dr_providers.transport import HttpProvider
 
 SERVE_TITLE = "dr-providers serve"
-SERVE_VERSION = "0.1.0"
+SERVE_VERSION = "0.2.0"
 LOCALHOST_ORIGIN_REGEX = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 MAX_VARIANCE_SAMPLES = 25
 MAX_VARIANCE_MODELS = 8

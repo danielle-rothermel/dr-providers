@@ -1,4 +1,4 @@
-"""Serve-side query and variance machinery over the v0.2 kernel.
+"""Serve-side query and variance machinery over the kernel.
 
 Pure library logic: declarative query specs resolve to kernel
 requests, run against any ``Provider`` (Fixture or Http), and come

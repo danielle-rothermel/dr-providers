@@ -116,7 +116,7 @@ def _raise_unsupported(
 
 
 def build_payload(request: LlmRequest) -> dict[str, Any]:
-    """Pure wire-payload construction; the payload rides on the response.
+    """Pure wire-payload construction.
 
     Chat completions: ``model`` + ``messages`` + knobs.
     Responses: ``model`` + ``instructions``/``input`` + knobs, with a
