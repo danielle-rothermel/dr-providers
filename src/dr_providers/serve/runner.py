@@ -1,7 +1,7 @@
-"""Serve-side query and variance machinery over the v0.2 kernel.
+"""Serve-side query and variance machinery over the kernel.
 
 Pure library logic: declarative query specs resolve to kernel
-requests, run against any ``Provider`` (Fixture or Http), and come
+requests, run against any ``Provider`` (Scripted or Http), and come
 back as structured results with conformance warnings applied. The
 variance runner fans one prompt across models x samples and reports
 output dispersion — the same records the playground downloads as
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from dr_providers.kernel.fixture import Provider
+    from dr_providers.provider import Provider
 
 from pydantic import (
     BaseModel,
@@ -27,26 +27,26 @@ from pydantic import (
     StrictStr,
 )
 
-from dr_providers.kernel.config import (
+from dr_providers.config import (
     MessageRole,
     PromptMessage,
     ProviderConfig,
+    ReasoningEffort,
     gemini_chat_config,
     openai_chat_config,
     openai_responses_config,
     openrouter_chat_config,
 )
-from dr_providers.kernel.conformance import with_conformance_warnings
-from dr_providers.kernel.failures import (
+from dr_providers.failures import (
     ProviderFailure,
     ProviderFailureError,
 )
-from dr_providers.kernel.request import (
+from dr_providers.request import (
     ENDPOINT_PATHS,
     LlmRequest,
     build_payload,
 )
-from dr_providers.kernel.response import LlmResponse  # noqa: TC001
+from dr_providers.response import LlmResponse  # noqa: TC001
 
 
 class ServeProviderKind(StrEnum):
@@ -73,8 +73,9 @@ class QuerySpec(BaseModel):
     model: StrictStr
     messages: tuple[PromptMessage, ...]
     temperature: float | None = None
+    top_p: float | None = None
     token_limit: StrictInt | None = None
-    reasoning: dict[str, Any] = Field(default_factory=dict)
+    reasoning: ReasoningEffort | None = None
     extra_body: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -139,6 +140,7 @@ def build_request(spec: QuerySpec) -> LlmRequest:
         provider_config=config,
         messages=spec.messages,
         temperature=spec.temperature,
+        top_p=spec.top_p,
         token_limit=spec.token_limit,
         reasoning=spec.reasoning,
         extra_body=spec.extra_body,
@@ -160,7 +162,7 @@ def run_query(spec: QuerySpec, provider: Provider) -> QueryResult:
     return QueryResult(
         endpoint_path=endpoint_path,
         payload=payload,
-        response=with_conformance_warnings(request, response),
+        response=response,
     )
 
 

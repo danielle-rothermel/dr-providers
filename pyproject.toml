@@ -1,7 +1,7 @@
 [project]
 name = "dr-providers"
-version = "0.1.1"
-description = "OpenRouter LLM query client with typed requests and responses."
+version = "0.2.0"
+description = "Typed LLM provider-call kernel for OpenRouter, OpenAI, and Gemini: one request, response, and failure vocabulary across providers."
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -53,6 +53,10 @@ only-include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: hits real provider endpoints; requires API keys",
+]
 
 [tool.ruff]
 include = ["scripts/**/*.py", "src/**/*.py", "tests/**/*.py"]
@@ -107,3 +111,7 @@ ignore = ["PLR1711", "S101", "TRY003"]
 
 [tool.ty.src]
 include = ["scripts", "src", "tests"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"

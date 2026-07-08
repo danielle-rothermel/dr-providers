@@ -1,30 +1,27 @@
 """FastAPI facade over query/build_payload/variance ([serve] extra).
 
-Providers: ``fixture`` (scripted outcomes, no network — what the
+Providers: ``scripted`` (scripted outcomes, no network — what the
 playground e2e uses) or ``live`` (raw-httpx transport; requires the
 provider's API key env var and is never exercised by tests).
 """
 
 import os
+from enum import StrEnum
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
-from dr_providers.kernel.failures import (
+from dr_providers.failures import (
     FailureClass,
     ProviderFailure,
     UnsupportedControlError,
     failure_record,
 )
-from dr_providers.kernel.fixture import (
-    FixtureOutcome,
-    FixtureProvider,
-    Provider,
-)
-from dr_providers.kernel.request import ENDPOINT_PATHS, build_payload
-from dr_providers.kernel.response import CostInfo, TokenUsage
-from dr_providers.kernel.transport import HttpProvider
+from dr_providers.provider import Provider
+from dr_providers.request import ENDPOINT_PATHS, build_payload
+from dr_providers.response import CostInfo, TokenUsage
+from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 from dr_providers.serve.runner import (
     QueryResult,
     QuerySpec,
@@ -34,25 +31,33 @@ from dr_providers.serve.runner import (
     run_query,
     run_variance,
 )
+from dr_providers.transport import HttpProvider
 
 SERVE_TITLE = "dr-providers serve"
-SERVE_VERSION = "0.1.0"
+SERVE_VERSION = "0.2.0"
 LOCALHOST_ORIGIN_REGEX = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 MAX_VARIANCE_SAMPLES = 25
 MAX_VARIANCE_MODELS = 8
 MISSING_API_KEY_CODE = "missing_api_key"
 
 
+class ProviderChoiceKind(StrEnum):
+    SCRIPTED = "scripted"
+    LIVE = "live"
+
+
 class ProviderChoice(BaseModel):
-    """Which provider executes the call: scripted fixture or live."""
+    """Which provider executes the call: scripted or live."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: StrictStr = "fixture"
-    fixture_outcomes: list["FixtureOutcomeSpec"] = Field(default_factory=list)
+    kind: ProviderChoiceKind = ProviderChoiceKind.SCRIPTED
+    scripted_outcomes: list["ScriptedOutcomeSpec"] = Field(
+        default_factory=list
+    )
 
 
-class FixtureOutcomeSpec(BaseModel):
+class ScriptedOutcomeSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: StrictStr = ""
@@ -62,7 +67,7 @@ class FixtureOutcomeSpec(BaseModel):
     failure_code: StrictStr | None = None
     failure_message: StrictStr | None = None
 
-    def to_outcome(self) -> FixtureOutcome:
+    def to_outcome(self) -> ScriptedOutcome:
         failure: ProviderFailure | None = None
         if self.failure_code is not None:
             failure = failure_record(
@@ -80,7 +85,7 @@ class FixtureOutcomeSpec(BaseModel):
             if self.total_cost is not None
             else None
         )
-        return FixtureOutcome(
+        return ScriptedOutcome(
             text=self.text,
             finish_reason=self.finish_reason,
             usage=usage,
@@ -124,27 +129,22 @@ class HealthResponse(BaseModel):
 
 
 def resolve_provider(choice: ProviderChoice, spec: QuerySpec) -> Provider:
-    if choice.kind == "fixture":
+    if choice.kind is ProviderChoiceKind.SCRIPTED:
         outcomes = [
-            outcome.to_outcome() for outcome in choice.fixture_outcomes
+            outcome.to_outcome() for outcome in choice.scripted_outcomes
         ]
-        return FixtureProvider(outcomes or None)
-    if choice.kind == "live":
-        config = build_request(spec).provider_config
-        api_key = os.environ.get(config.api_key_env)
-        if not api_key:
-            raise HTTPException(
-                status_code=424,
-                detail=(
-                    f"{MISSING_API_KEY_CODE}: set {config.api_key_env} "
-                    "to run live queries"
-                ),
-            )
-        return HttpProvider(api_key=api_key)
-    raise HTTPException(
-        status_code=422,
-        detail=f"unknown provider kind: {choice.kind!r}",
-    )
+        return ScriptedProvider(outcomes or None)
+    config = build_request(spec).provider_config
+    api_key = os.environ.get(config.api_key_env)
+    if not api_key:
+        raise HTTPException(
+            status_code=424,
+            detail=(
+                f"{MISSING_API_KEY_CODE}: set {config.api_key_env} "
+                "to run live queries"
+            ),
+        )
+    return HttpProvider(api_key=api_key)
 
 
 def create_app() -> FastAPI:

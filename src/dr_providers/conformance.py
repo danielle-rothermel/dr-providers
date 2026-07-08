@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dr_providers.kernel.response import LlmResponse, LlmWarning
+from dr_providers.config import ReasoningEffort
+from dr_providers.response import LlmResponse, LlmWarning
 
 if TYPE_CHECKING:
-    from dr_providers.kernel.request import LlmRequest
+    from dr_providers.request import LlmRequest
 
 REASONING_NOT_OBSERVED_CODE = "reasoning_not_observed"
 TOKEN_LIMIT_EXCEEDED_CODE = "token_limit_exceeded"  # noqa: S105
@@ -28,7 +29,11 @@ def conformance_warnings(
     usage = response.usage
 
     reasoning_tokens = usage.reasoning_tokens if usage else None
-    if request.reasoning and not reasoning_tokens:
+    reasoning_requested = (
+        request.reasoning is not None
+        and request.reasoning is not ReasoningEffort.NONE
+    )
+    if reasoning_requested and not reasoning_tokens:
         warnings.append(
             LlmWarning(
                 code=REASONING_NOT_OBSERVED_CODE,
@@ -36,7 +41,7 @@ def conformance_warnings(
                     "reasoning was requested but the response reports "
                     "no reasoning tokens"
                 ),
-                metadata={"requested": dict(request.reasoning)},
+                metadata={"requested": request.reasoning.value},
             )
         )
 

@@ -1,4 +1,4 @@
-"""FixtureProvider: a testing peer implementing the real interface.
+"""ScriptedProvider: a testing peer implementing the real interface.
 
 Public API — consumers exercise full request/response flows with no
 network by scripting outcomes (text, usage, cost, warnings, or a
@@ -8,32 +8,35 @@ repeats for subsequent calls.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
-from dr_providers.kernel.failures import (
+from dr_providers.conformance import with_conformance_warnings
+from dr_providers.failures import (
     ProviderFailure,
     raise_failure,
 )
-from dr_providers.kernel.request import LlmRequest, build_payload
-from dr_providers.kernel.response import (
+from dr_providers.provider import Provider
+from dr_providers.request import LlmRequest, build_payload
+from dr_providers.response import (
     CostInfo,
     LlmResponse,
     LlmWarning,
     TokenUsage,
 )
 
-FIXTURE_RESPONSE_ID_PREFIX = "fixture-response"
+__all__ = [
+    "SCRIPTED_RESPONSE_ID_PREFIX",
+    "Provider",
+    "ScriptedOutcome",
+    "ScriptedProvider",
+]
+
+SCRIPTED_RESPONSE_ID_PREFIX = "scripted-response"
 
 
-class Provider(Protocol):
-    """The single-shot provider call interface."""
-
-    def complete(self, request: LlmRequest) -> LlmResponse: ...
-
-
-class FixtureOutcome(BaseModel):
+class ScriptedOutcome(BaseModel):
     """One scripted call result: either text parts or a failure."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -47,12 +50,12 @@ class FixtureOutcome(BaseModel):
     provider_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class FixtureProvider:
+class ScriptedProvider:
     """Scripted provider; records every request it serves."""
 
-    def __init__(self, outcomes: list[FixtureOutcome] | None = None) -> None:
+    def __init__(self, outcomes: list[ScriptedOutcome] | None = None) -> None:
         self._outcomes = list(
-            outcomes or [FixtureOutcome(text="fixture output")]
+            outcomes or [ScriptedOutcome(text="scripted output")]
         )
         self.requests: list[LlmRequest] = []
         self.payloads: list[dict[str, Any]] = []
@@ -65,8 +68,8 @@ class FixtureProvider:
         outcome = self._outcomes[index]
         if outcome.failure is not None:
             raise raise_failure(outcome.failure)
-        response_id = f"{FIXTURE_RESPONSE_ID_PREFIX}-{len(self.requests)}"
-        return LlmResponse(
+        response_id = f"{SCRIPTED_RESPONSE_ID_PREFIX}-{len(self.requests)}"
+        response = LlmResponse(
             text=outcome.text,
             usage=outcome.usage,
             cost=outcome.cost,
@@ -74,7 +77,6 @@ class FixtureProvider:
             finish_reason=outcome.finish_reason,
             response_id=response_id,
             model=request.provider_config.model,
-            continuation_handle=response_id,
-            payload=payload,
             provider_metadata=dict(outcome.provider_metadata),
         )
+        return with_conformance_warnings(request, response)

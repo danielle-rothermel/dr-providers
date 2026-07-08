@@ -1,5 +1,13 @@
 # Agent Instructions
 
+## Model style
+
+- Pydantic BaseModels at parse/serialize/consumer boundaries (anything
+  validated, dumped, or constructed by another repo or FastAPI).
+- Plain frozen dataclasses are preferred for internal structures that never
+  cross such a boundary. This deliberately loosens the user-level "always
+  prefer pydantic" rule for this repo.
+
 ## Verification
 
 - **Cursor agents:** Do not run `uv run pre-commit run --all-files` unless the
@@ -35,3 +43,21 @@
 - If unexpected changes appear suspect or make the requested work difficult,
   ask how to proceed and describe the concern.
 - Do not undo suspect changes while waiting for guidance.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues for this repo (via the `gh` CLI); external
+PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default names (`needs-triage`,
+`needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. See
+`docs/agents/domain.md`.

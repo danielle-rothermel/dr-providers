@@ -16,25 +16,25 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from pydantic import BaseModel, ConfigDict, StrictInt
 
-from dr_providers.kernel.conformance import with_conformance_warnings
+from dr_providers.conformance import with_conformance_warnings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from dr_providers.kernel.config import ProviderConfig
-from dr_providers.kernel.failures import (
+    from dr_providers.config import ProviderConfig
+from dr_providers.failures import (
     FailureClass,
     ProviderFailureError,
     classify_status_code,
     failure_record,
     raise_failure,
 )
-from dr_providers.kernel.request import (
+from dr_providers.request import (
     LlmRequest,
     build_payload,
     endpoint_path,
 )
-from dr_providers.kernel.response import LlmResponse, parse_response
+from dr_providers.response import LlmResponse, parse_response
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
@@ -73,9 +73,25 @@ class HttpProvider:
     ) -> None:
         self._policy = policy or TransportPolicy()
         self._client = client
+        self._owns_client = client is None
         self._api_key = api_key
         self._sleep = sleep
         self._rng = rng
+
+    def close(self) -> None:
+        """Close the httpx client only if this provider created it.
+
+        Injected clients belong to the caller and are left open.
+        """
+        if self._owns_client and self._client is not None:
+            self._client.close()
+            self._client = None
+
+    def __enter__(self) -> HttpProvider:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def complete(self, request: LlmRequest) -> LlmResponse:
         payload = build_payload(request)
@@ -152,7 +168,7 @@ class HttpProvider:
                 ),
                 underlying=error,
             ) from error
-        return parse_response(body, config=config, payload=payload)
+        return parse_response(body, config=config)
 
     def _request_url(self, config: ProviderConfig) -> str:
         if not config.base_url:

@@ -1,8 +1,7 @@
 """Response as materialized typed parts, plus the wire parsers.
 
 ``LlmResponse`` composes text, usage, cost, warnings, finish reason,
-provider metadata, the exact payload that was sent, and an optional
-continuation handle — so a future streaming mode can emit the same
+and provider metadata — so a future streaming mode can emit the same
 parts incrementally without a breaking redesign.
 """
 
@@ -20,8 +19,8 @@ from pydantic import (
     StrictStr,
 )
 
-from dr_providers.kernel.config import EndpointKind, ProviderConfig
-from dr_providers.kernel.failures import (
+from dr_providers.config import EndpointKind, ProviderConfig
+from dr_providers.failures import (
     FailureClass,
     failure_record,
     raise_failure,
@@ -81,8 +80,6 @@ class LlmResponse(BaseModel):
     finish_reason: StrictStr | None = None
     response_id: StrictStr | None = None
     model: StrictStr | None = None
-    continuation_handle: StrictStr | None = None
-    payload: dict[str, Any] = Field(default_factory=dict)
     provider_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -90,20 +87,16 @@ def parse_response(
     body: Mapping[str, Any],
     *,
     config: ProviderConfig,
-    payload: Mapping[str, Any] | None = None,
 ) -> LlmResponse:
     if config.endpoint_kind is EndpointKind.CHAT_COMPLETIONS:
-        return parse_chat_completions_body(
-            body, config=config, payload=payload
-        )
-    return parse_responses_body(body, config=config, payload=payload)
+        return parse_chat_completions_body(body, config=config)
+    return parse_responses_body(body, config=config)
 
 
 def parse_chat_completions_body(
     body: Mapping[str, Any],
     *,
     config: ProviderConfig,
-    payload: Mapping[str, Any] | None = None,
 ) -> LlmResponse:
     choices = body.get("choices")
     if not isinstance(choices, Sequence) or isinstance(choices, str | bytes):
@@ -127,8 +120,6 @@ def parse_chat_completions_body(
         finish_reason=_optional_str(_get(choice, "finish_reason")),
         response_id=_optional_str(body.get("id")),
         model=_optional_str(body.get("model")) or config.model,
-        continuation_handle=None,
-        payload=dict(payload or {}),
         provider_metadata=dict(body),
     )
 
@@ -137,7 +128,6 @@ def parse_responses_body(
     body: Mapping[str, Any],
     *,
     config: ProviderConfig,
-    payload: Mapping[str, Any] | None = None,
 ) -> LlmResponse:
     text = _optional_str(body.get("output_text"))
     if text is None:
@@ -154,9 +144,6 @@ def parse_responses_body(
         finish_reason=_finish_reason_from_responses_body(body),
         response_id=response_id,
         model=_optional_str(body.get("model")) or config.model,
-        # Responses API threads continue from previous_response_id.
-        continuation_handle=response_id,
-        payload=dict(payload or {}),
         provider_metadata=dict(body),
     )
 

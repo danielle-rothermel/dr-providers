@@ -1,0 +1,21 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Hi",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1783518994,
+  "id": "EldOav-WFICg_uMP05qL2Qw",
+  "model": "gemini-2.5-flash",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 1,
+    "prompt_tokens": 7,
+    "total_tokens": 31
+  }
+}

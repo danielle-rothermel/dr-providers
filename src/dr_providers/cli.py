@@ -1,138 +1,113 @@
-"""CLI for querying OpenRouter with model, reasoning, and sampling options."""
+"""CLI for one-shot provider calls over the kernel.
+
+Thin: build a ``LlmRequest`` from flags, run it through ``HttpProvider``,
+print ``response.text`` to stdout and metadata to stderr. Not wired
+into ``dr_providers``'s pure import surface — this module (and its
+``[cli]`` extra) is only imported when running the CLI, so it is free
+to import ``HttpProvider`` (and therefore httpx) at module level.
+"""
 
 from __future__ import annotations
 
+from enum import StrEnum
+from typing import TYPE_CHECKING, Annotated
+
 import typer
 
-from dr_providers import (
-    LlmResponse,
-    OpenRouterProvider,
-    ProviderName,
-    ReasoningSpec,
-    SamplingControls,
+from dr_providers.config import (
+    MessageRole,
+    PromptMessage,
+    ProviderConfig,
+    ReasoningEffort,
+    gemini_chat_config,
+    openai_chat_config,
+    openai_responses_config,
+    openrouter_chat_config,
 )
-from dr_providers.names import EffortLevel
-from dr_providers.query.from_prompt import query_from_prompt
+from dr_providers.request import LlmRequest
+from dr_providers.transport import HttpProvider, TransportPolicy
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+DEFAULT_RETRIES = 2
 
 
-def _parse_effort(value: str) -> EffortLevel:
-    normalized = value.lower()
-    try:
-        return EffortLevel(normalized)
-    except ValueError:
-        allowed = ", ".join(level.value for level in EffortLevel)
-        raise typer.BadParameter(
-            f"Invalid effort {value!r}. Expected one of: {allowed}"
-        ) from None
+class ProviderChoice(StrEnum):
+    OPENROUTER = "openrouter"
+    OPENAI = "openai"
+    OPENAI_RESPONSES = "openai-responses"
+    GEMINI = "gemini"
 
 
-def _build_reasoning(
-    *,
-    effort: str | None,
-    reasoning_enabled: bool | None,
-) -> ReasoningSpec | None:
-    if effort is not None and reasoning_enabled is not None:
-        raise typer.BadParameter(
-            "Use --effort for effort-style models or "
-            "--reasoning-enabled/--reasoning-disabled for toggle-style "
-            "models, not both."
-        )
-    if effort is not None:
-        return ReasoningSpec(effort=_parse_effort(effort))
-    if reasoning_enabled is not None:
-        return ReasoningSpec(enabled=reasoning_enabled)
-    return None
+CONFIG_FACTORIES: dict[ProviderChoice, Callable[..., ProviderConfig]] = {
+    ProviderChoice.OPENROUTER: openrouter_chat_config,
+    ProviderChoice.OPENAI: openai_chat_config,
+    ProviderChoice.OPENAI_RESPONSES: openai_responses_config,
+    ProviderChoice.GEMINI: gemini_chat_config,
+}
+
+PROVIDER_OPTION = typer.Option("--provider", help="Provider to call.")
+MODEL_OPTION = typer.Option("--model", help="Model name.")
+MESSAGE_OPTION = typer.Option("-m", "--message", help="User message content.")
+SYSTEM_OPTION = typer.Option(
+    "--system", help="Optional system message content."
+)
+EFFORT_OPTION = typer.Option("--effort", help="Reasoning effort level.")
+TEMPERATURE_OPTION = typer.Option(
+    "--temperature", "--temp", help="Sampling temperature."
+)
+TOP_P_OPTION = typer.Option("--top-p", help="Nucleus sampling top-p.")
+TOKEN_LIMIT_OPTION = typer.Option(
+    "--token-limit", help="Max output/completion tokens."
+)
+RETRIES_OPTION = typer.Option(
+    "--retries",
+    help="Max transport retries (TransportPolicy.max_retries).",
+)
+
+app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
 
 
-def _build_sampling(
-    *,
-    temperature: float | None,
-    top_p: float | None,
-) -> SamplingControls | None:
-    if temperature is None and top_p is None:
-        return None
-    return SamplingControls(temperature=temperature, top_p=top_p)
-
-
-def _query_provider(  # noqa: PLR0913
-    *,
-    effort: str | None,
-    reasoning_enabled: bool | None,
-    temperature: float | None,
-    top_p: float | None,
-    max_tokens: int | None,
-    model: str,
-    message: str,
-) -> LlmResponse:
-    reasoning = _build_reasoning(
-        effort=effort,
-        reasoning_enabled=reasoning_enabled,
-    )
-    sampling = _build_sampling(temperature=temperature, top_p=top_p)
-    with OpenRouterProvider() as provider:
-        return query_from_prompt(
-            provider=provider,
-            provider_name=ProviderName.OPENROUTER,
-            model=model,
-            prompt=message,
-            reasoning=reasoning,
-            sampling=sampling,
-            max_tokens=max_tokens,
-        )
-
-
+@app.command()
 def query(  # noqa: PLR0913
-    model: str = typer.Option(..., "--model", help="OpenRouter model id."),
-    message: str = typer.Option(
-        ...,
-        "--message",
-        "-m",
-        help="User message to send.",
-    ),
-    effort: str | None = typer.Option(
-        None,
-        "--effort",
-        "-e",
-        help="Reasoning effort (low, medium, high) for effort-style models.",
-    ),
-    reasoning_enabled: bool | None = typer.Option(  # noqa: FBT001
-        None,
-        "--reasoning-enabled/--reasoning-disabled",
-        help="Enable or disable reasoning for toggle-style models.",
-    ),
-    max_tokens: int | None = typer.Option(
-        None,
-        "--max-tokens",
-        help="Completion token limit. Omit to use provider defaults.",
-    ),
-    temperature: float | None = typer.Option(
-        None,
-        "--temperature",
-        "--temp",
-        help="Sampling temperature.",
-    ),
-    top_p: float | None = typer.Option(
-        None,
-        "--top-p",
-        help="Sampling top-p.",
-    ),
+    provider: Annotated[ProviderChoice, PROVIDER_OPTION],
+    model: Annotated[str, MODEL_OPTION],
+    message: Annotated[str, MESSAGE_OPTION],
+    system: Annotated[str | None, SYSTEM_OPTION] = None,
+    effort: Annotated[ReasoningEffort | None, EFFORT_OPTION] = None,
+    temperature: Annotated[float | None, TEMPERATURE_OPTION] = None,
+    top_p: Annotated[float | None, TOP_P_OPTION] = None,
+    token_limit: Annotated[int | None, TOKEN_LIMIT_OPTION] = None,
+    retries: Annotated[int, RETRIES_OPTION] = DEFAULT_RETRIES,
 ) -> None:
-    response = _query_provider(
-        model=model,
-        message=message,
-        effort=effort,
-        reasoning_enabled=reasoning_enabled,
+    """Run a single-shot provider query and print the response text."""
+    provider_config = CONFIG_FACTORIES[provider](model=model)
+    messages: list[PromptMessage] = []
+    if system is not None:
+        messages.append(PromptMessage(role=MessageRole.SYSTEM, content=system))
+    messages.append(PromptMessage(role=MessageRole.USER, content=message))
+    request = LlmRequest(
+        provider_config=provider_config,
+        messages=tuple(messages),
         temperature=temperature,
         top_p=top_p,
-        max_tokens=max_tokens,
+        token_limit=token_limit,
+        reasoning=effort,
     )
+
+    policy = TransportPolicy(max_retries=retries)
+    with HttpProvider(policy=policy) as http_provider:
+        response = http_provider.complete(request)
+
     typer.echo(response.text)
-    typer.echo(f"({response.latency_ms} ms)", err=True)
-
-
-def main() -> None:
-    typer.run(query)
+    typer.echo(f"model: {response.model}", err=True)
+    typer.echo(f"finish_reason: {response.finish_reason}", err=True)
+    if response.usage is not None:
+        typer.echo(f"usage: {response.usage.model_dump()}", err=True)
+    for warning in response.warnings:
+        typer.echo(f"warning: {warning.code}", err=True)
 
 
 if __name__ == "__main__":
-    main()
+    app()
