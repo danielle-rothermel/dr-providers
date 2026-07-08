@@ -6,6 +6,7 @@ provider's API key env var and is never exercised by tests).
 """
 
 import os
+from enum import StrEnum
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,11 +18,8 @@ from dr_providers.kernel.failures import (
     UnsupportedControlError,
     failure_record,
 )
-from dr_providers.kernel.fixture import (
-    FixtureOutcome,
-    FixtureProvider,
-    Provider,
-)
+from dr_providers.kernel.fixture import FixtureOutcome, FixtureProvider
+from dr_providers.kernel.provider import Provider
 from dr_providers.kernel.request import ENDPOINT_PATHS, build_payload
 from dr_providers.kernel.response import CostInfo, TokenUsage
 from dr_providers.kernel.transport import HttpProvider
@@ -43,12 +41,17 @@ MAX_VARIANCE_MODELS = 8
 MISSING_API_KEY_CODE = "missing_api_key"
 
 
+class ProviderChoiceKind(StrEnum):
+    FIXTURE = "fixture"
+    LIVE = "live"
+
+
 class ProviderChoice(BaseModel):
     """Which provider executes the call: scripted fixture or live."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: StrictStr = "fixture"
+    kind: ProviderChoiceKind = ProviderChoiceKind.FIXTURE
     fixture_outcomes: list["FixtureOutcomeSpec"] = Field(default_factory=list)
 
 
@@ -124,27 +127,22 @@ class HealthResponse(BaseModel):
 
 
 def resolve_provider(choice: ProviderChoice, spec: QuerySpec) -> Provider:
-    if choice.kind == "fixture":
+    if choice.kind is ProviderChoiceKind.FIXTURE:
         outcomes = [
             outcome.to_outcome() for outcome in choice.fixture_outcomes
         ]
         return FixtureProvider(outcomes or None)
-    if choice.kind == "live":
-        config = build_request(spec).provider_config
-        api_key = os.environ.get(config.api_key_env)
-        if not api_key:
-            raise HTTPException(
-                status_code=424,
-                detail=(
-                    f"{MISSING_API_KEY_CODE}: set {config.api_key_env} "
-                    "to run live queries"
-                ),
-            )
-        return HttpProvider(api_key=api_key)
-    raise HTTPException(
-        status_code=422,
-        detail=f"unknown provider kind: {choice.kind!r}",
-    )
+    config = build_request(spec).provider_config
+    api_key = os.environ.get(config.api_key_env)
+    if not api_key:
+        raise HTTPException(
+            status_code=424,
+            detail=(
+                f"{MISSING_API_KEY_CODE}: set {config.api_key_env} "
+                "to run live queries"
+            ),
+        )
+    return HttpProvider(api_key=api_key)
 
 
 def create_app() -> FastAPI:

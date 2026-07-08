@@ -15,6 +15,7 @@ from dr_providers.kernel import (
     PromptMessage,
     ProviderFailureError,
     RateLimitedProviderError,
+    ReasoningEffort,
     TransientProviderError,
     openai_chat_config,
 )
@@ -83,7 +84,7 @@ class TestHttpProvider:
         assert seen["url"] == "https://api.openai.com/v1/chat/completions"
         assert seen["auth"] == "Bearer test-key"
         assert seen["idempotency"] == "attempt-9"
-        assert response.payload["model"] == "m"
+        assert response.model == "m"
 
     @pytest.mark.parametrize(
         ("status", "error_type"),
@@ -202,7 +203,7 @@ class TestConformance:
         provider, _ = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
-        response = provider.complete(request(reasoning={"effort": "low"}))
+        response = provider.complete(request(reasoning=ReasoningEffort.LOW))
         codes = [w.code for w in response.warnings]
         assert REASONING_NOT_OBSERVED_CODE in codes
 
@@ -231,3 +232,28 @@ class TestConformance:
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
         assert provider.complete(request()).warnings == ()
+
+
+class TestHttpProviderLifecycle:
+    def test_context_manager_closes_owned_client(self) -> None:
+        with HttpProvider(api_key="k") as provider:
+            client = provider._httpx_client()
+            assert not client.is_closed
+        assert client.is_closed
+
+    def test_injected_client_left_open(self) -> None:
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+            )
+        )
+        with HttpProvider(client=client, api_key="k") as provider:
+            assert provider.complete(request()).text == "hello"
+        assert not client.is_closed
+        client.close()
+
+    def test_close_is_idempotent(self) -> None:
+        provider = HttpProvider(api_key="k")
+        provider._httpx_client()
+        provider.close()
+        provider.close()

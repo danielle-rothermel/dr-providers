@@ -8,14 +8,16 @@ repeats for subsequent calls.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
+from dr_providers.kernel.conformance import with_conformance_warnings
 from dr_providers.kernel.failures import (
     ProviderFailure,
     raise_failure,
 )
+from dr_providers.kernel.provider import Provider
 from dr_providers.kernel.request import LlmRequest, build_payload
 from dr_providers.kernel.response import (
     CostInfo,
@@ -24,13 +26,14 @@ from dr_providers.kernel.response import (
     TokenUsage,
 )
 
+__all__ = [
+    "FIXTURE_RESPONSE_ID_PREFIX",
+    "FixtureOutcome",
+    "FixtureProvider",
+    "Provider",
+]
+
 FIXTURE_RESPONSE_ID_PREFIX = "fixture-response"
-
-
-class Provider(Protocol):
-    """The single-shot provider call interface."""
-
-    def complete(self, request: LlmRequest) -> LlmResponse: ...
 
 
 class FixtureOutcome(BaseModel):
@@ -66,7 +69,7 @@ class FixtureProvider:
         if outcome.failure is not None:
             raise raise_failure(outcome.failure)
         response_id = f"{FIXTURE_RESPONSE_ID_PREFIX}-{len(self.requests)}"
-        return LlmResponse(
+        response = LlmResponse(
             text=outcome.text,
             usage=outcome.usage,
             cost=outcome.cost,
@@ -74,7 +77,6 @@ class FixtureProvider:
             finish_reason=outcome.finish_reason,
             response_id=response_id,
             model=request.provider_config.model,
-            continuation_handle=response_id,
-            payload=payload,
             provider_metadata=dict(outcome.provider_metadata),
         )
+        return with_conformance_warnings(request, response)

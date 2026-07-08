@@ -53,16 +53,30 @@ class TokenLimitParameter(StrEnum):
     MAX_OUTPUT_TOKENS = "max_output_tokens"
 
 
-class ReasoningRequestShape(StrEnum):
+class ReasoningEffort(StrEnum):
+    """Typed cross-provider reasoning level (see ADR 0001)."""
+
     NONE = "none"
-    EXTRA_BODY = "extra_body"
-    TOP_LEVEL = "top_level"
+    MINIMAL = "minimal"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    XHIGH = "xhigh"
+
+
+class ReasoningRequestShape(StrEnum):
+    """How a config serializes reasoning effort on the wire."""
+
+    NONE = "none"
+    EFFORT_FIELD = "effort_field"
+    REASONING_OBJECT = "reasoning_object"
 
 
 class RequestControl(StrEnum):
     """Knobs a request may set; configs declare which they transport."""
 
     TEMPERATURE = "temperature"
+    TOP_P = "top_p"
     TOKEN_LIMIT = "token_limit"  # noqa: S105 -- knob name, not a secret
     REASONING = "reasoning"
 
@@ -90,6 +104,7 @@ class ProviderConfig(BaseModel):
     supported_controls: frozenset[RequestControl] = frozenset(
         {
             RequestControl.TEMPERATURE,
+            RequestControl.TOP_P,
             RequestControl.TOKEN_LIMIT,
             RequestControl.REASONING,
         }
@@ -124,7 +139,7 @@ def openrouter_chat_config(
         model=model,
         api_key_env=OPENROUTER_API_KEY_ENV,
         base_url=base_url,
-        reasoning_shape=ReasoningRequestShape.EXTRA_BODY,
+        reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
         token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
     )
 
@@ -136,7 +151,7 @@ def openai_chat_config(*, model: str) -> ProviderConfig:
         model=model,
         api_key_env=OPENAI_API_KEY_ENV,
         base_url=OPENAI_BASE_URL,
-        reasoning_shape=ReasoningRequestShape.TOP_LEVEL,
+        reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
         token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
     )
 
@@ -148,7 +163,7 @@ def openai_responses_config(*, model: str) -> ProviderConfig:
         model=model,
         api_key_env=OPENAI_API_KEY_ENV,
         base_url=OPENAI_BASE_URL,
-        reasoning_shape=ReasoningRequestShape.TOP_LEVEL,
+        reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
         token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
     )
 
@@ -161,9 +176,9 @@ def gemini_chat_config(*, model: str) -> ProviderConfig:
         model=model,
         api_key_env=GEMINI_API_KEY_ENV,
         base_url=GEMINI_OPENAI_COMPAT_BASE_URL,
-        # The compat endpoint takes reasoning_effort in the body, not an
-        # OpenAI-style top-level reasoning object; thinking budgets need
-        # the native API (deferred until compat gaps require it).
-        reasoning_shape=ReasoningRequestShape.EXTRA_BODY,
+        # The compat endpoint takes a flat reasoning_effort field, not an
+        # OpenAI-style nested reasoning object; thinking budgets need the
+        # native API (deferred until compat gaps require it).
+        reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
         token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
     )

@@ -104,6 +104,14 @@ def test_live_provider_without_key_is_424(
     assert "missing_api_key" in response.json()["detail"]
 
 
+def test_unknown_provider_kind_is_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/query",
+        json={"spec": SPEC, "provider": {"kind": "bogus"}},
+    )
+    assert response.status_code == 422
+
+
 def test_variance_endpoint_reports_and_records(client: TestClient) -> None:
     response = client.post(
         "/variance",

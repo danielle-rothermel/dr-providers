@@ -19,6 +19,7 @@ from dr_providers.kernel.config import (
     MessageRole,
     PromptMessage,
     ProviderConfig,
+    ReasoningEffort,
     ReasoningRequestShape,
     RequestControl,
 )
@@ -45,8 +46,9 @@ class LlmRequest(BaseModel):
     provider_config: ProviderConfig
     messages: tuple[PromptMessage, ...]
     temperature: float | None = None
+    top_p: float | None = None
     token_limit: StrictInt | None = None
-    reasoning: dict[str, Any] = Field(default_factory=dict)
+    reasoning: ReasoningEffort | None = None
     extra_body: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: StrictStr | None = None
 
@@ -58,27 +60,40 @@ def _set_controls(kwargs: dict[str, Any], request: LlmRequest) -> None:
             kwargs["temperature"] = request.temperature
         elif not config.allow_unsupported_control_drop:
             _raise_unsupported(config, RequestControl.TEMPERATURE)
+    if request.top_p is not None:
+        if config.supports(RequestControl.TOP_P):
+            kwargs["top_p"] = request.top_p
+        elif not config.allow_unsupported_control_drop:
+            _raise_unsupported(config, RequestControl.TOP_P)
     if request.token_limit is not None:
         if config.supports(RequestControl.TOKEN_LIMIT):
             kwargs[config.token_limit_parameter.value] = request.token_limit
         elif not config.allow_unsupported_control_drop:
             _raise_unsupported(config, RequestControl.TOKEN_LIMIT)
 
-    merged_extra_body = dict(config.extra_body)
-    merged_extra_body.update(request.extra_body)
-    if request.reasoning:
-        if not config.supports(RequestControl.REASONING) or (
-            config.reasoning_shape is ReasoningRequestShape.NONE
-        ):
-            if not config.allow_unsupported_control_drop:
-                _raise_unsupported(config, RequestControl.REASONING)
-        elif config.reasoning_shape is ReasoningRequestShape.TOP_LEVEL:
-            kwargs["reasoning"] = dict(request.reasoning)
-        elif config.reasoning_shape is ReasoningRequestShape.EXTRA_BODY:
-            merged_extra_body["reasoning"] = dict(request.reasoning)
+    _set_reasoning(kwargs, request)
     # extra_body rides inline on the wire payload (raw httpx: the body
     # is the payload; the SDK-era extra_body indirection is flattened).
+    merged_extra_body = dict(config.extra_body)
+    merged_extra_body.update(request.extra_body)
     kwargs.update(merged_extra_body)
+
+
+def _set_reasoning(kwargs: dict[str, Any], request: LlmRequest) -> None:
+    config = request.provider_config
+    effort = request.reasoning
+    if effort is None:
+        return
+    if not config.supports(RequestControl.REASONING) or (
+        config.reasoning_shape is ReasoningRequestShape.NONE
+    ):
+        if not config.allow_unsupported_control_drop:
+            _raise_unsupported(config, RequestControl.REASONING)
+        return
+    if config.reasoning_shape is ReasoningRequestShape.EFFORT_FIELD:
+        kwargs["reasoning_effort"] = effort.value
+    elif config.reasoning_shape is ReasoningRequestShape.REASONING_OBJECT:
+        kwargs["reasoning"] = {"effort": effort.value}
 
 
 def _raise_unsupported(

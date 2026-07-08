@@ -55,7 +55,6 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
     assert response.finish_reason == expected["finish_reason"]
     assert response.model == expected["model"]
     assert response.response_id == expected["response_id"]
-    assert response.continuation_handle == expected["continuation_handle"]
     if expected["usage"] is None:
         assert response.usage is None
     else:

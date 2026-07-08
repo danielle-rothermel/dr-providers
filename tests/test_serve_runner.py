@@ -52,6 +52,22 @@ def test_run_query_applies_conformance_warnings() -> None:
     assert "token_limit_exceeded" in codes
 
 
+def test_run_query_does_not_duplicate_warnings() -> None:
+    provider = FixtureProvider(
+        [
+            FixtureOutcome(
+                text="over budget",
+                usage=TokenUsage(completion_tokens=99),
+            )
+        ]
+    )
+    result = run_query(make_spec(token_limit=10), provider)
+
+    assert result.response is not None
+    codes = [warning.code for warning in result.response.warnings]
+    assert codes.count("token_limit_exceeded") == 1
+
+
 def test_run_query_surfaces_failure_records() -> None:
     failure = failure_record(
         failure_class=FailureClass.PERMANENT,

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from dr_providers.kernel.fixture import Provider
+    from dr_providers.kernel.provider import Provider
 
 from pydantic import (
     BaseModel,
@@ -31,12 +31,12 @@ from dr_providers.kernel.config import (
     MessageRole,
     PromptMessage,
     ProviderConfig,
+    ReasoningEffort,
     gemini_chat_config,
     openai_chat_config,
     openai_responses_config,
     openrouter_chat_config,
 )
-from dr_providers.kernel.conformance import with_conformance_warnings
 from dr_providers.kernel.failures import (
     ProviderFailure,
     ProviderFailureError,
@@ -73,8 +73,9 @@ class QuerySpec(BaseModel):
     model: StrictStr
     messages: tuple[PromptMessage, ...]
     temperature: float | None = None
+    top_p: float | None = None
     token_limit: StrictInt | None = None
-    reasoning: dict[str, Any] = Field(default_factory=dict)
+    reasoning: ReasoningEffort | None = None
     extra_body: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -139,6 +140,7 @@ def build_request(spec: QuerySpec) -> LlmRequest:
         provider_config=config,
         messages=spec.messages,
         temperature=spec.temperature,
+        top_p=spec.top_p,
         token_limit=spec.token_limit,
         reasoning=spec.reasoning,
         extra_body=spec.extra_body,
@@ -160,7 +162,7 @@ def run_query(spec: QuerySpec, provider: Provider) -> QueryResult:
     return QueryResult(
         endpoint_path=endpoint_path,
         payload=payload,
-        response=with_conformance_warnings(request, response),
+        response=response,
     )
 
 
