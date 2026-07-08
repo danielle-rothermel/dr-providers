@@ -19,8 +19,8 @@ from pydantic import (
     StrictStr,
 )
 
-from dr_providers.kernel.config import EndpointKind, ProviderConfig
-from dr_providers.kernel.failures import (
+from dr_providers.config import EndpointKind, ProviderConfig
+from dr_providers.failures import (
     FailureClass,
     failure_record,
     raise_failure,

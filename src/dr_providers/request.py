@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
-from dr_providers.kernel.config import (
+from dr_providers.config import (
     EndpointKind,
     MessageRole,
     PromptMessage,
@@ -23,7 +23,7 @@ from dr_providers.kernel.config import (
     ReasoningRequestShape,
     RequestControl,
 )
-from dr_providers.kernel.failures import (
+from dr_providers.failures import (
     FailureClass,
     UnsupportedControlError,
     failure_record,

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from dr_providers.kernel.provider import Provider
+    from dr_providers.provider import Provider
 
 from pydantic import (
     BaseModel,
@@ -27,7 +27,7 @@ from pydantic import (
     StrictStr,
 )
 
-from dr_providers.kernel.config import (
+from dr_providers.config import (
     MessageRole,
     PromptMessage,
     ProviderConfig,
@@ -37,16 +37,16 @@ from dr_providers.kernel.config import (
     openai_responses_config,
     openrouter_chat_config,
 )
-from dr_providers.kernel.failures import (
+from dr_providers.failures import (
     ProviderFailure,
     ProviderFailureError,
 )
-from dr_providers.kernel.request import (
+from dr_providers.request import (
     ENDPOINT_PATHS,
     LlmRequest,
     build_payload,
 )
-from dr_providers.kernel.response import LlmResponse  # noqa: TC001
+from dr_providers.response import LlmResponse  # noqa: TC001
 
 
 class ServeProviderKind(StrEnum):

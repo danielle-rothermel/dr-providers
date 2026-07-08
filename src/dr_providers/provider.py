@@ -9,8 +9,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from dr_providers.kernel.request import LlmRequest
-    from dr_providers.kernel.response import LlmResponse
+    from dr_providers.request import LlmRequest
+    from dr_providers.response import LlmResponse
 
 
 class Provider(Protocol):

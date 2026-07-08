@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 import pytest
 
-from dr_providers.kernel import (
+from dr_providers import (
     FailureClass,
     LlmRequest,
     MessageRole,
@@ -19,12 +19,12 @@ from dr_providers.kernel import (
     TransientProviderError,
     openai_chat_config,
 )
-from dr_providers.kernel.conformance import (
+from dr_providers.conformance import (
     MODEL_SUBSTITUTION_CODE,
     REASONING_NOT_OBSERVED_CODE,
     TOKEN_LIMIT_EXCEEDED_CODE,
 )
-from dr_providers.kernel.transport import (
+from dr_providers.transport import (
     HttpProvider,
     TransportPolicy,
 )

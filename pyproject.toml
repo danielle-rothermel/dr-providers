@@ -1,7 +1,7 @@
 [project]
 name = "dr-providers"
-version = "0.1.1"
-description = "OpenRouter LLM query client with typed requests and responses."
+version = "0.2.0"
+description = "Typed LLM provider-call kernel for OpenRouter, OpenAI, and Gemini: one request, response, and failure vocabulary across providers."
 readme = "README.md"
 license = "MIT"
 authors = [

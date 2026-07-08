@@ -1,9 +1,9 @@
 import pytest
 
-from dr_providers.kernel.config import MessageRole, PromptMessage
-from dr_providers.kernel.failures import FailureClass, failure_record
-from dr_providers.kernel.fixture import FixtureOutcome, FixtureProvider
-from dr_providers.kernel.response import TokenUsage
+from dr_providers.config import MessageRole, PromptMessage
+from dr_providers.failures import FailureClass, failure_record
+from dr_providers.fixture import FixtureOutcome, FixtureProvider
+from dr_providers.response import TokenUsage
 from dr_providers.serve.runner import (
     QuerySpec,
     ServeProviderKind,

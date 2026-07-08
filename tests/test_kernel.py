@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from dr_providers.kernel import (
+from dr_providers import (
     EndpointKind,
     FailureClass,
     FixtureOutcome,
@@ -298,7 +298,7 @@ class TestParseResponses:
         ids=["missing", "empty", "no_text"],
     )
     def test_chat_parse_failures_are_permanent(self, body: dict) -> None:
-        from dr_providers.kernel import PermanentProviderError
+        from dr_providers import PermanentProviderError
 
         with pytest.raises(PermanentProviderError):
             parse_chat_completions_body(
@@ -387,7 +387,7 @@ class TestFixtureProvider:
         assert len(provider.requests) == 2
 
     def test_response_carries_conformance_warnings(self) -> None:
-        from dr_providers.kernel import TokenUsage
+        from dr_providers import TokenUsage
 
         provider = FixtureProvider(
             [
@@ -407,7 +407,7 @@ class TestFixtureProvider:
         assert "token_limit_exceeded" in codes
 
     def test_scripted_warnings_appended_once(self) -> None:
-        from dr_providers.kernel import LlmWarning, TokenUsage
+        from dr_providers import LlmWarning, TokenUsage
 
         scripted = LlmWarning(code="scripted", message="script")
         provider = FixtureProvider(

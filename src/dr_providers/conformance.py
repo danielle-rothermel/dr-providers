@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dr_providers.kernel.config import ReasoningEffort
-from dr_providers.kernel.response import LlmResponse, LlmWarning
+from dr_providers.config import ReasoningEffort
+from dr_providers.response import LlmResponse, LlmWarning
 
 if TYPE_CHECKING:
-    from dr_providers.kernel.request import LlmRequest
+    from dr_providers.request import LlmRequest
 
 REASONING_NOT_OBSERVED_CODE = "reasoning_not_observed"
 TOKEN_LIMIT_EXCEEDED_CODE = "token_limit_exceeded"  # noqa: S105

@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from dr_providers.kernel import (
+from dr_providers import (
     openai_chat_config,
     openai_responses_config,
     parse_response,

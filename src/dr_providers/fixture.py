@@ -12,14 +12,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
-from dr_providers.kernel.conformance import with_conformance_warnings
-from dr_providers.kernel.failures import (
+from dr_providers.conformance import with_conformance_warnings
+from dr_providers.failures import (
     ProviderFailure,
     raise_failure,
 )
-from dr_providers.kernel.provider import Provider
-from dr_providers.kernel.request import LlmRequest, build_payload
-from dr_providers.kernel.response import (
+from dr_providers.provider import Provider
+from dr_providers.request import LlmRequest, build_payload
+from dr_providers.response import (
     CostInfo,
     LlmResponse,
     LlmWarning,

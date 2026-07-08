@@ -12,17 +12,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
-from dr_providers.kernel.failures import (
+from dr_providers.failures import (
     FailureClass,
     ProviderFailure,
     UnsupportedControlError,
     failure_record,
 )
-from dr_providers.kernel.fixture import FixtureOutcome, FixtureProvider
-from dr_providers.kernel.provider import Provider
-from dr_providers.kernel.request import ENDPOINT_PATHS, build_payload
-from dr_providers.kernel.response import CostInfo, TokenUsage
-from dr_providers.kernel.transport import HttpProvider
+from dr_providers.fixture import FixtureOutcome, FixtureProvider
+from dr_providers.provider import Provider
+from dr_providers.request import ENDPOINT_PATHS, build_payload
+from dr_providers.response import CostInfo, TokenUsage
 from dr_providers.serve.runner import (
     QueryResult,
     QuerySpec,
@@ -32,6 +31,7 @@ from dr_providers.serve.runner import (
     run_query,
     run_variance,
 )
+from dr_providers.transport import HttpProvider
 
 SERVE_TITLE = "dr-providers serve"
 SERVE_VERSION = "0.1.0"

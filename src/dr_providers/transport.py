@@ -16,25 +16,25 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from pydantic import BaseModel, ConfigDict, StrictInt
 
-from dr_providers.kernel.conformance import with_conformance_warnings
+from dr_providers.conformance import with_conformance_warnings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from dr_providers.kernel.config import ProviderConfig
-from dr_providers.kernel.failures import (
+    from dr_providers.config import ProviderConfig
+from dr_providers.failures import (
     FailureClass,
     ProviderFailureError,
     classify_status_code,
     failure_record,
     raise_failure,
 )
-from dr_providers.kernel.request import (
+from dr_providers.request import (
     LlmRequest,
     build_payload,
     endpoint_path,
 )
-from dr_providers.kernel.response import LlmResponse, parse_response
+from dr_providers.response import LlmResponse, parse_response
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
