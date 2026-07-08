@@ -111,3 +111,7 @@ ignore = ["PLR1711", "S101", "TRY003"]
 
 [tool.ty.src]
 include = ["scripts", "src", "tests"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
