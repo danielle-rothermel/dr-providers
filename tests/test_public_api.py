@@ -13,8 +13,8 @@ EXPECTED_ALL = {
     "CostInfo",
     "EndpointKind",
     "FailureClass",
-    "FixtureOutcome",
-    "FixtureProvider",
+    "ScriptedOutcome",
+    "ScriptedProvider",
     "HttpProvider",
     "LlmRequest",
     "LlmResponse",
@@ -65,7 +65,7 @@ PURE_MODULES = (
     "dr_providers.request",
     "dr_providers.response",
     "dr_providers.conformance",
-    "dr_providers.fixture",
+    "dr_providers.scripted",
     "dr_providers.provider",
 )
 

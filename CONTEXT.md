@@ -35,6 +35,11 @@ The typed cross-provider reasoning level (none–xhigh). Provider-specific
 thinking budgets are not efforts; they ride in `extra_body`.
 _Avoid_: thinking budget, reasoning dict
 
+**Scripted Provider**:
+The network-free Provider peer that replays pre-scripted outcomes in order
+(last one repeats) and records every request it serves.
+_Avoid_: fixture, dummy, mock, fake
+
 **Throttle Identity**:
 The stable string identifying a provider endpoint for record identity and
 rate accounting (`provider:endpoint:model`, or an explicit `throttle_key`

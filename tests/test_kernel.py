@@ -7,8 +7,6 @@ import pytest
 from dr_providers import (
     EndpointKind,
     FailureClass,
-    FixtureOutcome,
-    FixtureProvider,
     LlmRequest,
     MessageRole,
     PromptMessage,
@@ -16,6 +14,8 @@ from dr_providers import (
     RateLimitedProviderError,
     ReasoningEffort,
     RequestControl,
+    ScriptedOutcome,
+    ScriptedProvider,
     UnsupportedControlError,
     build_payload,
     classify_status_code,
@@ -347,10 +347,10 @@ class TestFailures:
         assert token_usage_from_body({}) is None
 
 
-class TestFixtureProvider:
+class TestScriptedProvider:
     def test_scripted_text_response(self) -> None:
-        provider = FixtureProvider(
-            [FixtureOutcome(text="scripted", finish_reason="stop")]
+        provider = ScriptedProvider(
+            [ScriptedOutcome(text="scripted", finish_reason="stop")]
         )
         request = LlmRequest(
             provider_config=openai_chat_config(model="m"),
@@ -367,7 +367,7 @@ class TestFixtureProvider:
             failure_class=FailureClass.RATE_LIMITED,
             message="scripted 429",
         )
-        provider = FixtureProvider([FixtureOutcome(failure=failure)])
+        provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
         request = LlmRequest(
             provider_config=openai_chat_config(model="m"),
             messages=MESSAGES,
@@ -377,7 +377,7 @@ class TestFixtureProvider:
         assert exc_info.value.failure.retryable is True
 
     def test_last_outcome_repeats(self) -> None:
-        provider = FixtureProvider([FixtureOutcome(text="only")])
+        provider = ScriptedProvider([ScriptedOutcome(text="only")])
         request = LlmRequest(
             provider_config=openai_chat_config(model="m"),
             messages=MESSAGES,
@@ -389,9 +389,9 @@ class TestFixtureProvider:
     def test_response_carries_conformance_warnings(self) -> None:
         from dr_providers import TokenUsage
 
-        provider = FixtureProvider(
+        provider = ScriptedProvider(
             [
-                FixtureOutcome(
+                ScriptedOutcome(
                     text="over budget",
                     usage=TokenUsage(completion_tokens=99),
                 )
@@ -410,9 +410,9 @@ class TestFixtureProvider:
         from dr_providers import LlmWarning, TokenUsage
 
         scripted = LlmWarning(code="scripted", message="script")
-        provider = FixtureProvider(
+        provider = ScriptedProvider(
             [
-                FixtureOutcome(
+                ScriptedOutcome(
                     text="over budget",
                     usage=TokenUsage(completion_tokens=99),
                     warnings=(scripted,),

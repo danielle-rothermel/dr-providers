@@ -74,15 +74,15 @@ each provider actually accepts reasoning/effort/thinking, Gemini's
 generation-dependent thinking configs, and links to the provider docs —
 see [docs/reasoning-controls.md](docs/reasoning-controls.md).
 
-## Testing with FixtureProvider
+## Testing with ScriptedProvider
 
-`FixtureProvider` implements the same `Provider` interface as
+`ScriptedProvider` implements the same `Provider` interface as
 `HttpProvider` but scripts outcomes with no network:
 
 ```python
-from dr_providers import FixtureOutcome, FixtureProvider, LlmRequest
+from dr_providers import ScriptedOutcome, ScriptedProvider, LlmRequest
 
-provider = FixtureProvider([FixtureOutcome(text="scripted reply")])
+provider = ScriptedProvider([ScriptedOutcome(text="scripted reply")])
 response = provider.complete(request)
 assert response.text == "scripted reply"
 ```

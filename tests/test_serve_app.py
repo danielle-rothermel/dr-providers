@@ -32,14 +32,14 @@ def test_build_payload_previews_the_wire_format(client: TestClient) -> None:
     assert payload["payload"]["model"] == "test/model"
 
 
-def test_query_with_scripted_fixture_outcomes(client: TestClient) -> None:
+def test_query_with_scripted_scripted_outcomes(client: TestClient) -> None:
     response = client.post(
         "/query",
         json={
             "spec": SPEC,
             "provider": {
-                "kind": "fixture",
-                "fixture_outcomes": [{"text": "scripted hello"}],
+                "kind": "scripted",
+                "scripted_outcomes": [{"text": "scripted hello"}],
             },
         },
     )
@@ -55,8 +55,8 @@ def test_query_conformance_violation_is_reported(client: TestClient) -> None:
         json={
             "spec": {**SPEC, "token_limit": 5},
             "provider": {
-                "kind": "fixture",
-                "fixture_outcomes": [
+                "kind": "scripted",
+                "scripted_outcomes": [
                     {"text": "way past budget", "completion_tokens": 50}
                 ],
             },
@@ -75,8 +75,8 @@ def test_query_failure_outcome_returns_failure_record(
         json={
             "spec": SPEC,
             "provider": {
-                "kind": "fixture",
-                "fixture_outcomes": [
+                "kind": "scripted",
+                "scripted_outcomes": [
                     {
                         "text": "",
                         "failure_code": "rate_limited",
@@ -120,8 +120,8 @@ def test_variance_endpoint_reports_and_records(client: TestClient) -> None:
             "models": ["model-a", "model-b"],
             "samples": 2,
             "provider": {
-                "kind": "fixture",
-                "fixture_outcomes": [
+                "kind": "scripted",
+                "scripted_outcomes": [
                     {"text": "alpha"},
                     {"text": "beta"},
                 ],

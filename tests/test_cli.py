@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from dr_providers import cli
 from dr_providers.config import ReasoningEffort
-from dr_providers.fixture import FixtureOutcome, FixtureProvider
+from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 
 if TYPE_CHECKING:
     import pytest
@@ -16,20 +16,20 @@ if TYPE_CHECKING:
 runner = CliRunner()
 
 
-class FixtureHttpProvider:
-    """Wraps FixtureProvider as a context manager, standing in for
+class ScriptedHttpProvider:
+    """Wraps ScriptedProvider as a context manager, standing in for
     HttpProvider so tests never touch the network."""
 
-    def __init__(self, fixture: FixtureProvider) -> None:
-        self._fixture = fixture
+    def __init__(self, scripted: ScriptedProvider) -> None:
+        self._scripted = scripted
 
     def __call__(
         self, *_args: object, **_kwargs: object
-    ) -> FixtureHttpProvider:
+    ) -> ScriptedHttpProvider:
         return self
 
-    def __enter__(self) -> FixtureProvider:
-        return self._fixture
+    def __enter__(self) -> ScriptedProvider:
+        return self._scripted
 
     def __exit__(self, *exc: object) -> None:
         return None
@@ -37,16 +37,16 @@ class FixtureHttpProvider:
 
 def patch_http_provider(
     monkeypatch: pytest.MonkeyPatch,
-    outcomes: list[FixtureOutcome] | None = None,
-) -> FixtureProvider:
-    fixture = FixtureProvider(outcomes)
-    monkeypatch.setattr(cli, "HttpProvider", FixtureHttpProvider(fixture))
-    return fixture
+    outcomes: list[ScriptedOutcome] | None = None,
+) -> ScriptedProvider:
+    scripted = ScriptedProvider(outcomes)
+    monkeypatch.setattr(cli, "HttpProvider", ScriptedHttpProvider(scripted))
+    return scripted
 
 
 def test_query_happy_path_prints_text(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_http_provider(
-        monkeypatch, [FixtureOutcome(text="hello from fixture")]
+        monkeypatch, [ScriptedOutcome(text="hello from scripted")]
     )
 
     result = runner.invoke(
@@ -62,14 +62,14 @@ def test_query_happy_path_prints_text(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert result.exit_code == 0
-    assert "hello from fixture" in result.stdout
+    assert "hello from scripted" in result.stdout
 
 
 def test_query_prints_metadata_to_stderr(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     patch_http_provider(
-        monkeypatch, [FixtureOutcome(text="hi", finish_reason="stop")]
+        monkeypatch, [ScriptedOutcome(text="hi", finish_reason="stop")]
     )
 
     result = runner.invoke(
@@ -92,7 +92,7 @@ def test_query_prints_metadata_to_stderr(
 def test_effort_and_provider_flags_build_expected_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fixture = patch_http_provider(monkeypatch)
+    scripted = patch_http_provider(monkeypatch)
 
     result = runner.invoke(
         cli.app,
@@ -117,8 +117,8 @@ def test_effort_and_provider_flags_build_expected_request(
     )
 
     assert result.exit_code == 0
-    assert len(fixture.requests) == 1
-    request: LlmRequest = fixture.requests[0]
+    assert len(scripted.requests) == 1
+    request: LlmRequest = scripted.requests[0]
     assert request.provider_config.provider_kind.value == "openai"
     assert request.provider_config.endpoint_kind.value == "responses"
     assert request.provider_config.model == "gpt-test"
@@ -135,7 +135,7 @@ def test_effort_and_provider_flags_build_expected_request(
 def test_gemini_provider_flag_builds_gemini_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fixture = patch_http_provider(monkeypatch)
+    scripted = patch_http_provider(monkeypatch)
 
     result = runner.invoke(
         cli.app,
@@ -150,7 +150,7 @@ def test_gemini_provider_flag_builds_gemini_config(
     )
 
     assert result.exit_code == 0
-    assert fixture.requests[0].provider_config.provider_kind.value == "gemini"
+    assert scripted.requests[0].provider_config.provider_kind.value == "gemini"
 
 
 def test_bad_provider_value_exits_with_clear_message() -> None:

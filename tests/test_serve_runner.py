@@ -2,8 +2,8 @@ import pytest
 
 from dr_providers.config import MessageRole, PromptMessage
 from dr_providers.failures import FailureClass, failure_record
-from dr_providers.fixture import FixtureOutcome, FixtureProvider
 from dr_providers.response import TokenUsage
+from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 from dr_providers.serve.runner import (
     QuerySpec,
     ServeProviderKind,
@@ -25,7 +25,7 @@ def make_spec(**overrides: object) -> QuerySpec:
 
 
 def test_run_query_returns_payload_and_response() -> None:
-    provider = FixtureProvider([FixtureOutcome(text="hello")])
+    provider = ScriptedProvider([ScriptedOutcome(text="hello")])
     result = run_query(make_spec(), provider)
 
     assert result.ok
@@ -37,9 +37,9 @@ def test_run_query_returns_payload_and_response() -> None:
 
 
 def test_run_query_applies_conformance_warnings() -> None:
-    provider = FixtureProvider(
+    provider = ScriptedProvider(
         [
-            FixtureOutcome(
+            ScriptedOutcome(
                 text="over budget",
                 usage=TokenUsage(completion_tokens=99),
             )
@@ -53,9 +53,9 @@ def test_run_query_applies_conformance_warnings() -> None:
 
 
 def test_run_query_does_not_duplicate_warnings() -> None:
-    provider = FixtureProvider(
+    provider = ScriptedProvider(
         [
-            FixtureOutcome(
+            ScriptedOutcome(
                 text="over budget",
                 usage=TokenUsage(completion_tokens=99),
             )
@@ -71,24 +71,24 @@ def test_run_query_does_not_duplicate_warnings() -> None:
 def test_run_query_surfaces_failure_records() -> None:
     failure = failure_record(
         failure_class=FailureClass.PERMANENT,
-        code="fixture_down",
+        code="scripted_down",
         message="scripted failure",
     )
-    provider = FixtureProvider([FixtureOutcome(failure=failure)])
+    provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
     result = run_query(make_spec(), provider)
 
     assert not result.ok
     assert result.failure is not None
-    assert result.failure.code == "fixture_down"
+    assert result.failure.code == "scripted_down"
     assert result.payload["model"] == "test/model"
 
 
 def test_run_variance_reports_dispersion_per_model() -> None:
-    provider = FixtureProvider(
+    provider = ScriptedProvider(
         [
-            FixtureOutcome(text="alpha"),
-            FixtureOutcome(text="beta"),
-            FixtureOutcome(text="beta"),
+            ScriptedOutcome(text="alpha"),
+            ScriptedOutcome(text="beta"),
+            ScriptedOutcome(text="beta"),
         ]
     )
     report = run_variance(
@@ -115,8 +115,8 @@ def test_run_variance_counts_failures() -> None:
         code="rate_limited",
         message="scripted",
     )
-    provider = FixtureProvider(
-        [FixtureOutcome(text="fine"), FixtureOutcome(failure=failure)]
+    provider = ScriptedProvider(
+        [ScriptedOutcome(text="fine"), ScriptedOutcome(failure=failure)]
     )
     report = run_variance(
         PROMPT,
@@ -132,7 +132,7 @@ def test_run_variance_counts_failures() -> None:
 
 
 def test_run_variance_validates_inputs() -> None:
-    provider = FixtureProvider()
+    provider = ScriptedProvider()
     with pytest.raises(ValueError, match="samples"):
         run_variance(
             PROMPT,

@@ -1,7 +1,7 @@
 """The Provider protocol: the single-shot provider call interface.
 
 A pure module (no httpx) so importing the protocol never pulls in the
-transport. Both ``FixtureProvider`` and ``HttpProvider`` implement it.
+transport. Both ``ScriptedProvider`` and ``HttpProvider`` implement it.
 """
 
 from __future__ import annotations

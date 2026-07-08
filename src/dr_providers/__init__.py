@@ -53,10 +53,6 @@ from dr_providers.failures import (
     raise_failure,
     sanitize_kwargs,
 )
-from dr_providers.fixture import (
-    FixtureOutcome,
-    FixtureProvider,
-)
 from dr_providers.provider import Provider
 from dr_providers.request import (
     LlmRequest,
@@ -75,6 +71,10 @@ from dr_providers.response import (
     parse_responses_body,
     token_usage_from_body,
 )
+from dr_providers.scripted import (
+    ScriptedOutcome,
+    ScriptedProvider,
+)
 
 PACKAGE_NAME = "dr-providers"
 
@@ -87,8 +87,6 @@ __all__ = [
     "CostInfo",
     "EndpointKind",
     "FailureClass",
-    "FixtureOutcome",
-    "FixtureProvider",
     "HttpProvider",
     "LlmRequest",
     "LlmResponse",
@@ -107,6 +105,8 @@ __all__ = [
     "ReasoningRequestShape",
     "RequestControl",
     "ResourceExhaustionProviderError",
+    "ScriptedOutcome",
+    "ScriptedProvider",
     "TokenLimitParameter",
     "TokenUsage",
     "TransientProviderError",

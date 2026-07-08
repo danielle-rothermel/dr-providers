@@ -1,6 +1,6 @@
 """FastAPI facade over query/build_payload/variance ([serve] extra).
 
-Providers: ``fixture`` (scripted outcomes, no network — what the
+Providers: ``scripted`` (scripted outcomes, no network — what the
 playground e2e uses) or ``live`` (raw-httpx transport; requires the
 provider's API key env var and is never exercised by tests).
 """
@@ -18,10 +18,10 @@ from dr_providers.failures import (
     UnsupportedControlError,
     failure_record,
 )
-from dr_providers.fixture import FixtureOutcome, FixtureProvider
 from dr_providers.provider import Provider
 from dr_providers.request import ENDPOINT_PATHS, build_payload
 from dr_providers.response import CostInfo, TokenUsage
+from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 from dr_providers.serve.runner import (
     QueryResult,
     QuerySpec,
@@ -42,20 +42,22 @@ MISSING_API_KEY_CODE = "missing_api_key"
 
 
 class ProviderChoiceKind(StrEnum):
-    FIXTURE = "fixture"
+    SCRIPTED = "scripted"
     LIVE = "live"
 
 
 class ProviderChoice(BaseModel):
-    """Which provider executes the call: scripted fixture or live."""
+    """Which provider executes the call: scripted or live."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: ProviderChoiceKind = ProviderChoiceKind.FIXTURE
-    fixture_outcomes: list["FixtureOutcomeSpec"] = Field(default_factory=list)
+    kind: ProviderChoiceKind = ProviderChoiceKind.SCRIPTED
+    scripted_outcomes: list["ScriptedOutcomeSpec"] = Field(
+        default_factory=list
+    )
 
 
-class FixtureOutcomeSpec(BaseModel):
+class ScriptedOutcomeSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: StrictStr = ""
@@ -65,7 +67,7 @@ class FixtureOutcomeSpec(BaseModel):
     failure_code: StrictStr | None = None
     failure_message: StrictStr | None = None
 
-    def to_outcome(self) -> FixtureOutcome:
+    def to_outcome(self) -> ScriptedOutcome:
         failure: ProviderFailure | None = None
         if self.failure_code is not None:
             failure = failure_record(
@@ -83,7 +85,7 @@ class FixtureOutcomeSpec(BaseModel):
             if self.total_cost is not None
             else None
         )
-        return FixtureOutcome(
+        return ScriptedOutcome(
             text=self.text,
             finish_reason=self.finish_reason,
             usage=usage,
@@ -127,11 +129,11 @@ class HealthResponse(BaseModel):
 
 
 def resolve_provider(choice: ProviderChoice, spec: QuerySpec) -> Provider:
-    if choice.kind is ProviderChoiceKind.FIXTURE:
+    if choice.kind is ProviderChoiceKind.SCRIPTED:
         outcomes = [
-            outcome.to_outcome() for outcome in choice.fixture_outcomes
+            outcome.to_outcome() for outcome in choice.scripted_outcomes
         ]
-        return FixtureProvider(outcomes or None)
+        return ScriptedProvider(outcomes or None)
     config = build_request(spec).provider_config
     api_key = os.environ.get(config.api_key_env)
     if not api_key:

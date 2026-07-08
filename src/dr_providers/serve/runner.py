@@ -1,7 +1,7 @@
 """Serve-side query and variance machinery over the kernel.
 
 Pure library logic: declarative query specs resolve to kernel
-requests, run against any ``Provider`` (Fixture or Http), and come
+requests, run against any ``Provider`` (Scripted or Http), and come
 back as structured results with conformance warnings applied. The
 variance runner fans one prompt across models x samples and reports
 output dispersion — the same records the playground downloads as
