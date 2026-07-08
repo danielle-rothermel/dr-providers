@@ -4,6 +4,15 @@ Typed LLM provider-call kernel for OpenRouter, OpenAI, and Gemini: one
 request, response, and failure vocabulary across providers. Requires
 Python 3.12+.
 
+## Ecosystem
+
+dr-providers is the typed LLM-provider HTTP transport kernel, with an
+optional `[serve]` FastAPI facade for localhost HTTP callers. Its neighboring
+repos are dr-serialize, dr-graph, dr-platform, dr-code, whetstone-ai, and
+unitbench. Package metadata shows no dependency on those neighbors; in-repo
+notes identify whetstone-ai/dr-platform, dr-graph's graph runner, and
+unitbench playgrounds as consumers.
+
 ## Install
 
 ```bash
