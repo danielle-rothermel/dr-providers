@@ -113,6 +113,23 @@ uv run pre-commit install
 uv run pre-commit run --all-files
 ```
 
+### Live verification matrix
+
+The default `uv run pytest` run is fully offline (`addopts = "-m 'not
+live'"`). A `live`-marked matrix in `tests/live/test_live_matrix.py`
+exercises the four presets against real provider endpoints:
+
+```bash
+uv run pytest -m live
+```
+
+Each case skips (not fails) when its API key env var
+(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) is unset,
+so this is safe to run without every provider configured. Successful
+calls overwrite `data/wire-corpus/<provider_kind>_<endpoint_kind>.json`
+with the raw response body; `tests/test_wire_corpus.py` re-parses
+those bodies offline on every normal run.
+
 ### Audit corpus ground truth
 
 This repo includes a small audit-output corpus and curated ground-truth

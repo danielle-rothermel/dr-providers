@@ -1,0 +1,55 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "Hello",
+        "reasoning": null,
+        "reasoning_details": [
+          {
+            "data": "gAAAAABqTlcOB4TmqluiAairITRQ9o-pDPCrJNO4_Qoe_SbUno742PFUDJ6159yqLuiO4ORJRuwIeqTSA4noLK6yGIB3ZxUMrCj8DMEg1z_6MBVzF5GMQACFMsXOxqDwhUAws-mYX9b1iHxPFTEXsDFkjX7nj-XJXNH1y_Ce8arLb7eqCwQRb4jCOA-WF0Z9NglZllK8AASa7UCGSIB_0Y9qYTDa30jNfoAw5aV4MAo4IpkvMBwkv3tCE_ubGLiMaCaCizDWAtGAuWl-sOwbBs2hZVSZUAilxNJKjHmrn9-5yIAFfmUPtxdMGKa_m-NeBeX5MHzQNyEKBoTUsmbKIyKqbcfr_sNkoPPnefb5z-CbayIrg-U2uCsx1CnSigkMnFDh5oZLR6oCsY8Mz3BRalLCXpFMMexXeV4tzvg9XJfI_Eyl4W-gMwmjEcOAIqhhKbEaPzpuBngQwkolEURcgdeTYpHpgOekwqMl87b1YyOZjIINzndKZBppp_zgeqqC7JHxa5Tx69cu2sdcxRCrPxfoTDKEOyDnEgbUdWsdGchxWF3oONDVz27VOWbFldB6c4td9OnzJo4N2hfIEGtgp6Th9t8o0_MiJVsE3CEtSH0h78jMF2EzA_rmky1ODH8Pw3NTgOXGaOWIiEMDyNTUchkGqkyNR44vFYHPQADNtSWYb8dwjPZa1paTMXAWzRstR-bRxwgh89bA8kjcKyDZQKrTu9UsJu1JEjT5Q3S3EVOUqFQM4A3c9vqsbfH1x0QFi79ukoIS2tHNLXLF2t7vvXRyUYdorvDVtCcprcq-e5Zii_AsYy_nS5gV-XPlcgBBMIWxNPma_y6Am5hxbMLDFKZ-LyL3z0qc_AJlln4Q_Y4Ghkr4UbnzCRO9JUsXlMCAUsem9fJ3iPxL7EmdslwHOCTglNg04MW7VQyeA2DeAtFQrRvHZYPuM-YcTAQCJxe7fk8i6IrWqm1CYlgxlT9uoUdaW2O0K5JgdCGXC0wDTZT8tNluq2TIZZp1OAGocpR9gAp9Vqjuh22t6oBsce-eKSJmKsrr8p1y2gOWl0wOehNpMSd8vjSH-9p9lzk_770cNEVeMQkTpsUk3OTPAJUnwgX18K9YbeHxUvJAX0JNSzdU-aOHbgBmgrgtYTWIpJjAvWBJAaNf09qhFiknA6J7MmsEzTV00NA7uOs_bFRR1YRnQOF5RbTEC5uKL4uj-O9qyK9TR96OgbD7eQdcBHxJZalKswbPNLvXQJ5cJlcUujxMaLgFozy37XcjOqqZopmXivNJidvqLDam",
+            "format": "openai-responses-v1",
+            "id": "rs_0ac03f03d6a1ffaf016a4e570e05f88196b6640df98d6f439c",
+            "index": 0,
+            "type": "reasoning.encrypted"
+          }
+        ],
+        "refusal": null,
+        "role": "assistant"
+      },
+      "native_finish_reason": "completed"
+    }
+  ],
+  "created": 1783518989,
+  "id": "gen-1783518989-xErQJjPSDQFxTLszmbZy",
+  "model": "openai/gpt-5-mini-2025-08-07",
+  "object": "chat.completion",
+  "provider": "OpenAI",
+  "service_tier": "default",
+  "system_fingerprint": null,
+  "usage": {
+    "completion_tokens": 68,
+    "completion_tokens_details": {
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "reasoning_tokens": 0
+    },
+    "cost": 0.000139,
+    "cost_details": {
+      "upstream_inference_completions_cost": 0.000136,
+      "upstream_inference_cost": 0.000139,
+      "upstream_inference_prompt_cost": 3e-06
+    },
+    "is_byok": false,
+    "prompt_tokens": 12,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cache_write_tokens": 0,
+      "cached_tokens": 0,
+      "video_tokens": 0
+    },
+    "total_tokens": 80
+  }
+}
