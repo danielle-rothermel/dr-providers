@@ -33,6 +33,7 @@ EXPECTED_ALL = {
     "ReasoningRequestShape",
     "RequestControl",
     "ResourceExhaustionProviderError",
+    "ResponsesDiagnostics",
     "TokenLimitParameter",
     "TokenUsage",
     "TransientProviderError",

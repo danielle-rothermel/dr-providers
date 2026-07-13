@@ -7,8 +7,11 @@ parts incrementally without a breaking redesign.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from enum import StrEnum
+from hashlib import sha256
 from typing import Any
 
 from pydantic import (
@@ -27,14 +30,22 @@ from dr_providers.failures import (
 )
 
 OUTPUT_TEXT_PART_TYPE = "output_text"
+REFUSAL_PART_TYPE = "refusal"
+MESSAGE_ITEM_TYPE = "message"
 RESPONSES_INCOMPLETE_REASON_LENGTH = "max_output_tokens"
 RESPONSES_INCOMPLETE_REASON_CONTENT_FILTER = "content_filter"
 RESPONSES_STATUS_COMPLETED = "completed"
+RESPONSES_STATUS_FAILED = "failed"
 FINISH_REASON_LENGTH = "length"
 FINISH_REASON_CONTENT_FILTER = "content_filter"
 FINISH_REASON_STOP = "stop"
 PARSE_ERROR_CODE = "response_parse_error"
+RESPONSE_REFUSAL_CODE = "response_refusal"
+RESPONSE_INCOMPLETE_NO_TEXT_CODE = "response_incomplete_no_text"
+RESPONSE_FAILED_CODE = "response_failed"
+RESPONSE_NO_TEXT_CODE = "response_no_text"
 RESPONSE_PREVIEW_LIMIT = 512
+RESPONSE_ID_HASH_LENGTH = 16
 
 
 class WarningSeverity(StrEnum):
@@ -70,6 +81,24 @@ class CostInfo(BaseModel):
     currency: StrictStr = "USD"
 
 
+class ResponsesDiagnostics(BaseModel):
+    """Safe, content-free observations from an OpenAI Responses body."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    response_status: StrictStr | None = None
+    incomplete_reason: StrictStr | None = None
+    provider_error_code: StrictStr | None = None
+    output_item_types: dict[StrictStr, StrictInt] = Field(default_factory=dict)
+    content_part_types: dict[StrictStr, StrictInt] = Field(
+        default_factory=dict
+    )
+    output_text_len: StrictInt = 0
+    refusal_len: StrictInt | None = None
+    response_id_hash: StrictStr | None = None
+    model_echoed: StrictStr | None = None
+
+
 class LlmResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -80,7 +109,33 @@ class LlmResponse(BaseModel):
     finish_reason: StrictStr | None = None
     response_id: StrictStr | None = None
     model: StrictStr | None = None
+    diagnostics: ResponsesDiagnostics | None = None
     provider_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _ResponsesWalk:
+    text: str
+    diagnostics: ResponsesDiagnostics
+    provider_error_message: str | None = None
+    parse_error: str | None = None
+
+
+@dataclass(frozen=True)
+class _ResponsesOutputWalk:
+    text: str
+    refusal_len: int | None
+    item_types: dict[str, int]
+    content_types: dict[str, int]
+    parse_error: str | None = None
+
+
+@dataclass(frozen=True)
+class _ResponsesContentWalk:
+    text: str
+    refusal_len: int | None
+    content_types: dict[str, int]
+    parse_error: str | None = None
 
 
 def parse_response(
@@ -129,21 +184,52 @@ def parse_responses_body(
     *,
     config: ProviderConfig,
 ) -> LlmResponse:
-    text = _optional_str(body.get("output_text"))
-    if text is None:
-        text = _text_from_responses_output(body.get("output"))
-    if text is None or not text.strip():
-        raise _parse_error(
-            "provider response produced no generation text", body, config
+    walk = _walk_responses_body(body)
+    if walk.parse_error is not None:
+        raise _responses_failure(
+            code=PARSE_ERROR_CODE,
+            message=walk.parse_error,
+            diagnostics=walk.diagnostics,
+            config=config,
+        )
+    if walk.diagnostics.response_status == RESPONSES_STATUS_FAILED:
+        message = "provider response failed"
+        if walk.provider_error_message is not None:
+            message = f"{message}: {walk.provider_error_message}"
+        raise _responses_failure(
+            code=RESPONSE_FAILED_CODE,
+            message=message,
+            diagnostics=walk.diagnostics,
+            config=config,
+        )
+    if not walk.text.strip():
+        if walk.diagnostics.refusal_len is not None:
+            code = RESPONSE_REFUSAL_CODE
+            message = "provider response contained a refusal and no text"
+        elif walk.diagnostics.response_status == "incomplete":
+            code = RESPONSE_INCOMPLETE_NO_TEXT_CODE
+            message = "provider response was incomplete and contained no text"
+        elif walk.diagnostics.response_status is None:
+            code = PARSE_ERROR_CODE
+            message = "provider response missing status and generation text"
+        else:
+            code = RESPONSE_NO_TEXT_CODE
+            message = "provider response contained no generation text"
+        raise _responses_failure(
+            code=code,
+            message=message,
+            diagnostics=walk.diagnostics,
+            config=config,
         )
     response_id = _optional_str(body.get("id"))
     return LlmResponse(
-        text=text,
+        text=walk.text,
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
         finish_reason=_finish_reason_from_responses_body(body),
         response_id=response_id,
         model=_optional_str(body.get("model")) or config.model,
+        diagnostics=walk.diagnostics,
         provider_metadata=dict(body),
     )
 
@@ -205,23 +291,166 @@ def _finish_reason_from_responses_body(
     return None
 
 
-def _text_from_responses_output(output: Any) -> str | None:
-    if not isinstance(output, Sequence) or isinstance(output, str | bytes):
-        return None
-    parts: list[str] = []
-    for item in output:
-        content = _get(item, "content")
-        if not isinstance(content, Sequence) or isinstance(
-            content, str | bytes
-        ):
-            continue
-        for part in content:
-            if _get(part, "type") != OUTPUT_TEXT_PART_TYPE:
+def _walk_responses_body(body: Mapping[str, Any]) -> _ResponsesWalk:
+    status = _optional_str(body.get("status"))
+    incomplete_details = body.get("incomplete_details")
+    incomplete_reason = None
+    if isinstance(incomplete_details, Mapping):
+        incomplete_reason = _optional_str(incomplete_details.get("reason"))
+
+    provider_error_code = None
+    provider_error_message = None
+    error = body.get("error")
+    if isinstance(error, Mapping):
+        provider_error_code = _optional_str(error.get("code"))
+        provider_error_message = _optional_str(error.get("message"))
+
+    output_walk = _walk_responses_output(body.get("output"))
+    response_id = _optional_str(body.get("id"))
+    diagnostics = ResponsesDiagnostics(
+        response_status=status,
+        incomplete_reason=incomplete_reason,
+        provider_error_code=provider_error_code,
+        output_item_types=output_walk.item_types,
+        content_part_types=output_walk.content_types,
+        output_text_len=len(output_walk.text),
+        refusal_len=output_walk.refusal_len,
+        response_id_hash=_hash_response_id(response_id),
+        model_echoed=_optional_str(body.get("model")),
+    )
+    return _ResponsesWalk(
+        text=output_walk.text,
+        diagnostics=diagnostics,
+        provider_error_message=provider_error_message,
+        parse_error=output_walk.parse_error,
+    )
+
+
+def _walk_responses_output(output: Any) -> _ResponsesOutputWalk:
+    parse_error = None
+    text_parts: list[str] = []
+    refusal_len = 0
+    saw_refusal = False
+    item_types: Counter[str] = Counter()
+    content_types: Counter[str] = Counter()
+
+    if not _is_sequence(output):
+        parse_error = "provider response output is not a list"
+    else:
+        for item in output:
+            if not isinstance(item, Mapping):
+                parse_error = "provider response output item is not an object"
+                break
+            item_type = _optional_str(item.get("type"))
+            if item_type is None:
+                parse_error = "provider response output item missing type"
+                break
+            item_types[item_type] += 1
+
+            content = item.get("content")
+            if item_type != MESSAGE_ITEM_TYPE and not _is_sequence(content):
                 continue
-            text = _get(part, "text")
-            if isinstance(text, str):
-                parts.append(text)
-    return "".join(parts) or None
+            content_walk = _walk_responses_content(content)
+            text_parts.append(content_walk.text)
+            content_types.update(content_walk.content_types)
+            if content_walk.refusal_len is not None:
+                saw_refusal = True
+                refusal_len += content_walk.refusal_len
+            if content_walk.parse_error is not None:
+                parse_error = content_walk.parse_error
+                break
+
+    text = "".join(text_parts)
+    return _ResponsesOutputWalk(
+        text=text,
+        refusal_len=refusal_len if saw_refusal else None,
+        item_types=dict(sorted(item_types.items())),
+        content_types=dict(sorted(content_types.items())),
+        parse_error=parse_error,
+    )
+
+
+def _walk_responses_content(content: Any) -> _ResponsesContentWalk:
+    if not _is_sequence(content):
+        return _ResponsesContentWalk(
+            text="",
+            refusal_len=None,
+            content_types={},
+            parse_error="provider response message content is not a list",
+        )
+
+    text_parts: list[str] = []
+    refusal_len = 0
+    saw_refusal = False
+    content_types: Counter[str] = Counter()
+    for part in content:
+        if not isinstance(part, Mapping):
+            return _ResponsesContentWalk(
+                text="".join(text_parts),
+                refusal_len=refusal_len if saw_refusal else None,
+                content_types=dict(sorted(content_types.items())),
+                parse_error="provider response content part is not an object",
+            )
+        part_type = _optional_str(part.get("type"))
+        if part_type is None:
+            return _ResponsesContentWalk(
+                text="".join(text_parts),
+                refusal_len=refusal_len if saw_refusal else None,
+                content_types=dict(sorted(content_types.items())),
+                parse_error="provider response content part missing type",
+            )
+        content_types[part_type] += 1
+        if part_type == OUTPUT_TEXT_PART_TYPE:
+            text = part.get("text")
+            if not isinstance(text, str):
+                return _content_parse_error(
+                    text_parts=text_parts,
+                    refusal_len=refusal_len if saw_refusal else None,
+                    content_types=content_types,
+                    message="response output_text value is not a string",
+                )
+            text_parts.append(text)
+        elif part_type == REFUSAL_PART_TYPE:
+            saw_refusal = True
+            refusal = part.get("refusal")
+            if not isinstance(refusal, str):
+                return _content_parse_error(
+                    text_parts=text_parts,
+                    refusal_len=refusal_len,
+                    content_types=content_types,
+                    message="response refusal value is not a string",
+                )
+            refusal_len += len(refusal)
+    return _ResponsesContentWalk(
+        text="".join(text_parts),
+        refusal_len=refusal_len if saw_refusal else None,
+        content_types=dict(sorted(content_types.items())),
+    )
+
+
+def _content_parse_error(
+    *,
+    text_parts: list[str],
+    refusal_len: int | None,
+    content_types: Counter[str],
+    message: str,
+) -> _ResponsesContentWalk:
+    return _ResponsesContentWalk(
+        text="".join(text_parts),
+        refusal_len=refusal_len,
+        content_types=dict(sorted(content_types.items())),
+        parse_error=message,
+    )
+
+
+def _hash_response_id(response_id: str | None) -> str | None:
+    if response_id is None:
+        return None
+    return sha256(response_id.encode()).hexdigest()[:RESPONSE_ID_HASH_LENGTH]
+
+
+def _is_sequence(value: Any) -> bool:
+    return isinstance(value, Sequence) and not isinstance(value, str | bytes)
 
 
 def _content_to_text(content: Any) -> str | None:
@@ -269,6 +498,26 @@ def _parse_error(
             "provider_kind": config.provider_kind.value,
             "endpoint_kind": config.endpoint_kind.value,
             "response_preview": repr(dict(body))[:RESPONSE_PREVIEW_LIMIT],
+        },
+    )
+    return raise_failure(failure)
+
+
+def _responses_failure(
+    *,
+    code: str,
+    message: str,
+    diagnostics: ResponsesDiagnostics,
+    config: ProviderConfig,
+) -> Exception:
+    failure = failure_record(
+        failure_class=FailureClass.PERMANENT,
+        code=code,
+        message=message,
+        metadata={
+            "provider_kind": config.provider_kind.value,
+            "endpoint_kind": config.endpoint_kind.value,
+            "diagnostics": diagnostics.model_dump(),
         },
     )
     return raise_failure(failure)
