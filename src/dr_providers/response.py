@@ -46,6 +46,22 @@ RESPONSE_FAILED_CODE = "response_failed"
 RESPONSE_NO_TEXT_CODE = "response_no_text"
 RESPONSE_PREVIEW_LIMIT = 512
 RESPONSE_ID_HASH_LENGTH = 16
+UNKNOWN_DIAGNOSTIC_CATEGORY = "unknown"
+RESPONSES_STATUS_VALUES = frozenset(
+    {"cancelled", "completed", "failed", "in_progress", "incomplete", "queued"}
+)
+RESPONSES_INCOMPLETE_REASON_VALUES = frozenset(
+    {
+        RESPONSES_INCOMPLETE_REASON_CONTENT_FILTER,
+        RESPONSES_INCOMPLETE_REASON_LENGTH,
+    }
+)
+RESPONSES_OUTPUT_ITEM_TYPE_VALUES = frozenset(
+    {MESSAGE_ITEM_TYPE, "function_call", "reasoning"}
+)
+RESPONSES_CONTENT_PART_TYPE_VALUES = frozenset(
+    {OUTPUT_TEXT_PART_TYPE, REFUSAL_PART_TYPE}
+)
 
 
 class WarningSeverity(StrEnum):
@@ -82,13 +98,20 @@ class CostInfo(BaseModel):
 
 
 class ResponsesDiagnostics(BaseModel):
-    """Safe, content-free observations from an OpenAI Responses body."""
+    """Safe, content-free observations from an OpenAI Responses body.
+
+    Provider-controlled enums are retained only when explicitly allowlisted;
+    all other string values are coalesced into ``unknown`` count categories.
+    ``response_id_hash`` is a truncated, unsalted SHA-256 digest retained for
+    correlating high-entropy provider IDs. It does not protect low-entropy
+    values from dictionary attacks, so callers must never treat hashing as a
+    substitute for excluding arbitrary provider content.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     response_status: StrictStr | None = None
     incomplete_reason: StrictStr | None = None
-    provider_error_code: StrictStr | None = None
     output_item_types: dict[StrictStr, StrictInt] = Field(default_factory=dict)
     content_part_types: dict[StrictStr, StrictInt] = Field(
         default_factory=dict
@@ -96,7 +119,6 @@ class ResponsesDiagnostics(BaseModel):
     output_text_len: StrictInt = 0
     refusal_len: StrictInt | None = None
     response_id_hash: StrictStr | None = None
-    model_echoed: StrictStr | None = None
 
 
 class LlmResponse(BaseModel):
@@ -288,29 +310,27 @@ def _finish_reason_from_responses_body(
 
 
 def _walk_responses_body(body: Mapping[str, Any]) -> _ResponsesWalk:
-    status = _optional_str(body.get("status"))
+    status = _allowlisted_diagnostic_value(
+        body.get("status"), RESPONSES_STATUS_VALUES
+    )
     incomplete_details = body.get("incomplete_details")
     incomplete_reason = None
     if isinstance(incomplete_details, Mapping):
-        incomplete_reason = _optional_str(incomplete_details.get("reason"))
-
-    provider_error_code = None
-    error = body.get("error")
-    if isinstance(error, Mapping):
-        provider_error_code = _optional_str(error.get("code"))
+        incomplete_reason = _allowlisted_diagnostic_value(
+            incomplete_details.get("reason"),
+            RESPONSES_INCOMPLETE_REASON_VALUES,
+        )
 
     output_walk = _walk_responses_output(body.get("output"))
     response_id = _optional_str(body.get("id"))
     diagnostics = ResponsesDiagnostics(
         response_status=status,
         incomplete_reason=incomplete_reason,
-        provider_error_code=provider_error_code,
         output_item_types=output_walk.item_types,
         content_part_types=output_walk.content_types,
         output_text_len=len(output_walk.text),
         refusal_len=output_walk.refusal_len,
         response_id_hash=_hash_response_id(response_id),
-        model_echoed=_optional_str(body.get("model")),
     )
     return _ResponsesWalk(
         text=output_walk.text,
@@ -338,7 +358,11 @@ def _walk_responses_output(output: Any) -> _ResponsesOutputWalk:
             if item_type is None:
                 parse_error = "provider response output item missing type"
                 break
-            item_types[item_type] += 1
+            item_types[
+                _allowlisted_diagnostic_category(
+                    item_type, RESPONSES_OUTPUT_ITEM_TYPE_VALUES
+                )
+            ] += 1
 
             if item_type != MESSAGE_ITEM_TYPE:
                 continue
@@ -391,7 +415,11 @@ def _walk_responses_content(content: Any) -> _ResponsesContentWalk:
                 content_types=dict(sorted(content_types.items())),
                 parse_error="provider response content part missing type",
             )
-        content_types[part_type] += 1
+        content_types[
+            _allowlisted_diagnostic_category(
+                part_type, RESPONSES_CONTENT_PART_TYPE_VALUES
+            )
+        ] += 1
         if part_type == OUTPUT_TEXT_PART_TYPE:
             text = part.get("text")
             if not isinstance(text, str):
@@ -439,6 +467,25 @@ def _hash_response_id(response_id: str | None) -> str | None:
     if response_id is None:
         return None
     return sha256(response_id.encode()).hexdigest()[:RESPONSE_ID_HASH_LENGTH]
+
+
+def _allowlisted_diagnostic_value(
+    value: Any, allowed_values: frozenset[str]
+) -> str | None:
+    raw_value = _optional_str(value)
+    if raw_value is None:
+        return None
+    if raw_value in allowed_values:
+        return raw_value
+    return UNKNOWN_DIAGNOSTIC_CATEGORY
+
+
+def _allowlisted_diagnostic_category(
+    value: str, allowed_values: frozenset[str]
+) -> str:
+    if value in allowed_values:
+        return value
+    return UNKNOWN_DIAGNOSTIC_CATEGORY
 
 
 def _is_sequence(value: Any) -> bool:

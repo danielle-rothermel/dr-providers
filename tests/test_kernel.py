@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 
 import pytest
 
@@ -364,13 +365,25 @@ class TestParseResponses:
         assert "response_preview" not in failure.metadata
         assert len(failure.metadata["diagnostics"]["response_id_hash"]) == 16
 
-    def test_failed_response_failure_is_entirely_content_free(self) -> None:
+    @pytest.mark.parametrize(
+        ("status", "expected_code"),
+        [
+            ("failed", "response_failed"),
+            ("PRIVATE_STATUS", "response_no_text"),
+        ],
+        ids=["failed", "unknown_status"],
+    )
+    def test_responses_failure_is_entirely_content_free(
+        self, status: str, expected_code: str
+    ) -> None:
         body = {
             "id": "PRIVATE_RESPONSE_ID",
-            "status": "failed",
+            "status": status,
+            "model": "PRIVATE_MODEL_ECHO",
             "prompt": "PRIVATE_PROMPT",
+            "incomplete_details": {"reason": "PRIVATE_INCOMPLETE_REASON"},
             "error": {
-                "code": "safe_provider_code",
+                "code": "PRIVATE_PROVIDER_ERROR_CODE",
                 "message": "PRIVATE_ERROR_MESSAGE",
             },
             "output": [
@@ -379,13 +392,65 @@ class TestParseResponses:
                     "content": [
                         {"type": "output_text", "text": "PRIVATE_OUTPUT"},
                         {"type": "refusal", "refusal": "PRIVATE_REFUSAL"},
+                        {
+                            "type": "PRIVATE_CONTENT_PART_TYPE",
+                            "payload": "PRIVATE_CONTENT_PAYLOAD",
+                        },
                     ],
                 },
                 {
-                    "type": "function_call",
+                    "type": "PRIVATE_OUTPUT_ITEM_TYPE",
                     "name": "PRIVATE_TOOL_NAME",
                     "arguments": "PRIVATE_TOOL_ARGUMENTS",
                 },
+            ],
+        }
+        if status == "PRIVATE_STATUS":
+            body["output"] = body["output"][1:]
+
+        with pytest.raises(PermanentProviderError) as exc_info:
+            parse_responses_body(
+                body, config=openai_responses_config(model="m")
+            )
+
+        failure = exc_info.value.failure
+        assert failure.code == expected_code
+        serialized_failure = json.dumps(failure.model_dump())
+        for private_value in (
+            "PRIVATE_RESPONSE_ID",
+            "PRIVATE_STATUS",
+            "PRIVATE_MODEL_ECHO",
+            "PRIVATE_PROMPT",
+            "PRIVATE_INCOMPLETE_REASON",
+            "PRIVATE_PROVIDER_ERROR_CODE",
+            "PRIVATE_ERROR_MESSAGE",
+            "PRIVATE_OUTPUT",
+            "PRIVATE_REFUSAL",
+            "PRIVATE_CONTENT_PART_TYPE",
+            "PRIVATE_CONTENT_PAYLOAD",
+            "PRIVATE_OUTPUT_ITEM_TYPE",
+            "PRIVATE_TOOL_NAME",
+            "PRIVATE_TOOL_ARGUMENTS",
+        ):
+            assert private_value not in serialized_failure
+
+    def test_failed_response_retains_allowlisted_diagnostics(self) -> None:
+        body = {
+            "id": "resp-safe-diagnostics",
+            "status": "failed",
+            "incomplete_details": {"reason": "content_filter"},
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "private"},
+                        {"type": "refusal", "refusal": "private"},
+                        {"type": "future_content"},
+                    ],
+                },
+                {"type": "reasoning"},
+                {"type": "function_call"},
+                {"type": "future_item"},
             ],
         }
 
@@ -394,23 +459,25 @@ class TestParseResponses:
                 body, config=openai_responses_config(model="m")
             )
 
-        failure = exc_info.value.failure
-        assert failure.code == "response_failed"
-        assert failure.message == "provider response failed"
-        assert failure.metadata["diagnostics"]["provider_error_code"] == (
-            "safe_provider_code"
-        )
-        serialized_failure = json.dumps(failure.model_dump())
-        for private_value in (
-            "PRIVATE_RESPONSE_ID",
-            "PRIVATE_PROMPT",
-            "PRIVATE_ERROR_MESSAGE",
-            "PRIVATE_OUTPUT",
-            "PRIVATE_REFUSAL",
-            "PRIVATE_TOOL_NAME",
-            "PRIVATE_TOOL_ARGUMENTS",
-        ):
-            assert private_value not in serialized_failure
+        diagnostics = exc_info.value.failure.metadata["diagnostics"]
+        assert diagnostics == {
+            "response_status": "failed",
+            "incomplete_reason": "content_filter",
+            "output_item_types": {
+                "function_call": 1,
+                "message": 1,
+                "reasoning": 1,
+                "unknown": 1,
+            },
+            "content_part_types": {
+                "output_text": 1,
+                "refusal": 1,
+                "unknown": 1,
+            },
+            "output_text_len": 7,
+            "refusal_len": 7,
+            "response_id_hash": sha256(body["id"].encode()).hexdigest()[:16],
+        }
 
     def test_parse_dispatches_by_endpoint_kind(self) -> None:
         chat_body = {
