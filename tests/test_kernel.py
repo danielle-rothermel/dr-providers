@@ -364,6 +364,54 @@ class TestParseResponses:
         assert "response_preview" not in failure.metadata
         assert len(failure.metadata["diagnostics"]["response_id_hash"]) == 16
 
+    def test_failed_response_failure_is_entirely_content_free(self) -> None:
+        body = {
+            "id": "PRIVATE_RESPONSE_ID",
+            "status": "failed",
+            "prompt": "PRIVATE_PROMPT",
+            "error": {
+                "code": "safe_provider_code",
+                "message": "PRIVATE_ERROR_MESSAGE",
+            },
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "PRIVATE_OUTPUT"},
+                        {"type": "refusal", "refusal": "PRIVATE_REFUSAL"},
+                    ],
+                },
+                {
+                    "type": "function_call",
+                    "name": "PRIVATE_TOOL_NAME",
+                    "arguments": "PRIVATE_TOOL_ARGUMENTS",
+                },
+            ],
+        }
+
+        with pytest.raises(PermanentProviderError) as exc_info:
+            parse_responses_body(
+                body, config=openai_responses_config(model="m")
+            )
+
+        failure = exc_info.value.failure
+        assert failure.code == "response_failed"
+        assert failure.message == "provider response failed"
+        assert failure.metadata["diagnostics"]["provider_error_code"] == (
+            "safe_provider_code"
+        )
+        serialized_failure = json.dumps(failure.model_dump())
+        for private_value in (
+            "PRIVATE_RESPONSE_ID",
+            "PRIVATE_PROMPT",
+            "PRIVATE_ERROR_MESSAGE",
+            "PRIVATE_OUTPUT",
+            "PRIVATE_REFUSAL",
+            "PRIVATE_TOOL_NAME",
+            "PRIVATE_TOOL_ARGUMENTS",
+        ):
+            assert private_value not in serialized_failure
+
     def test_parse_dispatches_by_endpoint_kind(self) -> None:
         chat_body = {
             "choices": [{"message": {"content": "x"}}],

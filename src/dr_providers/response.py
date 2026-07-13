@@ -117,7 +117,6 @@ class LlmResponse(BaseModel):
 class _ResponsesWalk:
     text: str
     diagnostics: ResponsesDiagnostics
-    provider_error_message: str | None = None
     parse_error: str | None = None
 
 
@@ -193,12 +192,9 @@ def parse_responses_body(
             config=config,
         )
     if walk.diagnostics.response_status == RESPONSES_STATUS_FAILED:
-        message = "provider response failed"
-        if walk.provider_error_message is not None:
-            message = f"{message}: {walk.provider_error_message}"
         raise _responses_failure(
             code=RESPONSE_FAILED_CODE,
-            message=message,
+            message="provider response failed",
             diagnostics=walk.diagnostics,
             config=config,
         )
@@ -299,11 +295,9 @@ def _walk_responses_body(body: Mapping[str, Any]) -> _ResponsesWalk:
         incomplete_reason = _optional_str(incomplete_details.get("reason"))
 
     provider_error_code = None
-    provider_error_message = None
     error = body.get("error")
     if isinstance(error, Mapping):
         provider_error_code = _optional_str(error.get("code"))
-        provider_error_message = _optional_str(error.get("message"))
 
     output_walk = _walk_responses_output(body.get("output"))
     response_id = _optional_str(body.get("id"))
@@ -321,7 +315,6 @@ def _walk_responses_body(body: Mapping[str, Any]) -> _ResponsesWalk:
     return _ResponsesWalk(
         text=output_walk.text,
         diagnostics=diagnostics,
-        provider_error_message=provider_error_message,
         parse_error=output_walk.parse_error,
     )
 
@@ -347,10 +340,9 @@ def _walk_responses_output(output: Any) -> _ResponsesOutputWalk:
                 break
             item_types[item_type] += 1
 
-            content = item.get("content")
-            if item_type != MESSAGE_ITEM_TYPE and not _is_sequence(content):
+            if item_type != MESSAGE_ITEM_TYPE:
                 continue
-            content_walk = _walk_responses_content(content)
+            content_walk = _walk_responses_content(item.get("content"))
             text_parts.append(content_walk.text)
             content_types.update(content_walk.content_types)
             if content_walk.refusal_len is not None:

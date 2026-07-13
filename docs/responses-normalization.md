@@ -1,8 +1,9 @@
 # Responses normalization
 
 `parse_responses_body()` parses the OpenAI Responses wire body in one pass over
-`output[]`. It concatenates every `output_text` content part in wire order and
-adds a content-free `ResponsesDiagnostics` envelope to successful
+`output[]`. Matching the official SDK aggregation, it concatenates
+`output_text` content parts only from `message` items, in wire order, and adds a
+content-free `ResponsesDiagnostics` envelope to successful
 `LlmResponse` values. Failures carry the same envelope in
 `ProviderFailure.metadata["diagnostics"]`.
 
@@ -39,5 +40,20 @@ documented response statuses, and the currently documented incomplete reasons
 
 Forward compatibility for unknown future type and reason strings is a local
 policy, not a claim that OpenAI supports any inferred shape. Unknown objects are
-counted but their payloads are not interpreted. A missing type, a non-list
-`output`, or malformed message content remains `response_parse_error`.
+counted by item type but their payloads are not interpreted, even when they have
+a list-valued `content` field. Content-part counts describe only message
+content. A missing type, a non-list `output`, or malformed message content
+remains `response_parse_error`.
+
+## Whetstone rollout dependency
+
+Whetstone needs a coordinated consumer change before these diagnostics can be
+used end to end. Successful response diagnostics currently require propagation
+through Whetstone's provider boundary because that boundary copies
+`provider_metadata` but not `LlmResponse.diagnostics`. Failure diagnostics are
+nested at `ProviderFailure.metadata["diagnostics"]`, while the current consumer
+looks for response status directly in failure metadata. Whetstone must also map
+the new typed outcome codes (`response_refusal`, `response_incomplete_no_text`,
+`response_failed`, and `response_no_text`) instead of treating them as generic
+provider failures. That rollout is intentionally not implemented in this
+repository.
