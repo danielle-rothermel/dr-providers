@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from hashlib import sha256
+
 import pytest
 
 from dr_providers import (
@@ -9,6 +12,7 @@ from dr_providers import (
     FailureClass,
     LlmRequest,
     MessageRole,
+    PermanentProviderError,
     PromptMessage,
     ProviderKind,
     RateLimitedProviderError,
@@ -255,7 +259,13 @@ class TestParseResponses:
         body = {
             "id": "resp-1",
             "status": "completed",
-            "output_text": "hi",
+            "output_text": "SDK convenience must not win",
+            "output": [
+                {
+                    "type": "message",
+                    "content": [{"type": "output_text", "text": "hi"}],
+                }
+            ],
             "usage": {"input_tokens": 3, "output_tokens": 5},
         }
         response = parse_responses_body(
@@ -265,16 +275,21 @@ class TestParseResponses:
         assert response.finish_reason == "stop"
         assert response.usage is not None
         assert response.usage.prompt_tokens == 3
+        assert response.text == "hi"
+        assert response.diagnostics is not None
+        assert response.diagnostics.output_text_len == 2
 
     def test_responses_output_parts_fallback(self) -> None:
         body = {
             "id": "resp-2",
+            "status": "completed",
             "output": [
                 {
+                    "type": "message",
                     "content": [
                         {"type": "output_text", "text": "part one "},
                         {"type": "output_text", "text": "part two"},
-                    ]
+                    ],
                 }
             ],
         }
@@ -282,6 +297,187 @@ class TestParseResponses:
             body, config=openai_responses_config(model="m")
         )
         assert response.text == "part one part two"
+
+    @pytest.mark.parametrize(
+        ("body", "expected_code"),
+        [
+            (
+                {
+                    "id": "resp-private-refusal",
+                    "status": "completed",
+                    "prompt": "PRIVATE_PROMPT",
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [
+                                {
+                                    "type": "refusal",
+                                    "refusal": "PRIVATE_REFUSAL",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "response_refusal",
+            ),
+            (
+                {
+                    "id": "resp-private-output",
+                    "status": "completed",
+                    "output": [
+                        {
+                            "type": "function_call",
+                            "arguments": "PRIVATE_OUTPUT",
+                        }
+                    ],
+                },
+                "response_no_text",
+            ),
+            (
+                {
+                    "id": "resp-private-malformed",
+                    "prompt": "PRIVATE_PROMPT",
+                    "output": {"text": "PRIVATE_OUTPUT"},
+                },
+                "response_parse_error",
+            ),
+        ],
+        ids=["refusal", "tool_only", "malformed"],
+    )
+    def test_responses_failure_metadata_is_content_free(
+        self, body: dict, expected_code: str
+    ) -> None:
+        with pytest.raises(PermanentProviderError) as exc_info:
+            parse_responses_body(
+                body, config=openai_responses_config(model="m")
+            )
+
+        failure = exc_info.value.failure
+        assert failure.code == expected_code
+        serialized_failure = json.dumps(failure.model_dump())
+        for private_value in (
+            "PRIVATE_PROMPT",
+            "PRIVATE_OUTPUT",
+            "PRIVATE_REFUSAL",
+            body["id"],
+        ):
+            assert private_value not in serialized_failure
+        assert "response_preview" not in failure.metadata
+        assert len(failure.metadata["diagnostics"]["response_id_hash"]) == 16
+
+    @pytest.mark.parametrize(
+        ("status", "expected_code"),
+        [
+            ("failed", "response_failed"),
+            ("PRIVATE_STATUS", "response_no_text"),
+        ],
+        ids=["failed", "unknown_status"],
+    )
+    def test_responses_failure_is_entirely_content_free(
+        self, status: str, expected_code: str
+    ) -> None:
+        body = {
+            "id": "PRIVATE_RESPONSE_ID",
+            "status": status,
+            "model": "PRIVATE_MODEL_ECHO",
+            "prompt": "PRIVATE_PROMPT",
+            "incomplete_details": {"reason": "PRIVATE_INCOMPLETE_REASON"},
+            "error": {
+                "code": "PRIVATE_PROVIDER_ERROR_CODE",
+                "message": "PRIVATE_ERROR_MESSAGE",
+            },
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "PRIVATE_OUTPUT"},
+                        {"type": "refusal", "refusal": "PRIVATE_REFUSAL"},
+                        {
+                            "type": "PRIVATE_CONTENT_PART_TYPE",
+                            "payload": "PRIVATE_CONTENT_PAYLOAD",
+                        },
+                    ],
+                },
+                {
+                    "type": "PRIVATE_OUTPUT_ITEM_TYPE",
+                    "name": "PRIVATE_TOOL_NAME",
+                    "arguments": "PRIVATE_TOOL_ARGUMENTS",
+                },
+            ],
+        }
+        if status == "PRIVATE_STATUS":
+            body["output"] = body["output"][1:]
+
+        with pytest.raises(PermanentProviderError) as exc_info:
+            parse_responses_body(
+                body, config=openai_responses_config(model="m")
+            )
+
+        failure = exc_info.value.failure
+        assert failure.code == expected_code
+        serialized_failure = json.dumps(failure.model_dump())
+        for private_value in (
+            "PRIVATE_RESPONSE_ID",
+            "PRIVATE_STATUS",
+            "PRIVATE_MODEL_ECHO",
+            "PRIVATE_PROMPT",
+            "PRIVATE_INCOMPLETE_REASON",
+            "PRIVATE_PROVIDER_ERROR_CODE",
+            "PRIVATE_ERROR_MESSAGE",
+            "PRIVATE_OUTPUT",
+            "PRIVATE_REFUSAL",
+            "PRIVATE_CONTENT_PART_TYPE",
+            "PRIVATE_CONTENT_PAYLOAD",
+            "PRIVATE_OUTPUT_ITEM_TYPE",
+            "PRIVATE_TOOL_NAME",
+            "PRIVATE_TOOL_ARGUMENTS",
+        ):
+            assert private_value not in serialized_failure
+
+    def test_failed_response_retains_allowlisted_diagnostics(self) -> None:
+        body = {
+            "id": "resp-safe-diagnostics",
+            "status": "failed",
+            "incomplete_details": {"reason": "content_filter"},
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "private"},
+                        {"type": "refusal", "refusal": "private"},
+                        {"type": "future_content"},
+                    ],
+                },
+                {"type": "reasoning"},
+                {"type": "function_call"},
+                {"type": "future_item"},
+            ],
+        }
+
+        with pytest.raises(PermanentProviderError) as exc_info:
+            parse_responses_body(
+                body, config=openai_responses_config(model="m")
+            )
+
+        diagnostics = exc_info.value.failure.metadata["diagnostics"]
+        assert diagnostics == {
+            "response_status": "failed",
+            "incomplete_reason": "content_filter",
+            "output_item_types": {
+                "function_call": 1,
+                "message": 1,
+                "reasoning": 1,
+                "unknown": 1,
+            },
+            "content_part_types": {
+                "output_text": 1,
+                "refusal": 1,
+                "unknown": 1,
+            },
+            "output_text_len": 7,
+            "refusal_len": 7,
+            "response_id_hash": sha256(body["id"].encode()).hexdigest()[:16],
+        }
 
     def test_parse_dispatches_by_endpoint_kind(self) -> None:
         chat_body = {
@@ -298,8 +494,6 @@ class TestParseResponses:
         ids=["missing", "empty", "no_text"],
     )
     def test_chat_parse_failures_are_permanent(self, body: dict) -> None:
-        from dr_providers import PermanentProviderError
-
         with pytest.raises(PermanentProviderError):
             parse_chat_completions_body(
                 body, config=openai_chat_config(model="m")

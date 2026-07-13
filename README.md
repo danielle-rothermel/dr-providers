@@ -83,6 +83,11 @@ each provider actually accepts reasoning/effort/thinking, Gemini's
 generation-dependent thinking configs, and links to the provider docs —
 see [docs/reasoning-controls.md](docs/reasoning-controls.md).
 
+OpenAI Responses bodies are normalized from wire `output[]` parts into text,
+typed no-text failures, and content-free diagnostics. See
+[docs/responses-normalization.md](docs/responses-normalization.md) for the
+failure codes, privacy boundary, and schema evidence.
+
 ## Testing with ScriptedProvider
 
 `ScriptedProvider` implements the same `Provider` interface as

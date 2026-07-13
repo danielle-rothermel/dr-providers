@@ -10,12 +10,14 @@ match a parser change without a recorded decision.
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from dr_providers import (
+    PermanentProviderError,
     openai_chat_config,
     openai_responses_config,
     parse_response,
@@ -48,6 +50,16 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
     else:
         config = openai_responses_config(model=model)
 
+    expected_failure = entry.get("expected_failure")
+    if expected_failure is not None:
+        with pytest.raises(PermanentProviderError) as exc_info:
+            parse_response(entry["body"], config=config)
+        failure = exc_info.value.failure
+        assert failure.code == expected_failure["code"]
+        assert failure.retryable is False
+        assert failure.metadata["diagnostics"] == _expected_diagnostics(entry)
+        return
+
     response = parse_response(entry["body"], config=config)
     expected = entry["expected"]
 
@@ -66,3 +78,21 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
         assert response.cost is not None
         assert response.cost.total_cost == expected["cost"]
     assert response.provider_metadata == entry["body"]
+    if entry["endpoint_kind"] == "responses":
+        assert response.diagnostics is not None
+        assert response.diagnostics.model_dump() == _expected_diagnostics(
+            entry
+        )
+    else:
+        assert response.diagnostics is None
+
+
+def _expected_diagnostics(entry: dict[str, Any]) -> dict[str, Any]:
+    expected = dict(entry["expected_diagnostics"])
+    response_id = entry["body"].get("id")
+    expected["response_id_hash"] = (
+        sha256(response_id.encode()).hexdigest()[:16]
+        if isinstance(response_id, str)
+        else None
+    )
+    return expected
