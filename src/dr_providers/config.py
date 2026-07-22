@@ -1,199 +1,272 @@
-"""Provider configuration as data records, not classes.
+"""Provider Call Config: complete validated assignment with Identity Hash.
 
-Provider differences are config: base URL, API key env var, endpoint
-kind, reasoning request shape, token-limit parameter name, and the set
-of controls the provider can transport. Presets ship for OpenRouter,
-OpenAI, and Gemini (via Google's OpenAI-compatible endpoint).
+A Provider Call Config is materialized by assigning every required
+Variable of exactly one Provider Call Definition. It carries its typed
+Definition reference and its Identity Hash (full 64-char SHA-256 via
+dr-serialize). Its identity-bearing fields are the Model Route plus
+every output-affecting generation control, control-mapping constraint,
+and provider body extension. Transport policy is excluded from identity.
+
+Preset builders ship for OpenRouter, OpenAI, Gemini (OpenAI-compat), and
+Anthropic Messages.
 """
 
 from __future__ import annotations
 
-from enum import StrEnum
+from functools import cached_property
 from typing import Any
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    StrictBool,
-    StrictStr,
+from dr_serialize import (
+    IdentityDocument,
+    build_identity_document,
+    identity_hash,
+)
+from pydantic import BaseModel, ConfigDict
+
+from dr_providers.controls import (
+    ControlConstraints,
+    GenerationControls,
+    ProviderBodyExtensions,
+    ReasoningRequestShape,
+    RequestControl,
+    TokenLimitParameter,
+)
+from dr_providers.definition import ProviderCallDefinition
+from dr_providers.route import (
+    ApiKeyEnv,
+    ModelRoute,
+    Protocol,
+    ProviderBaseUrl,
+    ProviderKind,
+    ProviderQuotaIdentity,
+)
+
+PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
+PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 1
+
+_ALL_CONTROLS = frozenset(
+    {
+        RequestControl.TEMPERATURE,
+        RequestControl.TOP_P,
+        RequestControl.TOKEN_LIMIT,
+        RequestControl.REASONING,
+    }
 )
 
 
-class ApiKeyEnv(StrEnum):
-    """Environment variables the preset configs read API keys from.
+class ProviderCallConfig(BaseModel):
+    """A Definition with every required Variable set, plus Identity Hash.
 
-    Member names follow ``{name}_API_KEY`` by convention (enforced in
-    tests); values stay explicit literals so they remain greppable.
+    Construct via :meth:`ProviderCallDefinition.materialize` or a preset
+    builder so the assignment is always validated against its owner.
     """
 
-    OPENROUTER = "OPENROUTER_API_KEY"
-    OPENAI = "OPENAI_API_KEY"
-    GEMINI = "GEMINI_API_KEY"
-
-
-class ProviderBaseUrl(StrEnum):
-    """Default base URLs used by the preset provider configs."""
-
-    OPENROUTER = "https://openrouter.ai/api/v1"
-    OPENAI = "https://api.openai.com/v1"
-    # The OpenAI-compat surface, not "Gemini's URL": a future native
-    # Gemini endpoint would be a sibling member, not this one.
-    GEMINI_OPENAI_COMPAT = (
-        "https://generativelanguage.googleapis.com/v1beta/openai"
-    )
-
-
-class ProviderKind(StrEnum):
-    OPENROUTER = "openrouter"
-    OPENAI = "openai"
-    GEMINI = "gemini"
-
-
-class EndpointKind(StrEnum):
-    CHAT_COMPLETIONS = "chat_completions"
-    RESPONSES = "responses"
-
-
-class MessageRole(StrEnum):
-    SYSTEM = "system"
-    USER = "user"
-    ASSISTANT = "assistant"
-    TOOL = "tool"
-
-
-class TokenLimitParameter(StrEnum):
-    MAX_TOKENS = "max_tokens"
-    MAX_COMPLETION_TOKENS = "max_completion_tokens"
-    MAX_OUTPUT_TOKENS = "max_output_tokens"
-
-
-class ReasoningEffort(StrEnum):
-    """Typed cross-provider reasoning level (see ADR 0001)."""
-
-    NONE = "none"
-    MINIMAL = "minimal"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    XHIGH = "xhigh"
-
-
-class ReasoningRequestShape(StrEnum):
-    """How a config serializes reasoning effort on the wire."""
-
-    NONE = "none"
-    EFFORT_FIELD = "effort_field"
-    REASONING_OBJECT = "reasoning_object"
-
-
-class RequestControl(StrEnum):
-    """Knobs a request may set; configs declare which they transport."""
-
-    TEMPERATURE = "temperature"
-    TOP_P = "top_p"
-    TOKEN_LIMIT = "token_limit"  # noqa: S105 -- knob name, not a secret
-    REASONING = "reasoning"
-
-
-class PromptMessage(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    role: MessageRole
-    content: StrictStr
-
-    def provider_dict(self) -> dict[str, str]:
-        return {"role": self.role.value, "content": self.content}
-
-
-class ProviderConfig(BaseModel):
-    """Runtime provider call configuration (pure data)."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    provider_kind: ProviderKind
-    endpoint_kind: EndpointKind
-    model: StrictStr
-    api_key_env: StrictStr
-    base_url: StrictStr | None = None
-    supported_controls: frozenset[RequestControl] = frozenset(
-        {
-            RequestControl.TEMPERATURE,
-            RequestControl.TOP_P,
-            RequestControl.TOKEN_LIMIT,
-            RequestControl.REASONING,
-        }
-    )
-    reasoning_shape: ReasoningRequestShape = ReasoningRequestShape.NONE
-    token_limit_parameter: TokenLimitParameter
-    extra_body: dict[str, Any] = Field(default_factory=dict)
-    throttle_key: StrictStr | None = None
-    allow_unsupported_control_drop: StrictBool = False
+    definition: ProviderCallDefinition
+    controls: GenerationControls = GenerationControls()
+    extensions: ProviderBodyExtensions = ProviderBodyExtensions()
 
     @property
-    def throttle_identity(self) -> str:
-        if self.throttle_key:
-            return self.throttle_key
-        return (
-            f"{self.provider_kind.value}:"
-            f"{self.endpoint_kind.value}:{self.model}"
+    def route(self) -> ModelRoute:
+        return self.definition.route
+
+    @property
+    def quota_identity(self) -> ProviderQuotaIdentity:
+        return self.definition.route.quota_identity
+
+    def identity_payload(self) -> dict[str, Any]:
+        """Model Route + output-affecting controls/extensions; transport
+        policy excluded."""
+        return {
+            "definition_id": self.definition.definition_id,
+            "definition_schema_version": self.definition.schema_version,
+            "route": self.route.identity_payload(),
+            "constraints": self.definition.constraints.identity_payload(),
+            "controls": self.controls.identity_payload(),
+            "extensions": self.extensions.identity_payload(),
+        }
+
+    def identity_document(self) -> IdentityDocument:
+        return build_identity_document(
+            schema=PROVIDER_CALL_CONFIG_SCHEMA,
+            schema_version=PROVIDER_CALL_CONFIG_SCHEMA_VERSION,
+            payload=self.identity_payload(),
         )
 
-    def supports(self, control: RequestControl) -> bool:
-        return control in self.supported_controls
+    @cached_property
+    def identity_hash(self) -> str:
+        """Full 64-char lowercase SHA-256 Config Identity Hash."""
+        return identity_hash(self.identity_document())
+
+
+# --- Presets ---------------------------------------------------------------
+
+
+def _chat_constraints(
+    *,
+    token_limit_parameter: TokenLimitParameter,
+    reasoning_shape: ReasoningRequestShape,
+) -> ControlConstraints:
+    return ControlConstraints(
+        supported_controls=_ALL_CONTROLS,
+        token_limit_parameter=token_limit_parameter,
+        reasoning_shape=reasoning_shape,
+    )
+
+
+def _config_from_route(
+    *,
+    definition_id: str,
+    route: ModelRoute,
+    constraints: ControlConstraints,
+    controls: GenerationControls | None,
+    extensions: ProviderBodyExtensions | None,
+) -> ProviderCallConfig:
+    extension_keys = (
+        frozenset(extensions.extra_body) if extensions else frozenset()
+    )
+    definition = ProviderCallDefinition(
+        definition_id=definition_id,
+        route=route,
+        constraints=constraints,
+        extension_keys=extension_keys,
+    )
+    return definition.materialize(controls=controls, extensions=extensions)
 
 
 def openrouter_chat_config(
     *,
     model: str,
-    base_url: str = ProviderBaseUrl.OPENROUTER,
-) -> ProviderConfig:
-    return ProviderConfig(
-        provider_kind=ProviderKind.OPENROUTER,
-        endpoint_kind=EndpointKind.CHAT_COMPLETIONS,
+    controls: GenerationControls | None = None,
+    extensions: ProviderBodyExtensions | None = None,
+) -> ProviderCallConfig:
+    route = ModelRoute(
+        provider=ProviderKind.OPENROUTER,
+        protocol=Protocol.CHAT_COMPLETIONS,
         model=model,
-        api_key_env=ApiKeyEnv.OPENROUTER,
-        base_url=base_url,
-        reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
-        token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+    )
+    return _config_from_route(
+        definition_id="openrouter.chat_completions",
+        route=route,
+        constraints=_chat_constraints(
+            token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+            reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
+        ),
+        controls=controls,
+        extensions=extensions,
     )
 
 
-def openai_chat_config(*, model: str) -> ProviderConfig:
-    return ProviderConfig(
-        provider_kind=ProviderKind.OPENAI,
-        endpoint_kind=EndpointKind.CHAT_COMPLETIONS,
+def openai_chat_config(
+    *,
+    model: str,
+    controls: GenerationControls | None = None,
+    extensions: ProviderBodyExtensions | None = None,
+) -> ProviderCallConfig:
+    route = ModelRoute(
+        provider=ProviderKind.OPENAI,
+        protocol=Protocol.CHAT_COMPLETIONS,
         model=model,
-        api_key_env=ApiKeyEnv.OPENAI,
-        base_url=ProviderBaseUrl.OPENAI,
-        reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
-        token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+    )
+    return _config_from_route(
+        definition_id="openai.chat_completions",
+        route=route,
+        constraints=_chat_constraints(
+            token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+            reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
+        ),
+        controls=controls,
+        extensions=extensions,
     )
 
 
-def openai_responses_config(*, model: str) -> ProviderConfig:
-    return ProviderConfig(
-        provider_kind=ProviderKind.OPENAI,
-        endpoint_kind=EndpointKind.RESPONSES,
+def openai_responses_config(
+    *,
+    model: str,
+    controls: GenerationControls | None = None,
+    extensions: ProviderBodyExtensions | None = None,
+) -> ProviderCallConfig:
+    route = ModelRoute(
+        provider=ProviderKind.OPENAI,
+        protocol=Protocol.RESPONSES,
         model=model,
-        api_key_env=ApiKeyEnv.OPENAI,
-        base_url=ProviderBaseUrl.OPENAI,
-        reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
-        token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
+    )
+    return _config_from_route(
+        definition_id="openai.responses",
+        route=route,
+        constraints=_chat_constraints(
+            token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
+            reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
+        ),
+        controls=controls,
+        extensions=extensions,
     )
 
 
-def gemini_chat_config(*, model: str) -> ProviderConfig:
+def gemini_chat_config(
+    *,
+    model: str,
+    controls: GenerationControls | None = None,
+    extensions: ProviderBodyExtensions | None = None,
+) -> ProviderCallConfig:
     """Gemini via Google's OpenAI-compatible endpoint (AI Studio key)."""
-    return ProviderConfig(
-        provider_kind=ProviderKind.GEMINI,
-        endpoint_kind=EndpointKind.CHAT_COMPLETIONS,
+    route = ModelRoute(
+        provider=ProviderKind.GEMINI,
+        protocol=Protocol.CHAT_COMPLETIONS,
         model=model,
-        api_key_env=ApiKeyEnv.GEMINI,
-        base_url=ProviderBaseUrl.GEMINI_OPENAI_COMPAT,
+    )
+    return _config_from_route(
+        definition_id="gemini.openai_compat",
+        route=route,
         # The compat endpoint takes a flat reasoning_effort field, not an
         # OpenAI-style nested reasoning object; thinking budgets need the
         # native API (deferred until compat gaps require it).
-        reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
-        token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+        constraints=_chat_constraints(
+            token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+            reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
+        ),
+        controls=controls,
+        extensions=extensions,
     )
+
+
+def anthropic_messages_config(
+    *,
+    model: str,
+    controls: GenerationControls | None = None,
+    extensions: ProviderBodyExtensions | None = None,
+) -> ProviderCallConfig:
+    """Anthropic Messages protocol over a (custom-capable) base URL."""
+    route = ModelRoute(
+        provider=ProviderKind.ANTHROPIC,
+        protocol=Protocol.ANTHROPIC_MESSAGES,
+        model=model,
+    )
+    return _config_from_route(
+        definition_id="anthropic.messages",
+        route=route,
+        # Anthropic Messages requires max_tokens and serializes reasoning
+        # as a native thinking object.
+        constraints=_chat_constraints(
+            token_limit_parameter=TokenLimitParameter.MAX_TOKENS,
+            reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
+        ),
+        controls=controls,
+        extensions=extensions,
+    )
+
+
+DEFAULT_BASE_URLS: dict[ProviderKind, ProviderBaseUrl] = {
+    ProviderKind.OPENROUTER: ProviderBaseUrl.OPENROUTER,
+    ProviderKind.OPENAI: ProviderBaseUrl.OPENAI,
+    ProviderKind.GEMINI: ProviderBaseUrl.GEMINI_OPENAI_COMPAT,
+    ProviderKind.ANTHROPIC: ProviderBaseUrl.ANTHROPIC,
+}
+
+DEFAULT_API_KEY_ENVS: dict[ProviderKind, ApiKeyEnv] = {
+    ProviderKind.OPENROUTER: ApiKeyEnv.OPENROUTER,
+    ProviderKind.OPENAI: ApiKeyEnv.OPENAI,
+    ProviderKind.GEMINI: ApiKeyEnv.GEMINI,
+    ProviderKind.ANTHROPIC: ApiKeyEnv.ANTHROPIC,
+}

@@ -17,7 +17,8 @@ from typing import Any
 import pytest
 
 from dr_providers import (
-    PermanentProviderError,
+    ProviderTransportFailure,
+    ProviderTransportResponse,
     openai_chat_config,
     openai_responses_config,
     parse_response,
@@ -50,41 +51,39 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
     else:
         config = openai_responses_config(model=model)
 
+    outcome = parse_response(entry["body"], config=config)
+
     expected_failure = entry.get("expected_failure")
     if expected_failure is not None:
-        with pytest.raises(PermanentProviderError) as exc_info:
-            parse_response(entry["body"], config=config)
-        failure = exc_info.value.failure
-        assert failure.code == expected_failure["code"]
-        assert failure.retryable is False
-        assert failure.metadata["diagnostics"] == _expected_diagnostics(entry)
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.code == expected_failure["code"]
+        assert outcome.retryable is False
+        assert outcome.metadata["diagnostics"] == _expected_diagnostics(entry)
         return
 
-    response = parse_response(entry["body"], config=config)
+    assert isinstance(outcome, ProviderTransportResponse)
     expected = entry["expected"]
 
-    assert response.text == expected["text"]
-    assert response.finish_reason == expected["finish_reason"]
-    assert response.model == expected["model"]
-    assert response.response_id == expected["response_id"]
+    assert outcome.text == expected["text"]
+    assert outcome.finish_reason == expected["finish_reason"]
+    assert outcome.model == expected["model"]
+    assert outcome.response_id == expected["response_id"]
     if expected["usage"] is None:
-        assert response.usage is None
+        assert outcome.usage is None
     else:
-        assert response.usage is not None
-        assert response.usage.model_dump() == expected["usage"]
+        assert outcome.usage is not None
+        assert outcome.usage.model_dump() == expected["usage"]
     if expected["cost"] is None:
-        assert response.cost is None
+        assert outcome.cost is None
     else:
-        assert response.cost is not None
-        assert response.cost.total_cost == expected["cost"]
-    assert response.provider_metadata == entry["body"]
+        assert outcome.cost is not None
+        assert outcome.cost.total_cost == expected["cost"]
+    assert outcome.raw_body == entry["body"]
     if entry["endpoint_kind"] == "responses":
-        assert response.diagnostics is not None
-        assert response.diagnostics.model_dump() == _expected_diagnostics(
-            entry
-        )
+        assert outcome.diagnostics is not None
+        assert outcome.diagnostics.model_dump() == _expected_diagnostics(entry)
     else:
-        assert response.diagnostics is None
+        assert outcome.diagnostics is None
 
 
 def _expected_diagnostics(entry: dict[str, Any]) -> dict[str, Any]:

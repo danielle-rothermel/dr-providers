@@ -1,9 +1,10 @@
-"""Failure taxonomy: records first, exceptions as carriers.
+"""Failure taxonomy and credential redaction.
 
-dr-providers is the canonical home of ``FailureClass`` and the failure
-record (whetstone's platform imports them; the graph runner
-interoperates via a structural protocol). The library classifies —
-callers own retry policy.
+dr-providers classifies transport-level failure only: an expected
+Provider Transport Failure carries a ``ProviderFailure`` record inside
+the closed no-throw Provider Transport Outcome. Whetstone owns semantic
+failure taxonomy and retry policy. Unexpected programming/infrastructure
+errors still raise ``ProviderFailureError``.
 """
 
 from __future__ import annotations
@@ -14,8 +15,17 @@ from typing import Any, ClassVar
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
 
 SANITIZE_KEYS = frozenset(
-    {"api_key", "api_base", "base_url", "model_list", "authorization"}
+    {
+        "api_key",
+        "api_base",
+        "base_url",
+        "model_list",
+        "authorization",
+        "x-api-key",
+        "x-goog-api-key",
+    }
 )
+AUTHORIZATION_HEADER = "Authorization"
 
 RATE_LIMIT_STATUS = 429
 TRANSIENT_STATUS_CODES = frozenset({408, 409, 425})
@@ -46,7 +56,11 @@ RETRYABLE_FAILURE_CLASSES = frozenset(
 
 
 class ProviderFailure(BaseModel):
-    """Primary failure artifact; exceptions carry it."""
+    """Transport failure classification record.
+
+    Carried inside a Provider Transport Failure and by the exception
+    types used only for unexpected raises.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -74,7 +88,11 @@ def failure_record(
 
 
 class ProviderFailureError(Exception):
-    """Carrier for a :class:`ProviderFailure` record."""
+    """Carrier for a :class:`ProviderFailure` record.
+
+    Raised only for unexpected programming/infrastructure errors, never
+    for expected transport outcomes (which are returned, not thrown).
+    """
 
     failure_class: ClassVar[FailureClass] = FailureClass.UNKNOWN
 
@@ -110,7 +128,12 @@ class UnknownProviderError(ProviderFailureError):
 
 
 class UnsupportedControlError(PermanentProviderError):
-    """A request set a knob the provider config cannot transport."""
+    """A Config assigns a control the route cannot transport.
+
+    This is a construction-time programming error (the Definition
+    rejects the assignment), so it raises rather than returning a
+    transport outcome.
+    """
 
 
 FAILURE_ERROR_TYPES: dict[FailureClass, type[ProviderFailureError]] = {
@@ -151,4 +174,19 @@ def sanitize_kwargs(kwargs: dict[str, Any] | None) -> dict[str, Any]:
     return {
         k: ("<redacted>" if k.lower() in SANITIZE_KEYS else v)
         for k, v in kwargs.items()
+    }
+
+
+def sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
+    """Redact authorization/credential headers before persistence.
+
+    Never persist authorization headers or credential material: this
+    returns headers with any credential-bearing header value replaced
+    by ``<redacted>``.
+    """
+    if not headers:
+        return {}
+    return {
+        k: ("<redacted>" if k.lower() in SANITIZE_KEYS else v)
+        for k, v in headers.items()
     }

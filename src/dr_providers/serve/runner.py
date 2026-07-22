@@ -28,25 +28,24 @@ from pydantic import (
 )
 
 from dr_providers.config import (
-    MessageRole,
-    PromptMessage,
-    ProviderConfig,
-    ReasoningEffort,
+    ProviderCallConfig,
+    anthropic_messages_config,
     gemini_chat_config,
     openai_chat_config,
     openai_responses_config,
     openrouter_chat_config,
 )
-from dr_providers.failures import (
-    ProviderFailure,
-    ProviderFailureError,
+from dr_providers.controls import GenerationControls, ReasoningEffort
+from dr_providers.outcome import (
+    ProviderTransportFailure,
+    ProviderTransportResponse,
 )
 from dr_providers.request import (
-    ENDPOINT_PATHS,
-    LlmRequest,
+    ProviderCallRequest,
     build_payload,
+    protocol_path,
 )
-from dr_providers.response import LlmResponse  # noqa: TC001
+from dr_providers.transcript import MessageRole, PromptMessage, Transcript
 
 
 class ServeProviderKind(StrEnum):
@@ -54,13 +53,17 @@ class ServeProviderKind(StrEnum):
     OPENAI = "openai"
     OPENAI_RESPONSES = "openai_responses"
     GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
 
 
-CONFIG_FACTORIES: dict[ServeProviderKind, Callable[..., ProviderConfig]] = {
+CONFIG_FACTORIES: dict[
+    ServeProviderKind, Callable[..., ProviderCallConfig]
+] = {
     ServeProviderKind.OPENROUTER: openrouter_chat_config,
     ServeProviderKind.OPENAI: openai_chat_config,
     ServeProviderKind.OPENAI_RESPONSES: openai_responses_config,
     ServeProviderKind.GEMINI: gemini_chat_config,
+    ServeProviderKind.ANTHROPIC: anthropic_messages_config,
 }
 
 
@@ -86,8 +89,8 @@ class QueryResult(BaseModel):
 
     endpoint_path: StrictStr
     payload: dict[str, Any]
-    response: LlmResponse | None = None
-    failure: ProviderFailure | None = None
+    response: ProviderTransportResponse | None = None
+    failure: ProviderTransportFailure | None = None
 
     @property
     def ok(self) -> bool:
@@ -134,35 +137,40 @@ class VarianceReport(BaseModel):
     records: tuple[VarianceRecord, ...]
 
 
-def build_request(spec: QuerySpec) -> LlmRequest:
-    config = CONFIG_FACTORIES[spec.provider_kind](model=spec.model)
-    return LlmRequest(
-        provider_config=config,
-        messages=spec.messages,
-        temperature=spec.temperature,
-        top_p=spec.top_p,
-        token_limit=spec.token_limit,
-        reasoning=spec.reasoning,
-        extra_body=spec.extra_body,
+def build_request(spec: QuerySpec) -> ProviderCallRequest:
+    from dr_providers.controls import ProviderBodyExtensions  # noqa: PLC0415
+
+    config = CONFIG_FACTORIES[spec.provider_kind](
+        model=spec.model,
+        controls=GenerationControls(
+            temperature=spec.temperature,
+            top_p=spec.top_p,
+            token_limit=spec.token_limit,
+            reasoning=spec.reasoning,
+        ),
+        extensions=ProviderBodyExtensions(extra_body=dict(spec.extra_body)),
+    )
+    return ProviderCallRequest(
+        config=config,
+        transcript=Transcript(messages=spec.messages),
     )
 
 
 def run_query(spec: QuerySpec, provider: Provider) -> QueryResult:
     request = build_request(spec)
     payload = build_payload(request)
-    endpoint_path = ENDPOINT_PATHS[request.provider_config.endpoint_kind]
-    try:
-        response = provider.complete(request)
-    except ProviderFailureError as error:
+    endpoint_path = protocol_path(request.config)
+    outcome = provider.complete(request)
+    if isinstance(outcome, ProviderTransportResponse):
         return QueryResult(
             endpoint_path=endpoint_path,
             payload=payload,
-            failure=error.failure,
+            response=outcome,
         )
     return QueryResult(
         endpoint_path=endpoint_path,
         payload=payload,
-        response=response,
+        failure=outcome,
     )
 
 

@@ -1,9 +1,10 @@
 """ScriptedProvider: a testing peer implementing the real interface.
 
-Public API — consumers exercise full request/response flows with no
+Public API — consumers exercise full request/outcome flows with no
 network by scripting outcomes (text, usage, cost, warnings, or a
-failure) per call. Outcomes are consumed in order; the last outcome
-repeats for subsequent calls.
+transport failure) per call. Outcomes are consumed in order; the last
+outcome repeats for subsequent calls. ``complete`` returns the closed
+no-throw Provider Transport Outcome.
 """
 
 from __future__ import annotations
@@ -13,18 +14,16 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from dr_providers.conformance import with_conformance_warnings
-from dr_providers.failures import (
-    ProviderFailure,
-    raise_failure,
-)
-from dr_providers.provider import Provider
-from dr_providers.request import LlmRequest, build_payload
-from dr_providers.response import (
+from dr_providers.outcome import (
     CostInfo,
-    LlmResponse,
     LlmWarning,
+    ProviderTransportFailure,
+    ProviderTransportOutcome,
+    ProviderTransportResponse,
     TokenUsage,
 )
+from dr_providers.provider import Provider
+from dr_providers.request import ProviderCallRequest, build_payload
 
 __all__ = [
     "SCRIPTED_RESPONSE_ID_PREFIX",
@@ -37,7 +36,7 @@ SCRIPTED_RESPONSE_ID_PREFIX = "scripted-response"
 
 
 class ScriptedOutcome(BaseModel):
-    """One scripted call result: either text parts or a failure."""
+    """One scripted call result: either text parts or a transport failure."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -46,8 +45,8 @@ class ScriptedOutcome(BaseModel):
     cost: CostInfo | None = None
     warnings: tuple[LlmWarning, ...] = ()
     finish_reason: StrictStr | None = "stop"
-    failure: ProviderFailure | None = None
-    provider_metadata: dict[str, Any] = Field(default_factory=dict)
+    failure: ProviderTransportFailure | None = None
+    raw_body: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScriptedProvider:
@@ -57,26 +56,30 @@ class ScriptedProvider:
         self._outcomes = list(
             outcomes or [ScriptedOutcome(text="scripted output")]
         )
-        self.requests: list[LlmRequest] = []
+        self.requests: list[ProviderCallRequest] = []
         self.payloads: list[dict[str, Any]] = []
 
-    def complete(self, request: LlmRequest) -> LlmResponse:
+    def complete(
+        self, request: ProviderCallRequest
+    ) -> ProviderTransportOutcome:
         payload = build_payload(request)
         self.requests.append(request)
         self.payloads.append(payload)
         index = min(len(self.requests) - 1, len(self._outcomes) - 1)
         outcome = self._outcomes[index]
         if outcome.failure is not None:
-            raise raise_failure(outcome.failure)
+            return outcome.failure.model_copy(
+                update={"raw_request": dict(payload)}
+            )
         response_id = f"{SCRIPTED_RESPONSE_ID_PREFIX}-{len(self.requests)}"
-        response = LlmResponse(
+        response = ProviderTransportResponse(
             text=outcome.text,
+            raw_body=dict(outcome.raw_body),
             usage=outcome.usage,
             cost=outcome.cost,
             warnings=outcome.warnings,
             finish_reason=outcome.finish_reason,
             response_id=response_id,
-            model=request.provider_config.model,
-            provider_metadata=dict(outcome.provider_metadata),
+            model=request.config.route.model,
         )
         return with_conformance_warnings(request, response)

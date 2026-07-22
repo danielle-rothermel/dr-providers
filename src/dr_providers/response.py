@@ -1,8 +1,10 @@
-"""Response as materialized typed parts, plus the wire parsers.
+"""Wire-body parsers producing least-processed transport outcomes.
 
-``LlmResponse`` composes text, usage, cost, warnings, finish reason,
-and provider metadata — so a future streaming mode can emit the same
-parts incrementally without a breaking redesign.
+Each parser takes the raw provider body and returns either a
+``ProviderTransportResponse`` (carrying the least-processed raw body and
+materialized parts) or a ``ProviderTransportFailure`` (an expected parse
+outcome, never raised). The transport wraps these in the no-throw
+Provider Transport Outcome.
 """
 
 from __future__ import annotations
@@ -10,24 +12,21 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import StrEnum
 from hashlib import sha256
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    StrictInt,
-    StrictStr,
+from dr_providers.failures import FailureClass
+from dr_providers.outcome import (
+    CostInfo,
+    ProviderTransportFailure,
+    ProviderTransportResponse,
+    ResponsesDiagnostics,
+    TokenUsage,
 )
+from dr_providers.route import Protocol
 
-from dr_providers.config import EndpointKind, ProviderConfig
-from dr_providers.failures import (
-    FailureClass,
-    failure_record,
-    raise_failure,
-)
+if TYPE_CHECKING:
+    from dr_providers.config import ProviderCallConfig
 
 OUTPUT_TEXT_PART_TYPE = "output_text"
 REFUSAL_PART_TYPE = "refusal"
@@ -44,7 +43,6 @@ RESPONSE_REFUSAL_CODE = "response_refusal"
 RESPONSE_INCOMPLETE_NO_TEXT_CODE = "response_incomplete_no_text"
 RESPONSE_FAILED_CODE = "response_failed"
 RESPONSE_NO_TEXT_CODE = "response_no_text"
-RESPONSE_PREVIEW_LIMIT = 512
 RESPONSE_ID_HASH_LENGTH = 16
 UNKNOWN_DIAGNOSTIC_CATEGORY = "unknown"
 RESPONSES_STATUS_VALUES = frozenset(
@@ -63,76 +61,7 @@ RESPONSES_CONTENT_PART_TYPE_VALUES = frozenset(
     {OUTPUT_TEXT_PART_TYPE, REFUSAL_PART_TYPE}
 )
 
-
-class WarningSeverity(StrEnum):
-    INFO = "info"
-    WARNING = "warning"
-    CRITICAL = "critical"
-
-
-class LlmWarning(BaseModel):
-    """Conformance or parse observation; the caller decides fatality."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    code: StrictStr
-    message: StrictStr
-    severity: WarningSeverity = WarningSeverity.WARNING
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class TokenUsage(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    prompt_tokens: StrictInt | None = None
-    completion_tokens: StrictInt | None = None
-    total_tokens: StrictInt | None = None
-    reasoning_tokens: StrictInt | None = None
-
-
-class CostInfo(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    total_cost: float
-    currency: StrictStr = "USD"
-
-
-class ResponsesDiagnostics(BaseModel):
-    """Safe, content-free observations from an OpenAI Responses body.
-
-    Provider-controlled enums are retained only when explicitly allowlisted;
-    all other string values are coalesced into ``unknown`` count categories.
-    ``response_id_hash`` is a truncated, unsalted SHA-256 digest retained for
-    correlating high-entropy provider IDs. It does not protect low-entropy
-    values from dictionary attacks, so callers must never treat hashing as a
-    substitute for excluding arbitrary provider content.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    response_status: StrictStr | None = None
-    incomplete_reason: StrictStr | None = None
-    output_item_types: dict[StrictStr, StrictInt] = Field(default_factory=dict)
-    content_part_types: dict[StrictStr, StrictInt] = Field(
-        default_factory=dict
-    )
-    output_text_len: StrictInt = 0
-    refusal_len: StrictInt | None = None
-    response_id_hash: StrictStr | None = None
-
-
-class LlmResponse(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    text: StrictStr
-    usage: TokenUsage | None = None
-    cost: CostInfo | None = None
-    warnings: tuple[LlmWarning, ...] = ()
-    finish_reason: StrictStr | None = None
-    response_id: StrictStr | None = None
-    model: StrictStr | None = None
-    diagnostics: ResponsesDiagnostics | None = None
-    provider_metadata: dict[str, Any] = Field(default_factory=dict)
+ParseOutcome = ProviderTransportResponse | ProviderTransportFailure
 
 
 @dataclass(frozen=True)
@@ -162,23 +91,30 @@ class _ResponsesContentWalk:
 def parse_response(
     body: Mapping[str, Any],
     *,
-    config: ProviderConfig,
-) -> LlmResponse:
-    if config.endpoint_kind is EndpointKind.CHAT_COMPLETIONS:
+    config: ProviderCallConfig,
+) -> ParseOutcome:
+    protocol = config.route.protocol
+    if protocol is Protocol.CHAT_COMPLETIONS:
         return parse_chat_completions_body(body, config=config)
+    if protocol is Protocol.ANTHROPIC_MESSAGES:
+        return parse_anthropic_messages_body(body, config=config)
     return parse_responses_body(body, config=config)
 
 
 def parse_chat_completions_body(
     body: Mapping[str, Any],
     *,
-    config: ProviderConfig,
-) -> LlmResponse:
+    config: ProviderCallConfig,
+) -> ParseOutcome:
     choices = body.get("choices")
     if not isinstance(choices, Sequence) or isinstance(choices, str | bytes):
-        raise _parse_error("provider response missing choices", body, config)
+        return _parse_failure(
+            "provider response missing choices", body, config
+        )
     if not choices:
-        raise _parse_error("provider response has empty choices", body, config)
+        return _parse_failure(
+            "provider response has empty choices", body, config
+        )
     choice = choices[0]
     message = _get(choice, "message")
     text = _content_to_text(_get(message, "content"))
@@ -186,69 +122,110 @@ def parse_chat_completions_body(
         value = _get(choice, "text")
         text = value if isinstance(value, str) else None
     if text is None or not text.strip():
-        raise _parse_error(
+        return _parse_failure(
             "provider response produced no generation text", body, config
         )
-    return LlmResponse(
+    return ProviderTransportResponse(
         text=text,
+        raw_body=dict(body),
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
         finish_reason=_optional_str(_get(choice, "finish_reason")),
         response_id=_optional_str(body.get("id")),
-        model=_optional_str(body.get("model")) or config.model,
-        provider_metadata=dict(body),
+        model=_optional_str(body.get("model")) or config.route.model,
+    )
+
+
+def parse_anthropic_messages_body(
+    body: Mapping[str, Any],
+    *,
+    config: ProviderCallConfig,
+) -> ParseOutcome:
+    content = body.get("content")
+    if not isinstance(content, Sequence) or isinstance(content, str | bytes):
+        return _parse_failure(
+            "anthropic response missing content list", body, config
+        )
+    text = _anthropic_text(content)
+    if text is None or not text.strip():
+        return _parse_failure(
+            "anthropic response produced no generation text", body, config
+        )
+    return ProviderTransportResponse(
+        text=text,
+        raw_body=dict(body),
+        usage=_anthropic_usage(body),
+        cost=cost_from_body(body),
+        finish_reason=_optional_str(body.get("stop_reason")),
+        response_id=_optional_str(body.get("id")),
+        model=_optional_str(body.get("model")) or config.route.model,
     )
 
 
 def parse_responses_body(
     body: Mapping[str, Any],
     *,
-    config: ProviderConfig,
-) -> LlmResponse:
+    config: ProviderCallConfig,
+) -> ParseOutcome:
     walk = _walk_responses_body(body)
     if walk.parse_error is not None:
-        raise _responses_failure(
+        return _responses_failure(
             code=PARSE_ERROR_CODE,
             message=walk.parse_error,
             diagnostics=walk.diagnostics,
+            body=body,
             config=config,
         )
     if walk.diagnostics.response_status == RESPONSES_STATUS_FAILED:
-        raise _responses_failure(
+        return _responses_failure(
             code=RESPONSE_FAILED_CODE,
             message="provider response failed",
             diagnostics=walk.diagnostics,
+            body=body,
             config=config,
         )
     if not walk.text.strip():
-        if walk.diagnostics.refusal_len is not None:
-            code = RESPONSE_REFUSAL_CODE
-            message = "provider response contained a refusal and no text"
-        elif walk.diagnostics.response_status == "incomplete":
-            code = RESPONSE_INCOMPLETE_NO_TEXT_CODE
-            message = "provider response was incomplete and contained no text"
-        elif walk.diagnostics.response_status is None:
-            code = PARSE_ERROR_CODE
-            message = "provider response missing status and generation text"
-        else:
-            code = RESPONSE_NO_TEXT_CODE
-            message = "provider response contained no generation text"
-        raise _responses_failure(
+        code, message = _responses_no_text_reason(walk.diagnostics)
+        return _responses_failure(
             code=code,
             message=message,
             diagnostics=walk.diagnostics,
+            body=body,
             config=config,
         )
-    response_id = _optional_str(body.get("id"))
-    return LlmResponse(
+    return ProviderTransportResponse(
         text=walk.text,
+        raw_body=dict(body),
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
         finish_reason=_finish_reason_from_responses_body(body),
-        response_id=response_id,
-        model=_optional_str(body.get("model")) or config.model,
+        response_id=_optional_str(body.get("id")),
+        model=_optional_str(body.get("model")) or config.route.model,
         diagnostics=walk.diagnostics,
-        provider_metadata=dict(body),
+    )
+
+
+def _responses_no_text_reason(
+    diagnostics: ResponsesDiagnostics,
+) -> tuple[str, str]:
+    if diagnostics.refusal_len is not None:
+        return (
+            RESPONSE_REFUSAL_CODE,
+            "provider response contained a refusal and no text",
+        )
+    if diagnostics.response_status == "incomplete":
+        return (
+            RESPONSE_INCOMPLETE_NO_TEXT_CODE,
+            "provider response was incomplete and contained no text",
+        )
+    if diagnostics.response_status is None:
+        return (
+            PARSE_ERROR_CODE,
+            "provider response missing status and generation text",
+        )
+    return (
+        RESPONSE_NO_TEXT_CODE,
+        "provider response contained no generation text",
     )
 
 
@@ -280,15 +257,43 @@ def token_usage_from_body(body: Mapping[str, Any]) -> TokenUsage | None:
     )
 
 
+def _anthropic_usage(body: Mapping[str, Any]) -> TokenUsage | None:
+    usage = body.get("usage")
+    if not isinstance(usage, Mapping):
+        return None
+    prompt = _optional_int(usage.get("input_tokens"))
+    completion = _optional_int(usage.get("output_tokens"))
+    total = None
+    if prompt is not None and completion is not None:
+        total = prompt + completion
+    if (prompt, completion) == (None, None):
+        return None
+    return TokenUsage(
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        total_tokens=total,
+    )
+
+
+def _anthropic_text(content: Sequence[Any]) -> str | None:
+    parts: list[str] = []
+    for part in content:
+        if isinstance(part, Mapping) and part.get("type") == "text":
+            text = part.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts) or None
+
+
 def cost_from_body(body: Mapping[str, Any]) -> CostInfo | None:
     for key in ("cost", "total_cost"):
         value = body.get(key)
-        if isinstance(value, int | float):
+        if isinstance(value, int | float) and not isinstance(value, bool):
             return CostInfo(total_cost=float(value))
     usage = body.get("usage")
     if isinstance(usage, Mapping):
         value = usage.get("cost")
-        if isinstance(value, int | float):
+        if isinstance(value, int | float) and not isinstance(value, bool):
             return CostInfo(total_cost=float(value))
     return None
 
@@ -524,22 +529,22 @@ def _optional_int(value: Any) -> int | None:
     return value if isinstance(value, int) else None
 
 
-def _parse_error(
+def _parse_failure(
     message: str,
     body: Mapping[str, Any],
-    config: ProviderConfig,
-) -> Exception:
-    failure = failure_record(
+    config: ProviderCallConfig,
+) -> ProviderTransportFailure:
+    return ProviderTransportFailure(
         failure_class=FailureClass.PERMANENT,
         code=PARSE_ERROR_CODE,
         message=message,
+        retryable=False,
+        raw_response_body=dict(body),
         metadata={
-            "provider_kind": config.provider_kind.value,
-            "endpoint_kind": config.endpoint_kind.value,
-            "response_preview": repr(dict(body))[:RESPONSE_PREVIEW_LIMIT],
+            "provider": config.route.provider.value,
+            "protocol": config.route.protocol.value,
         },
     )
-    return raise_failure(failure)
 
 
 def _responses_failure(
@@ -547,16 +552,18 @@ def _responses_failure(
     code: str,
     message: str,
     diagnostics: ResponsesDiagnostics,
-    config: ProviderConfig,
-) -> Exception:
-    failure = failure_record(
+    body: Mapping[str, Any],
+    config: ProviderCallConfig,
+) -> ProviderTransportFailure:
+    return ProviderTransportFailure(
         failure_class=FailureClass.PERMANENT,
         code=code,
         message=message,
+        retryable=False,
+        raw_response_body=dict(body),
         metadata={
-            "provider_kind": config.provider_kind.value,
-            "endpoint_kind": config.endpoint_kind.value,
+            "provider": config.route.provider.value,
+            "protocol": config.route.protocol.value,
             "diagnostics": diagnostics.model_dump(),
         },
     )
-    return raise_failure(failure)

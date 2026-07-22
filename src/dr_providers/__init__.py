@@ -1,30 +1,27 @@
-"""dr-providers: typed LLM provider-call kernel.
+"""dr-providers: typed LLM provider-call transport kernel.
 
-The stable intersection of four provider-implementation lineages:
-request, response, usage, warning, failure record, provider config,
-transport. See whetstone-ai ``docs/composable/llm_provider.md``.
+Owns the Provider Call Definition -> Config identity, the Provider Call
+Request identity, the Provider Transport Policy, the typed no-throw
+Provider Transport Outcome, complete least-processed success/failure
+evidence in a stable Provider Invocation Evidence artifact, native
+retry-zero support, and the ``(provider, protocol, model)`` Provider
+Quota Identity. Whetstone owns semantic acceptance, classification,
+retry/backoff, checkpoints, results, and concurrency.
 
-``HttpProvider`` / ``TransportPolicy`` load lazily so importing this
-package's pure modules (failure taxonomy, config records, payloads)
-never pulls in httpx — consumers with import-hygiene contracts rely
-on this.
+``HttpProvider`` loads lazily so importing this package's pure modules
+(identity, config, payloads) never pulls in httpx.
 """
 
 from importlib.metadata import version
 from typing import Any
 
 from dr_providers.config import (
-    ApiKeyEnv,
-    EndpointKind,
-    MessageRole,
-    PromptMessage,
-    ProviderBaseUrl,
-    ProviderConfig,
-    ProviderKind,
-    ReasoningEffort,
-    ReasoningRequestShape,
-    RequestControl,
-    TokenLimitParameter,
+    DEFAULT_API_KEY_ENVS,
+    DEFAULT_BASE_URLS,
+    PROVIDER_CALL_CONFIG_SCHEMA,
+    PROVIDER_CALL_CONFIG_SCHEMA_VERSION,
+    ProviderCallConfig,
+    anthropic_messages_config,
     gemini_chat_config,
     openai_chat_config,
     openai_responses_config,
@@ -33,6 +30,26 @@ from dr_providers.config import (
 from dr_providers.conformance import (
     conformance_warnings,
     with_conformance_warnings,
+)
+from dr_providers.controls import (
+    ControlConstraints,
+    GenerationControls,
+    ProviderBodyExtensions,
+    ReasoningEffort,
+    ReasoningRequestShape,
+    RequestControl,
+    TokenLimitParameter,
+)
+from dr_providers.definition import (
+    PROVIDER_CALL_DEFINITION_SCHEMA,
+    PROVIDER_CALL_DEFINITION_SCHEMA_VERSION,
+    ProviderCallDefinition,
+)
+from dr_providers.evidence import (
+    PROVIDER_INVOCATION_EVIDENCE_SCHEMA,
+    PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
+    ProviderInvocationEvidence,
+    RawHttpRequest,
 )
 from dr_providers.failures import (
     FAILURE_ERROR_TYPES,
@@ -51,57 +68,103 @@ from dr_providers.failures import (
     classify_status_code,
     failure_record,
     raise_failure,
+    sanitize_headers,
     sanitize_kwargs,
 )
-from dr_providers.provider import Provider
-from dr_providers.request import (
-    LlmRequest,
-    build_payload,
-    endpoint_path,
-)
-from dr_providers.response import (
+from dr_providers.outcome import (
     CostInfo,
-    LlmResponse,
     LlmWarning,
+    ProviderTransportFailure,
+    ProviderTransportOutcome,
+    ProviderTransportResponse,
     ResponsesDiagnostics,
     TokenUsage,
     WarningSeverity,
+    is_failure,
+    is_response,
+)
+from dr_providers.policy import (
+    DEFAULT_TIMEOUT_SECONDS,
+    ProviderTransportPolicy,
+    policy_for,
+)
+from dr_providers.provider import Provider
+from dr_providers.request import (
+    ProviderCallRequest,
+    build_payload,
+    protocol_path,
+)
+from dr_providers.response import (
     cost_from_body,
+    parse_anthropic_messages_body,
     parse_chat_completions_body,
     parse_response,
     parse_responses_body,
     token_usage_from_body,
 )
+from dr_providers.route import (
+    ApiKeyEnv,
+    ModelRoute,
+    Protocol,
+    ProviderBaseUrl,
+    ProviderKind,
+    ProviderQuotaIdentity,
+)
 from dr_providers.scripted import (
     ScriptedOutcome,
     ScriptedProvider,
+)
+from dr_providers.transcript import (
+    MessageRole,
+    PromptMessage,
+    Transcript,
 )
 
 PACKAGE_NAME = "dr-providers"
 
 __all__ = [
+    "DEFAULT_API_KEY_ENVS",
+    "DEFAULT_BASE_URLS",
+    "DEFAULT_TIMEOUT_SECONDS",
     "FAILURE_ERROR_TYPES",
+    "PROVIDER_CALL_CONFIG_SCHEMA",
+    "PROVIDER_CALL_CONFIG_SCHEMA_VERSION",
+    "PROVIDER_CALL_DEFINITION_SCHEMA",
+    "PROVIDER_CALL_DEFINITION_SCHEMA_VERSION",
+    "PROVIDER_INVOCATION_EVIDENCE_SCHEMA",
+    "PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION",
     "RECOVERABLE_FAILURE_CLASSES",
     "RETRYABLE_FAILURE_CLASSES",
     "SANITIZE_KEYS",
     "ApiKeyEnv",
+    "ControlConstraints",
     "CostInfo",
-    "EndpointKind",
     "FailureClass",
+    "GenerationControls",
     "HttpProvider",
-    "LlmRequest",
-    "LlmResponse",
     "LlmWarning",
     "MessageRole",
+    "ModelRoute",
     "PermanentProviderError",
     "PromptMessage",
+    "Protocol",
     "Provider",
     "ProviderBaseUrl",
-    "ProviderConfig",
+    "ProviderBodyExtensions",
+    "ProviderCallConfig",
+    "ProviderCallDefinition",
+    "ProviderCallRequest",
     "ProviderFailure",
     "ProviderFailureError",
+    "ProviderInvocationEvidence",
     "ProviderKind",
+    "ProviderQuotaIdentity",
+    "ProviderTransportFailure",
+    "ProviderTransportOutcome",
+    "ProviderTransportPolicy",
+    "ProviderTransportResponse",
     "RateLimitedProviderError",
+    "RawHttpRequest",
     "ReasoningEffort",
     "ReasoningRequestShape",
     "RequestControl",
@@ -111,25 +174,31 @@ __all__ = [
     "ScriptedProvider",
     "TokenLimitParameter",
     "TokenUsage",
+    "Transcript",
     "TransientProviderError",
-    "TransportPolicy",
     "UnknownProviderError",
     "UnsupportedControlError",
     "WarningSeverity",
+    "anthropic_messages_config",
     "build_payload",
     "classify_status_code",
     "conformance_warnings",
     "cost_from_body",
-    "endpoint_path",
     "failure_record",
     "gemini_chat_config",
+    "is_failure",
+    "is_response",
     "openai_chat_config",
     "openai_responses_config",
     "openrouter_chat_config",
+    "parse_anthropic_messages_body",
     "parse_chat_completions_body",
     "parse_response",
     "parse_responses_body",
+    "policy_for",
+    "protocol_path",
     "raise_failure",
+    "sanitize_headers",
     "sanitize_kwargs",
     "token_usage_from_body",
     "with_conformance_warnings",
@@ -138,7 +207,7 @@ __all__ = [
 __version__ = version(PACKAGE_NAME)
 
 
-_LAZY_TRANSPORT_EXPORTS = frozenset({"HttpProvider", "TransportPolicy"})
+_LAZY_TRANSPORT_EXPORTS = frozenset({"HttpProvider"})
 
 
 def __getattr__(name: str) -> Any:

@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 from typer.testing import CliRunner
 
 from dr_providers import cli
-from dr_providers.config import ReasoningEffort
+from dr_providers.controls import ReasoningEffort
 from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 
 if TYPE_CHECKING:
     import pytest
 
-    from dr_providers.request import LlmRequest
+    from dr_providers.request import ProviderCallRequest
 
 runner = CliRunner()
 
@@ -118,16 +118,16 @@ def test_effort_and_provider_flags_build_expected_request(
 
     assert result.exit_code == 0
     assert len(scripted.requests) == 1
-    request: LlmRequest = scripted.requests[0]
-    assert request.provider_config.provider_kind.value == "openai"
-    assert request.provider_config.endpoint_kind.value == "responses"
-    assert request.provider_config.model == "gpt-test"
-    assert request.reasoning == ReasoningEffort.HIGH
-    assert request.temperature == 0.5
-    assert request.top_p == 0.9
-    assert request.token_limit == 128
-    roles = [m.role.value for m in request.messages]
-    contents = [m.content for m in request.messages]
+    request: ProviderCallRequest = scripted.requests[0]
+    assert request.config.route.provider.value == "openai"
+    assert request.config.route.protocol.value == "responses"
+    assert request.config.route.model == "gpt-test"
+    assert request.config.controls.reasoning == ReasoningEffort.HIGH
+    assert request.config.controls.temperature == 0.5
+    assert request.config.controls.top_p == 0.9
+    assert request.config.controls.token_limit == 128
+    roles = [m.role.value for m in request.transcript.messages]
+    contents = [m.content for m in request.transcript.messages]
     assert roles == ["system", "user"]
     assert contents == ["Be terse.", "Say hello."]
 
@@ -150,7 +150,7 @@ def test_gemini_provider_flag_builds_gemini_config(
     )
 
     assert result.exit_code == 0
-    assert scripted.requests[0].provider_config.provider_kind.value == "gemini"
+    assert scripted.requests[0].config.route.provider.value == "gemini"
 
 
 def test_bad_provider_value_exits_with_clear_message() -> None:

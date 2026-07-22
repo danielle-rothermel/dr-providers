@@ -12,15 +12,19 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
+from dr_providers.config import DEFAULT_API_KEY_ENVS, DEFAULT_BASE_URLS
 from dr_providers.failures import (
     FailureClass,
-    ProviderFailure,
     UnsupportedControlError,
-    failure_record,
 )
+from dr_providers.outcome import (
+    CostInfo,
+    ProviderTransportFailure,
+    TokenUsage,
+)
+from dr_providers.policy import ProviderTransportPolicy
 from dr_providers.provider import Provider
-from dr_providers.request import ENDPOINT_PATHS, build_payload
-from dr_providers.response import CostInfo, TokenUsage
+from dr_providers.request import build_payload, protocol_path
 from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 from dr_providers.serve.runner import (
     QueryResult,
@@ -68,12 +72,13 @@ class ScriptedOutcomeSpec(BaseModel):
     failure_message: StrictStr | None = None
 
     def to_outcome(self) -> ScriptedOutcome:
-        failure: ProviderFailure | None = None
+        failure: ProviderTransportFailure | None = None
         if self.failure_code is not None:
-            failure = failure_record(
+            failure = ProviderTransportFailure(
                 failure_class=FailureClass.PERMANENT,
                 code=self.failure_code,
                 message=self.failure_message or self.failure_code,
+                retryable=False,
             )
         usage = (
             TokenUsage(completion_tokens=self.completion_tokens)
@@ -134,17 +139,22 @@ def resolve_provider(choice: ProviderChoice, spec: QuerySpec) -> Provider:
             outcome.to_outcome() for outcome in choice.scripted_outcomes
         ]
         return ScriptedProvider(outcomes or None)
-    config = build_request(spec).provider_config
-    api_key = os.environ.get(config.api_key_env)
+    kind = build_request(spec).config.route.provider
+    api_key_env = str(DEFAULT_API_KEY_ENVS[kind])
+    api_key = os.environ.get(api_key_env)
     if not api_key:
         raise HTTPException(
             status_code=424,
             detail=(
-                f"{MISSING_API_KEY_CODE}: set {config.api_key_env} "
+                f"{MISSING_API_KEY_CODE}: set {api_key_env} "
                 "to run live queries"
             ),
         )
-    return HttpProvider(api_key=api_key)
+    policy = ProviderTransportPolicy(
+        api_key_env=api_key_env,
+        base_url=str(DEFAULT_BASE_URLS[kind]),
+    )
+    return HttpProvider(policy=policy, api_key=api_key)
 
 
 def create_app() -> FastAPI:
@@ -167,9 +177,7 @@ def create_app() -> FastAPI:
         try:
             llm_request = build_request(request.spec)
             return BuildPayloadResponse(
-                endpoint_path=ENDPOINT_PATHS[
-                    llm_request.provider_config.endpoint_kind
-                ],
+                endpoint_path=protocol_path(llm_request.config),
                 payload=build_payload(llm_request),
             )
         except UnsupportedControlError as error:

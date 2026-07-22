@@ -1,8 +1,7 @@
 import pytest
 
-from dr_providers.config import MessageRole, PromptMessage
-from dr_providers.failures import FailureClass, failure_record
-from dr_providers.response import TokenUsage
+from dr_providers.failures import FailureClass
+from dr_providers.outcome import ProviderTransportFailure, TokenUsage
 from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 from dr_providers.serve.runner import (
     QuerySpec,
@@ -10,6 +9,7 @@ from dr_providers.serve.runner import (
     run_query,
     run_variance,
 )
+from dr_providers.transcript import MessageRole, PromptMessage
 
 PROMPT = "Say hello."
 
@@ -69,10 +69,11 @@ def test_run_query_does_not_duplicate_warnings() -> None:
 
 
 def test_run_query_surfaces_failure_records() -> None:
-    failure = failure_record(
+    failure = ProviderTransportFailure(
         failure_class=FailureClass.PERMANENT,
         code="scripted_down",
         message="scripted failure",
+        retryable=False,
     )
     provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
     result = run_query(make_spec(), provider)
@@ -110,10 +111,11 @@ def test_run_variance_reports_dispersion_per_model() -> None:
 
 
 def test_run_variance_counts_failures() -> None:
-    failure = failure_record(
+    failure = ProviderTransportFailure(
         failure_class=FailureClass.TRANSIENT,
         code="rate_limited",
         message="scripted",
+        retryable=True,
     )
     provider = ScriptedProvider(
         [ScriptedOutcome(text="fine"), ScriptedOutcome(failure=failure)]
