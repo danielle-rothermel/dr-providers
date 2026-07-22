@@ -84,6 +84,7 @@ from dr_providers.outcome import (
     is_response,
 )
 from dr_providers.policy import (
+    DEFAULT_IDLE_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_SECONDS,
     ProviderTransportPolicy,
     policy_for,
@@ -125,6 +126,7 @@ PACKAGE_NAME = "dr-providers"
 __all__ = [
     "DEFAULT_API_KEY_ENVS",
     "DEFAULT_BASE_URLS",
+    "DEFAULT_IDLE_TIMEOUT_SECONDS",
     "DEFAULT_TIMEOUT_SECONDS",
     "FAILURE_ERROR_TYPES",
     "PROVIDER_CALL_CONFIG_SCHEMA",

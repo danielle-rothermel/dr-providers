@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from dr_providers.route import ApiKeyEnv
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
+DEFAULT_IDLE_TIMEOUT_SECONDS = 90.0
 
 
 class ProviderTransportPolicy(BaseModel):
@@ -29,25 +30,46 @@ class ProviderTransportPolicy(BaseModel):
     api_key_env: StrictStr
     base_url: StrictStr | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
-    """Effective wall-clock bound for any single wire call.
+    """Absolute wall-clock CAP for any single wire call (the hard backstop).
 
-    ``timeout_seconds`` is the total wall-clock budget the transport
-    enforces against a single invocation, not merely a per-socket-read
-    timeout. It is applied on two independent layers:
+    ``timeout_seconds`` is the maximum total wall-clock a single invocation
+    may take before the transport interrupts it and returns a typed failure.
+    It is NOT a per-socket-read timeout, and -- crucially -- it is NOT the
+    primary stall detector: a LEGITIMATE long streaming response (e.g. a
+    reasoning model emitting 18k tokens over many minutes) is making steady
+    progress and must NOT be killed merely for running long. The primary
+    stall detector is ``idle_timeout_seconds`` (below); ``timeout_seconds``
+    is the absolute cap that also catches a pathological dribble (a wedged
+    edge sending one byte per idle window forever, which defeats a naive
+    no-NEW-bytes idle timer).
 
-      * httpx timeout discipline — every phase is bounded so no phase can
-        stall silently: ``connect = min(30, timeout_seconds)`` (a stalled
-        TCP/TLS handshake must fail fast), and ``read = write = pool =
-        timeout_seconds``.
-      * an overall per-invocation deadline (a hard watchdog) of
-        ``timeout_seconds`` plus a small fixed margin. This backstops the
-        httpx read timeout, which is *per-read-operation* and therefore
-        does not bound wall-clock: a stalled response that trickles bytes
-        (e.g. a wedged Cloudflare edge) can reset the per-read timer
-        indefinitely and never trigger httpx's read timeout. The deadline
-        guarantees a single stall can never exceed the budget; on breach
-        the transport returns a typed Provider Transport Failure
+    Enforcement layers:
+
+      * httpx timeout discipline -- ``connect = min(30, timeout_seconds)``
+        (a stalled TCP/TLS handshake fails fast); the streaming READ phase is
+        bounded by ``idle_timeout_seconds`` (per-read, i.e. per inter-byte
+        gap), so a genuine idle stall fails as ``stalled_response`` promptly
+        WITHOUT capping a progressing stream.
+      * an overall per-invocation deadline (hard watchdog) of
+        ``timeout_seconds`` plus a small fixed margin -- the absolute cap. It
+        guarantees NO single call (including a forever-dribbling response that
+        resets the idle timer one byte at a time) can exceed the budget; on
+        breach the transport interrupts the wedged socket and returns a typed
+        Provider Transport Failure
         (``code='timeout'``/``'stalled_response'``), never hangs.
+    """
+    idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS
+    """Progress/idle timeout: fail ``stalled_response`` if no bytes arrive
+    for this many seconds (default 90s).
+
+    This is the PRIMARY stall detector and the semantic replacement for the
+    old flat deadline: a response that keeps producing bytes (a legitimate
+    long stream) never trips it, while a response that goes silent for longer
+    than ``idle_timeout_seconds`` fails promptly. It is applied as httpx's
+    per-read (per inter-byte) timeout on the streaming read phase. A
+    pathological dribble that sends a single byte just inside every idle
+    window defeats this timer by design -- that case is caught by the
+    absolute ``timeout_seconds`` cap.
     """
     native_retry_count: StrictInt = 0
 
@@ -62,6 +84,7 @@ class ProviderTransportPolicy(BaseModel):
             "api_key_env": self.api_key_env,
             "base_url": self.base_url,
             "timeout_seconds": self.timeout_seconds,
+            "idle_timeout_seconds": self.idle_timeout_seconds,
             "native_retry_count": self.native_retry_count,
         }
 
@@ -71,12 +94,14 @@ def policy_for(
     api_key_env: ApiKeyEnv | str,
     base_url: str | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
     native_retry_count: int = 0,
 ) -> ProviderTransportPolicy:
     return ProviderTransportPolicy(
         api_key_env=str(api_key_env),
         base_url=base_url,
         timeout_seconds=timeout_seconds,
+        idle_timeout_seconds=idle_timeout_seconds,
         native_retry_count=native_retry_count,
     )
 

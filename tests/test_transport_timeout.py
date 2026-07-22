@@ -162,6 +162,36 @@ def _accept_then_silent(_conn: socket.socket, stop: threading.Event) -> None:
     stop.wait(timeout=EXTERNAL_WATCHDOG_SECONDS)
 
 
+def _steady_stream_then_complete(
+    conn: socket.socket, stop: threading.Event
+) -> None:
+    """A LEGITIMATE long stream: deliver body bytes steadily, then complete.
+
+    Every chunk arrives well within the idle window (never a silent gap longer
+    than the idle timeout), so a progress/idle bound must let it finish. Stands
+    in for a reasoning model streaming many tokens over a long wall-clock: it
+    runs longer than the idle timeout but is always making progress, so it must
+    NOT be killed. The total body is small so the test is fast.
+    """
+    conn.recv(65536)
+    body = b'{"choices":[{"message":{"content":"ok"}}]}'
+    header = (
+        b"HTTP/1.1 200 OK\r\n"
+        b"Content-Type: application/json\r\n"
+        + f"Content-Length: {len(body)}\r\n".encode()
+        + b"\r\n"
+    )
+    conn.sendall(header)
+    # Dribble the body one byte at a time, each within the idle window, for a
+    # wall-clock LONGER than the idle timeout but always making progress.
+    for byte in (body[i : i + 1] for i in range(len(body))):
+        if stop.is_set():
+            return
+        with contextlib.suppress(OSError):
+            conn.sendall(byte)
+        stop.wait(timeout=0.1)
+
+
 def _invoke_bounded(provider: HttpProvider) -> Any:
     """Run ``invoke`` under an external watchdog so a hang fails loudly."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -256,6 +286,100 @@ class TestStalledResponseTimeout:
                     pytest.fail("complete hung; timeout not enforced")
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code in {TIMEOUT_CODE, STALLED_RESPONSE_CODE}
+
+
+def _idle_cap_policy(
+    *, idle_timeout_seconds: float, timeout_seconds: float
+) -> ProviderTransportPolicy:
+    return ProviderTransportPolicy(
+        api_key_env=str(ApiKeyEnv.OPENAI),
+        base_url="http://placeholder",
+        timeout_seconds=timeout_seconds,
+        idle_timeout_seconds=idle_timeout_seconds,
+    )
+
+
+class TestProgressIdleSemantics:
+    """FIX 3: idle/progress timeout is the stall detector, cap is the backstop.
+
+    A LEGITIMATE long stream making steady progress must complete (never capped
+    for running long); a genuinely IDLE response fails ``stalled_response`` on
+    the idle timeout; a forever-dribble is still caught by the absolute cap.
+    """
+
+    def test_steady_progress_stream_is_not_killed_by_running_long(
+        self,
+    ) -> None:
+        # Idle window 0.5s, absolute cap 2.0s. The server dribbles a small body
+        # one byte every 0.1s (well within the idle window) over a wall-clock
+        # that exceeds the idle timeout — a stream that keeps making progress
+        # must SUCCEED, proving idle != flat-deadline.
+        policy = _idle_cap_policy(
+            idle_timeout_seconds=0.5, timeout_seconds=2.0
+        )
+        with _StallServer(_steady_stream_then_complete) as server:
+            provider = HttpProvider(
+                policy=policy.model_copy(update={"base_url": server.base_url}),
+                api_key="test-key",
+            )
+            try:
+                evidence = _invoke_bounded(provider)
+            finally:
+                provider.close()
+        # It completed with a real response, not a timeout/stall failure.
+        assert evidence.failure is None, (
+            "a steadily-progressing stream must not be killed for running "
+            f"past the idle timeout; got {evidence.failure!r}"
+        )
+
+    def test_idle_stall_fails_stalled_response_on_the_idle_timeout(
+        self,
+    ) -> None:
+        # Idle 0.4s, cap 20s: a headers-then-silent response has NO progress,
+        # so the IDLE timer (not the far-off cap) fails it promptly as a stall.
+        policy = _idle_cap_policy(
+            idle_timeout_seconds=0.4, timeout_seconds=20.0
+        )
+        with _StallServer(_headers_then_stall) as server:
+            provider = HttpProvider(
+                policy=policy.model_copy(update={"base_url": server.base_url}),
+                api_key="test-key",
+            )
+            start = time.monotonic()
+            try:
+                evidence = _invoke_bounded(provider)
+            finally:
+                provider.close()
+            elapsed = time.monotonic() - start
+        failure = evidence.failure
+        assert isinstance(failure, ProviderTransportFailure)
+        assert failure.code == STALLED_RESPONSE_CODE
+        # Fired on the IDLE timeout (~0.4s), FAR before the 20s absolute cap.
+        assert elapsed < 5.0
+
+    def test_forever_dribble_is_caught_by_the_absolute_cap(self) -> None:
+        # A dribble sends one byte per 0.05s, defeating a naive no-NEW-bytes
+        # idle timer (idle 0.5s here never trips). Only the absolute cap
+        # (timeout_seconds 1.0 + margin) stops it — bounded, never hangs.
+        policy = _idle_cap_policy(
+            idle_timeout_seconds=0.5, timeout_seconds=1.0
+        )
+        with _StallServer(_dribble_forever) as server:
+            provider = HttpProvider(
+                policy=policy.model_copy(update={"base_url": server.base_url}),
+                api_key="test-key",
+            )
+            start = time.monotonic()
+            try:
+                evidence = _invoke_bounded(provider)
+            finally:
+                provider.close()
+            elapsed = time.monotonic() - start
+        failure = evidence.failure
+        assert isinstance(failure, ProviderTransportFailure)
+        assert failure.code in {TIMEOUT_CODE, STALLED_RESPONSE_CODE}
+        # Bounded by the absolute cap (1.0 + 5s margin) + slack, not unbounded.
+        assert elapsed < 1.0 + 8.0
 
 
 class TestTimeoutFailureShape:

@@ -62,32 +62,39 @@ TIMEOUT_CODE = "timeout"
 STALLED_RESPONSE_CODE = "stalled_response"
 
 # A stalled TCP/TLS handshake must fail fast: a wedged connect should
-# never consume the full read budget. Read/write/pool phases each get the
-# full policy budget; the per-invocation deadline (below) is the true
-# wall-clock backstop.
+# never consume the full read budget. The read phase is bounded by the
+# IDLE timeout (per inter-byte gap), not the absolute cap, so a legitimate
+# long stream making steady progress is never killed for running long; the
+# per-invocation deadline (below) is the absolute wall-clock backstop.
 MAX_CONNECT_TIMEOUT_SECONDS = 30.0
 
-# Small fixed margin added on top of ``timeout_seconds`` for the overall
-# per-invocation deadline. It lets httpx's own timeout discipline fire and
-# return a typed failure first (the common case); the hard deadline only
-# fires when a stalled response defeats the per-read timeout entirely.
+# Small fixed margin added on top of ``timeout_seconds`` (the absolute cap)
+# for the overall per-invocation deadline. The idle-read timeout is the
+# primary stall detector and returns a typed failure first for a genuine
+# stall; the hard deadline (absolute cap) only fires when a response defeats
+# the idle timer entirely — e.g. a dribble sending one byte per idle window.
 INVOCATION_DEADLINE_MARGIN_SECONDS = 5.0
 
 
-def _httpx_timeout(timeout_seconds: float) -> httpx.Timeout:
-    """Complete timeout discipline: connect/read/write/pool all bounded.
+def _httpx_timeout(idle_timeout_seconds: float) -> httpx.Timeout:
+    """Progress-aware timeout discipline: idle-bounded read, capped connect.
 
-    A bare float (or a read-only timeout) leaves a stalled connect able to
-    hang and, worse, makes the read timeout per-operation rather than a
-    wall-clock bound. Every phase is bounded here so no phase stalls
-    silently; the connect phase is additionally capped so a wedged
-    handshake fails fast.
+    The READ phase is bounded by ``idle_timeout_seconds`` -- httpx's read
+    timeout is per-read-operation (per inter-byte gap), which is exactly a
+    PROGRESS/IDLE bound: a stream that keeps delivering bytes resets it and
+    runs as long as it makes progress, while a stream that goes silent longer
+    than the idle window fails ``stalled_response`` promptly. This is why a
+    legitimate long streaming response (steady tokens for minutes) is no
+    longer killed by the flat ``timeout_seconds``. Connect is capped so a
+    wedged handshake fails fast; write/pool take the idle budget too. The
+    absolute ``timeout_seconds`` cap is enforced separately as the
+    per-invocation deadline (the dribble backstop).
     """
     return httpx.Timeout(
-        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, timeout_seconds),
-        read=timeout_seconds,
-        write=timeout_seconds,
-        pool=timeout_seconds,
+        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, idle_timeout_seconds),
+        read=idle_timeout_seconds,
+        write=idle_timeout_seconds,
+        pool=idle_timeout_seconds,
     )
 
 
@@ -206,18 +213,25 @@ class HttpProvider:
         deadline = (
             self._policy.timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
         )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(
-                self._wire_call, request, url, headers, payload
-            )
-            try:
-                return future.result(timeout=deadline)
-            except concurrent.futures.TimeoutError:
-                # Interrupt the wedged C-level socket read so the worker
-                # thread cannot linger blocked forever, then return the
-                # typed stalled-response failure.
-                self._interrupt_wedged_client()
-                return self._deadline_timeout_failure(url, payload, deadline)
+        # Do NOT use the executor as a context manager: its __exit__ joins the
+        # worker thread, which would re-block for the whole idle read budget on
+        # a deadline breach. The idle read timeout is now large (a legitimate
+        # long stream must not be capped), so on breach we interrupt the wedged
+        # socket and shut the pool down WITHOUT waiting on the (now-erroring)
+        # worker, returning the typed failure immediately.
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = pool.submit(self._wire_call, request, url, headers, payload)
+        try:
+            result = future.result(timeout=deadline)
+        except concurrent.futures.TimeoutError:
+            # Interrupt the wedged C-level socket read so the worker thread
+            # errors out instead of lingering blocked for the idle budget, then
+            # return the typed stalled-response failure without joining it.
+            self._interrupt_wedged_client()
+            pool.shutdown(wait=False)
+            return self._deadline_timeout_failure(url, payload, deadline)
+        pool.shutdown(wait=True)
+        return result
 
     def _wire_call(
         self,
@@ -231,7 +245,7 @@ class HttpProvider:
                 url,
                 json=payload,
                 headers=headers,
-                timeout=_httpx_timeout(self._policy.timeout_seconds),
+                timeout=_httpx_timeout(self._policy.idle_timeout_seconds),
             )
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url, payload)
@@ -254,16 +268,24 @@ class HttpProvider:
         url: str,
         payload: dict[str, Any],
     ) -> ProviderTransportFailure:
-        """Typed failure for an httpx-enforced connect/read/write timeout."""
+        """Typed failure for an httpx-enforced connect/read/write timeout.
+
+        A ReadTimeout is an IDLE stall: no bytes arrived within
+        ``idle_timeout_seconds`` (the progress/idle bound), so it is classified
+        ``stalled_response``. A connect/write/pool timeout keeps the generic
+        ``timeout`` code.
+        """
+        is_idle_stall = isinstance(error, httpx.ReadTimeout)
         return ProviderTransportFailure(
             failure_class=FailureClass.TRANSIENT,
-            code=TIMEOUT_CODE,
+            code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
             message=f"{type(error).__name__}: {error}",
             retryable=True,
             raw_request=dict(payload),
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
+                "idle_timeout_seconds": self._policy.idle_timeout_seconds,
                 "phase": type(error).__name__,
             },
         )
