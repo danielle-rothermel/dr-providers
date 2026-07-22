@@ -19,6 +19,8 @@ Two protocol families are first-class:
 
 from __future__ import annotations
 
+import concurrent.futures
+import contextlib
 import os
 from typing import TYPE_CHECKING, Any
 
@@ -56,6 +58,37 @@ MISSING_BASE_URL_CODE = "missing_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
 TRANSPORT_ERROR_CODE = "transport_error"
 INVALID_JSON_CODE = "invalid_response_json"
+TIMEOUT_CODE = "timeout"
+STALLED_RESPONSE_CODE = "stalled_response"
+
+# A stalled TCP/TLS handshake must fail fast: a wedged connect should
+# never consume the full read budget. Read/write/pool phases each get the
+# full policy budget; the per-invocation deadline (below) is the true
+# wall-clock backstop.
+MAX_CONNECT_TIMEOUT_SECONDS = 30.0
+
+# Small fixed margin added on top of ``timeout_seconds`` for the overall
+# per-invocation deadline. It lets httpx's own timeout discipline fire and
+# return a typed failure first (the common case); the hard deadline only
+# fires when a stalled response defeats the per-read timeout entirely.
+INVOCATION_DEADLINE_MARGIN_SECONDS = 5.0
+
+
+def _httpx_timeout(timeout_seconds: float) -> httpx.Timeout:
+    """Complete timeout discipline: connect/read/write/pool all bounded.
+
+    A bare float (or a read-only timeout) leaves a stalled connect able to
+    hang and, worse, makes the read timeout per-operation rather than a
+    wall-clock bound. Every phase is bounded here so no phase stalls
+    silently; the connect phase is additionally capped so a wedged
+    handshake fails fast.
+    """
+    return httpx.Timeout(
+        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, timeout_seconds),
+        read=timeout_seconds,
+        write=timeout_seconds,
+        pool=timeout_seconds,
+    )
 
 
 class HttpProvider:
@@ -150,13 +183,58 @@ class HttpProvider:
         headers = self._headers(config)
         if headers is None:
             return self._missing_api_key_failure(payload)
+        return self._wire_call_within_deadline(request, url, headers, payload)
+
+    def _wire_call_within_deadline(
+        self,
+        request: ProviderCallRequest,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+    ) -> ProviderTransportOutcome:
+        """Run the blocking wire call under a hard wall-clock deadline.
+
+        httpx's own timeout discipline (``_httpx_timeout``) is the primary
+        bound and returns a typed failure for a normal stall. This
+        deadline is the belt-and-suspenders backstop: it bounds the entire
+        invocation — including response streaming/JSON decode — so a
+        stalled response that defeats the per-read timeout (a trickling
+        edge that keeps resetting the per-read timer) can never exceed the
+        budget. On breach the wedged socket is interrupted and a typed
+        timeout failure is returned; nothing hangs and nothing raises.
+        """
+        deadline = (
+            self._policy.timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
+        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                self._wire_call, request, url, headers, payload
+            )
+            try:
+                return future.result(timeout=deadline)
+            except concurrent.futures.TimeoutError:
+                # Interrupt the wedged C-level socket read so the worker
+                # thread cannot linger blocked forever, then return the
+                # typed stalled-response failure.
+                self._interrupt_wedged_client()
+                return self._deadline_timeout_failure(url, payload, deadline)
+
+    def _wire_call(
+        self,
+        request: ProviderCallRequest,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+    ) -> ProviderTransportOutcome:
         try:
             http_response = self._httpx_client().post(
                 url,
                 json=payload,
                 headers=headers,
-                timeout=self._policy.timeout_seconds,
+                timeout=_httpx_timeout(self._policy.timeout_seconds),
             )
+        except httpx.TimeoutException as error:
+            return self._httpx_timeout_failure(error, url, payload)
         except httpx.HTTPError as error:
             return ProviderTransportFailure(
                 failure_class=FailureClass.TRANSIENT,
@@ -169,6 +247,65 @@ class HttpProvider:
         return self._outcome_from_response(
             request, http_response, url, payload
         )
+
+    def _httpx_timeout_failure(
+        self,
+        error: httpx.TimeoutException,
+        url: str,
+        payload: dict[str, Any],
+    ) -> ProviderTransportFailure:
+        """Typed failure for an httpx-enforced connect/read/write timeout."""
+        return ProviderTransportFailure(
+            failure_class=FailureClass.TRANSIENT,
+            code=TIMEOUT_CODE,
+            message=f"{type(error).__name__}: {error}",
+            retryable=True,
+            raw_request=dict(payload),
+            metadata={
+                "url": url,
+                "timeout_seconds": self._policy.timeout_seconds,
+                "phase": type(error).__name__,
+            },
+        )
+
+    def _deadline_timeout_failure(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        deadline: float,
+    ) -> ProviderTransportFailure:
+        """Typed failure for the hard per-invocation deadline breach."""
+        return ProviderTransportFailure(
+            failure_class=FailureClass.TRANSIENT,
+            code=STALLED_RESPONSE_CODE,
+            message=(
+                "provider invocation exceeded the per-invocation deadline "
+                f"of {deadline:.1f}s (policy timeout_seconds="
+                f"{self._policy.timeout_seconds:.1f}s); the response "
+                "stalled without completing"
+            ),
+            retryable=True,
+            raw_request=dict(payload),
+            metadata={
+                "url": url,
+                "timeout_seconds": self._policy.timeout_seconds,
+                "deadline_seconds": deadline,
+            },
+        )
+
+    def _interrupt_wedged_client(self) -> None:
+        """Close the owned client to unblock a wedged socket read.
+
+        Closing tears down the underlying connection pool, forcing the
+        blocked C-level ``recv`` in the worker thread to error out instead
+        of lingering forever. Only an owned client is closed and rebuilt;
+        an injected client is left alone (the caller owns its lifecycle).
+        """
+        if self._owns_client and self._client is not None:
+            # best-effort unblock: any close error is irrelevant here.
+            with contextlib.suppress(Exception):
+                self._client.close()
+            self._client = None
 
     def _outcome_from_response(
         self,

@@ -29,6 +29,26 @@ class ProviderTransportPolicy(BaseModel):
     api_key_env: StrictStr
     base_url: StrictStr | None = None
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    """Effective wall-clock bound for any single wire call.
+
+    ``timeout_seconds`` is the total wall-clock budget the transport
+    enforces against a single invocation, not merely a per-socket-read
+    timeout. It is applied on two independent layers:
+
+      * httpx timeout discipline — every phase is bounded so no phase can
+        stall silently: ``connect = min(30, timeout_seconds)`` (a stalled
+        TCP/TLS handshake must fail fast), and ``read = write = pool =
+        timeout_seconds``.
+      * an overall per-invocation deadline (a hard watchdog) of
+        ``timeout_seconds`` plus a small fixed margin. This backstops the
+        httpx read timeout, which is *per-read-operation* and therefore
+        does not bound wall-clock: a stalled response that trickles bytes
+        (e.g. a wedged Cloudflare edge) can reset the per-read timer
+        indefinitely and never trigger httpx's read timeout. The deadline
+        guarantees a single stall can never exceed the budget; on breach
+        the transport returns a typed Provider Transport Failure
+        (``code='timeout'``/``'stalled_response'``), never hangs.
+    """
     native_retry_count: StrictInt = 0
 
     def identity_payload(self) -> dict[str, Any]:
