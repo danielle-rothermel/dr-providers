@@ -181,6 +181,20 @@ this README does not repeat the per-name detail. `HttpProvider` loads
 lazily so importing the pure modules (route, controls, config, request,
 response, outcome, policy, evidence) never pulls in httpx.
 
+## CLI
+
+The `[cli]` extra installs a typer CLI, exposed as the `dr-providers`
+console script, for one-shot provider calls:
+
+```bash
+pip install 'dr-providers[cli]'
+dr-providers --provider openrouter --model openai/gpt-4o-mini -m "Say hello."
+```
+
+The console script is always installed, but the CLI itself requires the
+`[cli]` extra; running it without that extra prints an install hint and
+exits nonzero.
+
 ## Serve facade
 
 An optional FastAPI facade (the `[serve]` extra) exposes the kernel
@@ -189,6 +203,11 @@ over HTTP for non-Python callers:
 ```bash
 uv run python -m dr_providers.serve serve
 ```
+
+Release notes live in the
+[changelog](https://github.com/danielle-rothermel/dr-providers/blob/main/CHANGELOG.md);
+note that 0.2.0 is a complete rewrite with no API compatibility with the
+0.1.x query client.
 
 ## Development
 
