@@ -15,6 +15,12 @@ dr-platform, dr-code, whetstone-ai, and unitbench. Whetstone-ai /
 dr-platform, dr-graph's graph runner, and unitbench playgrounds are
 consumers.
 
+The [vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
+(source: `.defs/vocab.html`) is the authoritative statement of the
+provider-call transport contract this repo implements: the terms, the
+guarantees, what is in and out of scope, and the mapping from each term
+to the exported names.
+
 ## Install
 
 ```bash

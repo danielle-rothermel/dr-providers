@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="doc.css">
+<title>dr-providers · The provider-call transport contract this repo owns</title>
+<style>
+  /* Page-local tokens. Purple (--anchor) = main-point accents (.key/.must);
+     blue (--accent) = term links (.term-ref), matching doc.css link hue. */
+  .term-name { font-weight: 600; }
+  dfn.term-name { font-style: normal; }
+  .must { color: var(--anchor); font-weight: 600; }
+  .term-ref { color: var(--accent); text-decoration: underline; text-decoration-style: dashed; text-underline-offset: 2px; }
+  td ul { margin: 0; padding-left: 18px; }
+  td li { margin-bottom: 4px; }
+  td li:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+<main class="wide">
+
+<h1>The dr-providers provider-call transport contract</h1>
+<p class="dek">A reference for the terms and guarantees that bind dr-providers.</p>
+<div class="byline">dr-providers · 2026-07-24</div>
+
+<p>This is the vocabulary of the provider-call transport contract dr-providers implements: the <span class="key">terms</span> that name a validated provider-call configuration, its executed HTTP call, and the typed result; the <span class="key">guarantees</span> that bind this repo; what is in and out of <span class="key">scope</span> at the transport boundary; and the <span class="key">mapping</span> from each term to the names actually exported by <a href="https://github.com/danielle-rothermel/dr-providers/blob/main/src/dr_providers/__init__.py"><code>dr_providers</code></a>.</p>
+
+<div class="section-head" id="terms"><h2>Terms</h2></div>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+  <tbody>
+    <tr><td><dfn class="term-name" id="term-definition">Definition</dfn></td><td>A versioned description of an object's shape and its unset variables.</td></tr>
+    <tr><td><dfn class="term-name" id="term-variable">Variable</dfn></td><td>A named slot whose allowed values and identity effect are declared by a <a class="term-ref" href="#term-definition">definition</a>.</td></tr>
+    <tr><td><dfn class="term-name" id="term-config">Config</dfn></td><td>A <a class="term-ref" href="#term-definition">definition</a> with every required <a class="term-ref" href="#term-variable">variable</a> set.</td></tr>
+    <tr><td><dfn class="term-name" id="term-hash">Hash</dfn></td><td>A deterministic fixed-length value computed by a declared algorithm over exact declared input bytes; its specific role and semantics come from the qualified term. dr-providers builds the <a class="term-ref" href="#term-identity-hash">identity hash</a> specialization for its <a class="term-ref" href="#term-identity-document">identity documents</a>.</td></tr>
+    <tr><td><dfn class="term-name" id="term-identity-payload">Identity Payload</dfn></td><td>Validated finite-JSON domain data deliberately selected to contain exactly the fields that determine an object's identity, and none that are incidental runtime or transport state.</td></tr>
+    <tr><td><dfn class="term-name" id="term-identity-document">Identity Document</dfn></td><td>A complete versioned finite-JSON document that carries its own schema name and version, with exactly the shape <code>{schema, schema_version, payload}</code>; the domain selects the <a class="term-ref" href="#term-identity-payload">identity payload</a> fields inside it, while the serialization layer validates the finite JSON and exact document shape.</td></tr>
+    <tr><td><dfn class="term-name" id="term-canonical-identity-json">Canonical Identity JSON</dfn></td><td>The single deterministic UTF-8 JSON rendering of a validated <a class="term-ref" href="#term-identity-document">identity document</a>, produced without lossy normalization.</td></tr>
+    <tr><td><dfn class="term-name" id="term-identity-hash">Identity Hash</dfn></td><td>The full 64-character lowercase SHA-256 <a class="term-ref" href="#term-hash">hash</a> of the <a class="term-ref" href="#term-canonical-identity-json">canonical identity JSON</a> of an <a class="term-ref" href="#term-identity-document">identity document</a>.</td></tr>
+    <tr><td><dfn class="term-name" id="term-model">Model</dfn></td><td>A requested model name scoped to one <a class="term-ref" href="#term-provider-service">provider service</a>.</td></tr>
+    <tr><td><dfn class="term-name" id="term-transcript">Transcript</dfn></td><td>An ordered sequence of role-and-content messages sent as provider-call input.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-service">Provider Service</dfn></td><td>An external service family that exposes one or more model-serving API protocols. dr-providers targets OpenRouter, OpenAI, Gemini, and Anthropic.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-client">Provider Client</dfn></td><td>An injected executor that translates and performs calls to a <a class="term-ref" href="#term-provider-service">provider service</a>. This package names that protocol <code>Provider</code>; both the HTTP client and the scripted test client implement it.</td></tr>
+    <tr><td><dfn class="term-name" id="term-model-route">Model Route</dfn></td><td>The executable target tuple <code>(provider, protocol, model)</code>, carrying a <a class="term-ref" href="#term-model">model</a> and its HTTP protocol but excluding credentials, accounts, and generation controls.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-quota-identity">Provider Quota Identity</dfn></td><td>A quota identity equal to one <a class="term-ref" href="#term-model-route">model route</a>'s exact <code>(provider, protocol, model)</code> tuple, with no credential, account, or override component, distinguishing quota pools only to route granularity.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-call-definition">Provider Call Definition</dfn></td><td>A versioned variable-bearing <a class="term-ref" href="#term-definition">definition</a> declaring a <a class="term-ref" href="#term-model-route">model route</a>, output-affecting generation controls and provider body extensions, their constraints, and their identity effects. It is the sole owner of one or more <a class="term-ref" href="#term-provider-call-config">provider call configs</a>, each a complete assignment of its <a class="term-ref" href="#term-variable">variables</a>.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-call-config">Provider Call Config</dfn></td><td>A complete validated <a class="term-ref" href="#term-config">config</a> in which every required <a class="term-ref" href="#term-variable">variable</a> of exactly one <a class="term-ref" href="#term-provider-call-definition">provider call definition</a> is set; its typed definition reference and full <a class="term-ref" href="#term-identity-hash">identity hash</a> identify that owner. The fields that determine its identity are the <a class="term-ref" href="#term-model-route">model route</a> plus every output-affecting generation control and provider body extension; transport policy is excluded.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-call-request">Provider Call Request</dfn></td><td>An immutable transport request, itself identified by a full <a class="term-ref" href="#term-identity-hash">identity hash</a>, referencing exactly one <a class="term-ref" href="#term-provider-call-config">provider call config</a> and containing one <a class="term-ref" href="#term-transcript">transcript</a>, without duplicating config assignments or transport policy.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-transport-policy">Provider Transport Policy</dfn></td><td>An operational transport-only policy for credentials, base URL, timeout, native retry count, and other HTTP execution concerns. Its native retry count defaults to zero; it carries no semantic failure classification, attempt bound, backoff, or durability policy, and is excluded from identity.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-transport-response">Provider Transport Response</dfn></td><td>A typed successful transport value containing the raw response body as received, without normalization, plus provider identifiers, usage, cost, warnings, and diagnostics available at the transport boundary. It does not assert semantic acceptance by the caller.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-transport-failure">Provider Transport Failure</dfn></td><td>A typed expected transport failure value retaining the complete raw request and failure-response bytes as received, without normalization, plus transport diagnostics, without the caller's semantic classification or retry decisions.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-transport-outcome">Provider Transport Outcome</dfn></td><td>The closed union of a <a class="term-ref" href="#term-provider-transport-response">provider transport response</a> or a <a class="term-ref" href="#term-provider-transport-failure">provider transport failure</a> that never raises for an expected result. Unexpected programming and infrastructure errors remain exceptions.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-invocation-evidence">Provider Invocation Evidence</dfn></td><td>A stable serializable artifact for one completed transport invocation, binding the exact <a class="term-ref" href="#term-provider-call-request">provider call request</a> and <a class="term-ref" href="#term-provider-transport-policy">provider transport policy</a> identities to its <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a> and the complete raw request and success-or-failure bytes as received, without normalization. Credential material and authorization headers are excluded, and it retains bodies without silent truncation.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="section-head" id="guarantees"><h2>Guarantees</h2></div>
+
+<div class="callout">
+  <strong>Execution and Reporting Without Semantic Judgment.</strong> dr-providers turns a validated <a class="term-ref" href="#term-provider-call-request">provider call request</a> into an executed HTTP call and a typed <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a>, retaining complete raw evidence; it never decides semantic acceptance, retry, or backoff — those belong to the caller.
+</div>
+<ul>
+  <li><span class="must">Splits</span> the <a class="term-ref" href="#term-provider-call-definition">provider call definition</a> from the <a class="term-ref" href="#term-provider-call-config">provider call config</a> it owns — the definition owns the <a class="term-ref" href="#term-variable">variables</a>, the config carries a <span class="key">complete validated assignment</span> of them.</li>
+  <li><span class="must">Identifies</span> each <a class="term-ref" href="#term-provider-call-config">provider call config</a> by a <span class="key">full 64-character</span> <a class="term-ref" href="#term-identity-hash">identity hash</a> over its <a class="term-ref" href="#term-canonical-identity-json">canonical identity JSON</a> — never a truncated value on the identity path.</li>
+  <li><span class="must">References</span> rather than duplicates: a <a class="term-ref" href="#term-provider-call-request">provider call request</a> stores its config's <a class="term-ref" href="#term-identity-hash">identity hash</a> and one <a class="term-ref" href="#term-transcript">transcript</a>, never a copy of the config's controls.</li>
+  <li><span class="must">Excludes</span> the <a class="term-ref" href="#term-provider-transport-policy">provider transport policy</a> from identity, and <span class="key">defaults its native retry count to zero</span>.</li>
+  <li><span class="must">Returns</span> a <span class="key">closed</span> <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a> for every expected result; only unexpected programming and infrastructure errors raise.</li>
+  <li><span class="must">Retains</span> complete raw request, response, and failure bodies as received in <a class="term-ref" href="#term-provider-invocation-evidence">provider invocation evidence</a> <span class="key">without silent truncation</span>.</li>
+  <li><span class="must">Redacts</span> credential material and authorization headers from all retained evidence.</li>
+  <li><span class="must">Derives</span> a <a class="term-ref" href="#term-provider-quota-identity">provider quota identity</a> as exactly the <code>(provider, protocol, model)</code> tuple — no credential, account, or override component.</li>
+  <li><span class="must">Leaves</span> semantic acceptance, failure taxonomy, retry, backoff, checkpointing, result storage, and concurrency to the caller.</li>
+</ul>
+
+<div class="section-head" id="scope"><h2>In vs. Out of Scope</h2></div>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>In scope</th><th>Out of scope</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>
+        <ul>
+          <li><a class="term-ref" href="#term-provider-call-definition">Provider call definition</a> and <a class="term-ref" href="#term-provider-call-config">config</a> identity</li>
+          <li><a class="term-ref" href="#term-provider-call-request">Provider call request</a> assembly and HTTP request body building</li>
+          <li>Executing the HTTP call across OpenRouter, OpenAI, Gemini, and Anthropic</li>
+          <li>The closed <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a> that never raises for an expected result</li>
+          <li><a class="term-ref" href="#term-provider-invocation-evidence">Provider invocation evidence</a> with redaction and no silent truncation</li>
+          <li><a class="term-ref" href="#term-provider-quota-identity">Provider quota identity</a> at route granularity</li>
+          <li>Transport-level failure labeling and credential redaction</li>
+          <li>Post-response conformance warnings</li>
+          <li>A network-free scripted client and an optional local serving interface</li>
+        </ul>
+      </td>
+      <td>
+        <ul>
+          <li>Semantic acceptance of a generation</li>
+          <li>Semantic failure taxonomy and classification</li>
+          <li>Semantic retry and backoff</li>
+          <li>Durable checkpointing</li>
+          <li>Result storage</li>
+          <li>Concurrency control</li>
+          <li>Credentials, accounts, and quota labels beyond the <a class="term-ref" href="#term-provider-quota-identity">provider quota identity</a> tuple</li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="section-head" id="exported-names"><h2>Exported Names</h2></div>
+
+<p class="aside">Each row maps a term, or a group of supporting exports, to names in <a href="https://github.com/danielle-rothermel/dr-providers/blob/main/src/dr_providers/__init__.py"><code>dr_providers.__all__</code></a>. Every exported name appears exactly once in the names column; there are no aliases or alternate spellings. The terms <a class="term-ref" href="#term-definition">definition</a>, <a class="term-ref" href="#term-variable">variable</a>, <a class="term-ref" href="#term-config">config</a>, <a class="term-ref" href="#term-hash">hash</a>, <a class="term-ref" href="#term-identity-payload">identity payload</a>, <a class="term-ref" href="#term-identity-document">identity document</a>, <a class="term-ref" href="#term-canonical-identity-json">canonical identity JSON</a>, <a class="term-ref" href="#term-identity-hash">identity hash</a>, and <a class="term-ref" href="#term-provider-service">provider service</a> name concepts rather than exports, so they have no row.</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Term</th><th>Exported names</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><a class="term-ref" href="#term-model">Model</a></td>
+      <td><code>ModelRoute</code>, <code>ProviderKind</code>, <code>Protocol</code>, <code>ProviderBaseUrl</code>, <code>ApiKeyEnv</code></td>
+      <td>Listed under <a class="term-ref" href="#term-model-route">model route</a> below, which carries the model; the HTTP <code>Protocol</code> and <code>ProviderKind</code> are its other two components, and <code>ProviderBaseUrl</code> / <code>ApiKeyEnv</code> are the preset per-provider base URLs and key-environment names.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-transcript">Transcript</a></td>
+      <td><code>Transcript</code>, <code>PromptMessage</code>, <code>MessageRole</code></td>
+      <td>An ordered tuple of <code>PromptMessage</code>, each a <code>MessageRole</code> and its content.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-client">Provider Client</a></td>
+      <td><code>Provider</code>, <code>HttpProvider</code>, <code>ScriptedProvider</code>, <code>ScriptedOutcome</code></td>
+      <td>The protocol is named <code>Provider</code>; <code>HttpProvider</code> performs real calls (imported lazily so pure modules never pull in httpx), and <code>ScriptedProvider</code> replays a sequence of <code>ScriptedOutcome</code> with no network.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-model-route">Model Route</a></td>
+      <td>See the model row.</td>
+      <td>The <code>ModelRoute</code> and its component enums are listed with <a class="term-ref" href="#term-model">model</a> above.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-quota-identity">Provider Quota Identity</a></td>
+      <td><code>ProviderQuotaIdentity</code></td>
+      <td>Its <code>label</code> method returns a stable collision-free label string.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-call-definition">Provider Call Definition</a></td>
+      <td><code>ProviderCallDefinition</code>, <code>PROVIDER_CALL_DEFINITION_SCHEMA</code>, <code>PROVIDER_CALL_DEFINITION_SCHEMA_VERSION</code>, <code>RequestControl</code>, <code>TokenLimitParameter</code>, <code>ReasoningEffort</code>, <code>ReasoningRequestShape</code>, <code>GenerationControls</code>, <code>ControlConstraints</code>, <code>ProviderBodyExtensions</code></td>
+      <td>The definition declares the output-affecting controls (<code>RequestControl</code>, with <code>GenerationControls</code> values), their HTTP mapping (<code>TokenLimitParameter</code>, <code>ReasoningEffort</code>, <code>ReasoningRequestShape</code>), their <code>ControlConstraints</code>, and raw <code>ProviderBodyExtensions</code>; the schema constants name its <a class="term-ref" href="#term-identity-document">identity document</a>.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-call-config">Provider Call Config</a></td>
+      <td><code>ProviderCallConfig</code>, <code>PROVIDER_CALL_CONFIG_SCHEMA</code>, <code>PROVIDER_CALL_CONFIG_SCHEMA_VERSION</code>, <code>openrouter_chat_config</code>, <code>openai_chat_config</code>, <code>openai_responses_config</code>, <code>gemini_chat_config</code>, <code>anthropic_messages_config</code>, <code>DEFAULT_BASE_URLS</code>, <code>DEFAULT_API_KEY_ENVS</code></td>
+      <td>Each per-protocol builder returns a <code>ProviderCallConfig</code> for one <a class="term-ref" href="#term-provider-call-definition">provider call definition</a>, carrying the full <a class="term-ref" href="#term-identity-hash">identity hash</a>. <code>DEFAULT_BASE_URLS</code> and <code>DEFAULT_API_KEY_ENVS</code> are the presets those builders read.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-call-request">Provider Call Request</a></td>
+      <td><code>ProviderCallRequest</code>, <code>build_payload</code>, <code>protocol_path</code></td>
+      <td>The request references exactly one <a class="term-ref" href="#term-provider-call-config">provider call config</a> (by its <a class="term-ref" href="#term-identity-hash">identity hash</a> on the identity path) and one <a class="term-ref" href="#term-transcript">transcript</a>; <code>build_payload</code> renders the HTTP request body and <code>protocol_path</code> the endpoint path for its config's protocol.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-transport-policy">Provider Transport Policy</a></td>
+      <td><code>ProviderTransportPolicy</code>, <code>policy_for</code>, <code>DEFAULT_TIMEOUT_SECONDS</code>, <code>DEFAULT_IDLE_TIMEOUT_SECONDS</code></td>
+      <td><code>policy_for</code> builds a policy for a given provider; the two timeout defaults are the wall-clock cap and the idle-progress timeout.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-transport-response">Provider Transport Response</a></td>
+      <td><code>ProviderTransportResponse</code>, <code>TokenUsage</code>, <code>CostInfo</code>, <code>ResponsesDiagnostics</code>, <code>parse_response</code>, <code>parse_chat_completions_body</code>, <code>parse_responses_body</code>, <code>parse_anthropic_messages_body</code>, <code>token_usage_from_body</code>, <code>cost_from_body</code></td>
+      <td>The response carries <code>TokenUsage</code>, <code>CostInfo</code>, and (for the Responses surface) <code>ResponsesDiagnostics</code>. The parse and extraction functions build these from the raw response body as received. <code>ResponsesDiagnostics.response_id_hash</code> is a truncated, unsalted SHA-256 value documented as diagnostic-only, never a domain <a class="term-ref" href="#term-identity-hash">identity hash</a>.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-transport-failure">Provider Transport Failure</a></td>
+      <td><code>ProviderTransportFailure</code>, <code>ProviderFailure</code>, <code>failure_record</code></td>
+      <td><code>ProviderTransportFailure</code> is the typed failure outcome; <code>ProviderFailure</code> is the classification record it holds, built by <code>failure_record</code>. The transport-level failure taxonomy and redaction helpers are in the supporting row below.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-transport-outcome">Provider Transport Outcome</a></td>
+      <td><code>ProviderTransportOutcome</code>, <code>is_response</code>, <code>is_failure</code></td>
+      <td>The union type plus its two predicates, <code>is_response</code> and <code>is_failure</code>, that report which member an outcome holds.</td>
+    </tr>
+    <tr>
+      <td><a class="term-ref" href="#term-provider-invocation-evidence">Provider Invocation Evidence</a></td>
+      <td><code>ProviderInvocationEvidence</code>, <code>RawHttpRequest</code>, <code>PROVIDER_INVOCATION_EVIDENCE_SCHEMA</code>, <code>PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION</code></td>
+      <td><code>RawHttpRequest</code> is the retained request record with authorization headers redacted; the schema constants name its <a class="term-ref" href="#term-identity-document">identity document</a>.</td>
+    </tr>
+    <tr>
+      <td>Transport failure taxonomy</td>
+      <td><code>FailureClass</code>, <code>RETRYABLE_FAILURE_CLASSES</code>, <code>RECOVERABLE_FAILURE_CLASSES</code>, <code>classify_status_code</code>, <code>FAILURE_ERROR_TYPES</code>, <code>raise_failure</code></td>
+      <td>Transport-level labeling only: <code>classify_status_code</code> maps an HTTP status to a <code>FailureClass</code>, and the frozensets flag which classes carry a retry hint. Semantic failure classification and retry eligibility belong to the caller.</td>
+    </tr>
+    <tr>
+      <td>Error types</td>
+      <td><code>ProviderFailureError</code>, <code>PermanentProviderError</code>, <code>TransientProviderError</code>, <code>RateLimitedProviderError</code>, <code>ResourceExhaustionProviderError</code>, <code>UnknownProviderError</code>, <code>UnsupportedControlError</code></td>
+      <td>Raised carriers for unexpected errors, rooted at <code>ProviderFailureError</code> (which wraps a <code>ProviderFailure</code> record). <code>UnsupportedControlError</code> fires when a <a class="term-ref" href="#term-provider-call-config">provider call config</a> assigns a control the route cannot transport.</td>
+    </tr>
+    <tr>
+      <td>Credential redaction</td>
+      <td><code>sanitize_headers</code>, <code>sanitize_kwargs</code>, <code>SANITIZE_KEYS</code></td>
+      <td>Strip authorization headers and credential-like keys before persistence; <code>SANITIZE_KEYS</code> is the redacted key set.</td>
+    </tr>
+    <tr>
+      <td>Conformance warnings</td>
+      <td><code>conformance_warnings</code>, <code>with_conformance_warnings</code>, <code>LlmWarning</code>, <code>WarningSeverity</code></td>
+      <td>Post-response checks over observed evidence; each violation is an <code>LlmWarning</code> at a <code>WarningSeverity</code>, and the caller decides fatality.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="colophon">
+  <p><strong>Scope.</strong> This sheet is the authoritative statement of the provider-call transport contract dr-providers implements. Exported names match <code>src/dr_providers/__init__.py</code>.</p>
+</div>
+
+</main>
+</body>
+</html>
