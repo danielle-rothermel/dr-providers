@@ -1,17 +1,26 @@
 # dr-providers
 
-Typed LLM provider-call kernel for OpenRouter, OpenAI, and Gemini: one
-request, response, and failure vocabulary across providers. Requires
+Typed LLM provider-call kernel for OpenRouter, OpenAI, Gemini, and
+Anthropic: one Provider Call Config, Request, Transport Policy, and
+no-throw Transport Outcome vocabulary across providers. Requires
 Python 3.12+.
 
 ## Ecosystem
 
 dr-providers is the typed LLM-provider HTTP transport kernel, with an
-optional `[serve]` FastAPI facade for localhost HTTP callers. Its neighboring
-repos are dr-serialize, dr-graph, dr-platform, dr-code, whetstone-ai, and
-unitbench. Package metadata shows no dependency on those neighbors; in-repo
-notes identify whetstone-ai/dr-platform, dr-graph's graph runner, and
-unitbench playgrounds as consumers.
+optional `[serve]` FastAPI facade for localhost HTTP callers. It builds
+Provider Call Definition, Config, and Request Identity Documents — each
+carrying its own full 64-char SHA-256 Identity Hash — through
+`dr-serialize`. Its neighboring repos are dr-serialize, dr-graph,
+dr-platform, dr-code, whetstone-ai, and unitbench. Whetstone-ai /
+dr-platform, dr-graph's graph runner, and unitbench playgrounds are
+consumers.
+
+The [vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
+(source: `.defs/vocab.html`) is the authoritative statement of the
+provider-call transport contract this repo implements: the terms, the
+guarantees, what is in and out of scope, and the mapping from each term
+to the exported names.
 
 ## Install
 
@@ -33,60 +42,110 @@ Set the API key env var for whichever provider(s) you call:
 export OPENROUTER_API_KEY="sk-or-..."
 export OPENAI_API_KEY="sk-..."
 export GEMINI_API_KEY="..."
+export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 ## Quickstart
 
 ```python
 from dr_providers import (
+    ApiKeyEnv,
+    GenerationControls,
     HttpProvider,
-    LlmRequest,
     MessageRole,
+    ProviderBaseUrl,
+    ProviderCallRequest,
+    ProviderTransportPolicy,
+    ProviderTransportResponse,
     PromptMessage,
     ReasoningEffort,
+    Transcript,
     openrouter_chat_config,
 )
 
-request = LlmRequest(
-    provider_config=openrouter_chat_config(model="openai/gpt-4o-mini"),
-    messages=(
-        PromptMessage(role=MessageRole.USER, content="Say hello in one word."),
-    ),
-    reasoning=ReasoningEffort.LOW,
+# A Provider Call Config is a complete validated assignment of one
+# Provider Call Definition; it carries a full SHA-256 Identity Hash.
+config = openrouter_chat_config(
+    model="openai/gpt-4o-mini",
+    controls=GenerationControls(reasoning=ReasoningEffort.LOW),
 )
 
-with HttpProvider() as provider:
-    response = provider.complete(request)
-    print(response.text)
+# A Provider Call Request is one Config reference + one Transcript.
+request = ProviderCallRequest(
+    config=config,
+    transcript=Transcript(
+        messages=(
+            PromptMessage(
+                role=MessageRole.USER, content="Say hello in one word."
+            ),
+        )
+    ),
+)
+
+# Transport policy (credentials, base URL, timeout, native retry) is
+# separate and excluded from identity. Native retry defaults to zero.
+policy = ProviderTransportPolicy(
+    api_key_env=str(ApiKeyEnv.OPENROUTER),
+    base_url=str(ProviderBaseUrl.OPENROUTER),
+)
+
+with HttpProvider(policy=policy) as provider:
+    outcome = provider.complete(request)  # no-throw typed outcome
+    if isinstance(outcome, ProviderTransportResponse):
+        print(outcome.text)
 ```
 
-`HttpProvider` is a context manager: it owns and closes its httpx
-client on exit unless you inject your own (which is left open for you
-to manage).
+`complete` returns a closed no-throw Provider Transport Outcome
+(`ProviderTransportResponse | ProviderTransportFailure`); expected
+outcomes never raise. `invoke` instead returns a stable
+`ProviderInvocationEvidence` artifact binding the request + policy
+identities to the outcome and the complete least-processed raw request
+and success/failure bodies (authorization headers and credentials are
+never persisted).
+
+`HttpProvider` is a context manager. In the default (owned) mode each
+wire call runs on its own short-lived `httpx.Client` and daemon thread
+under a per-invocation wall-clock deadline, so one call's deadline breach
+tears down only that call's connection pool and never disturbs another.
+If you inject your own client it is shared and left open for you to
+manage; the transport cannot forcibly cancel a wedged call on a
+caller-owned sync client (see the `HttpProvider` docstring).
 
 ## Provider matrix
 
-Presets in `dr_providers.config` fill in each provider's base URL, API
-key env var, endpoint, and reasoning wire shape:
+Presets in `dr_providers.config` build a Provider Call Definition and
+materialize its Config, fixing each provider's Model Route
+`(provider, protocol, model)`, the token-limit parameter, and the
+reasoning wire shape. Base URL and API key env var live on the separate
+`ProviderTransportPolicy`; `policy_for(kind, ...)` derives them from the
+`DEFAULT_BASE_URLS` / `DEFAULT_API_KEY_ENVS` per-provider maps (both in
+`dr_providers.policy`), each overridable:
 
-| Preset                     | Provider kind | Endpoint          | Reasoning wire shape                       |
-| --------------------------- | -------------- | ----------------- | ------------------------------------------- |
-| `openrouter_chat_config`    | `openrouter`   | chat completions  | `reasoning: {"effort": ...}` object         |
-| `openai_chat_config`        | `openai`       | chat completions  | `reasoning_effort: ...` field               |
-| `openai_responses_config`   | `openai`       | responses         | `reasoning: {"effort": ...}` object         |
-| `gemini_chat_config`        | `gemini`       | chat completions  | `reasoning_effort: ...` field (OpenAI-compat endpoint) |
+| Preset                       | Provider    | Protocol            | Reasoning wire shape                        |
+| ---------------------------- | ----------- | ------------------- | ------------------------------------------- |
+| `openrouter_chat_config`     | `openrouter`| `chat_completions`  | `reasoning: {"effort": ...}` object         |
+| `openai_chat_config`         | `openai`    | `chat_completions`  | `reasoning_effort: ...` field               |
+| `openai_responses_config`    | `openai`    | `responses`         | `reasoning: {"effort": ...}` object         |
+| `gemini_chat_config`         | `gemini`    | `chat_completions`  | `reasoning_effort: ...` field (OpenAI-compat endpoint) |
+| `anthropic_messages_config`  | `anthropic` | `anthropic_messages`| `output_config: {"effort": ...}` object     |
+
+Both the OpenAI-compatible / OpenRouter `chat_completions` path and the
+Anthropic `anthropic_messages` path are first-class, each usable with a
+custom base URL via the transport policy.
 
 `ReasoningEffort` is a shared enum (`NONE`, `MINIMAL`, `LOW`, `MEDIUM`,
-`HIGH`, `XHIGH`); each config's `reasoning_shape` determines how
-`build_payload()` serializes it on the wire. For the full story — how
-each provider actually accepts reasoning/effort/thinking, Gemini's
-generation-dependent thinking configs, and links to the provider docs —
-see [docs/reasoning-controls.md](docs/reasoning-controls.md).
+`HIGH`, `XHIGH`); each Definition's `reasoning_shape` constraint
+determines how `build_payload()` serializes it on the wire. Anthropic
+Messages accepts only `low`/`medium`/`high`, so `NONE`, `MINIMAL`, and
+`XHIGH` are rejected with a `ControlValidationError` rather than silently
+coerced. Anthropic also requires `max_tokens`, so `anthropic_messages_config`
+marks `TOKEN_LIMIT` a required control (the CLI and serve facade default it
+to 4096 when unset).
 
-OpenAI Responses bodies are normalized from wire `output[]` parts into text,
-typed no-text failures, and content-free diagnostics. See
-[docs/responses-normalization.md](docs/responses-normalization.md) for the
-failure codes, privacy boundary, and schema evidence.
+OpenAI Responses bodies are normalized from wire `output[]` parts into
+text, typed no-text failures, and content-free diagnostics
+(`ResponsesDiagnostics`). See the [vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
+for the authoritative per-name mapping of the parse/diagnostic surface.
 
 ## Testing with ScriptedProvider
 
@@ -94,11 +153,11 @@ failure codes, privacy boundary, and schema evidence.
 `HttpProvider` but scripts outcomes with no network:
 
 ```python
-from dr_providers import ScriptedOutcome, ScriptedProvider, LlmRequest
+from dr_providers import ScriptedOutcome, ScriptedProvider
 
 provider = ScriptedProvider([ScriptedOutcome(text="scripted reply")])
-response = provider.complete(request)
-assert response.text == "scripted reply"
+outcome = provider.complete(request)
+assert outcome.text == "scripted reply"
 ```
 
 ## Public API
@@ -106,12 +165,35 @@ assert response.text == "scripted reply"
 Import stable symbols from the top-level package:
 
 ```python
-from dr_providers import LlmRequest, HttpProvider, ReasoningEffort
+from dr_providers import (
+    ProviderCallConfig,
+    ProviderCallRequest,
+    ProviderTransportPolicy,
+    HttpProvider,
+    ReasoningEffort,
+)
 ```
 
-See `dr_providers.__all__` for the full list. `HttpProvider` and
-`TransportPolicy` load lazily so importing pure modules (config,
-failures, request, response) never pulls in httpx.
+`dr_providers.__all__` is the authoritative export list; the
+[vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
+maps every one of those names to the contract term it implements, so
+this README does not repeat the per-name detail. `HttpProvider` loads
+lazily so importing the pure modules (route, controls, config, request,
+response, outcome, policy, evidence) never pulls in httpx.
+
+## CLI
+
+The `[cli]` extra installs a typer CLI, exposed as the `dr-providers`
+console script, for one-shot provider calls:
+
+```bash
+pip install 'dr-providers[cli]'
+dr-providers --provider openrouter --model openai/gpt-4o-mini -m "Say hello."
+```
+
+The console script is always installed, but the CLI itself requires the
+`[cli]` extra; running it without that extra prints an install hint and
+exits nonzero.
 
 ## Serve facade
 
@@ -121,6 +203,11 @@ over HTTP for non-Python callers:
 ```bash
 uv run python -m dr_providers.serve serve
 ```
+
+Release notes live in the
+[changelog](https://github.com/danielle-rothermel/dr-providers/blob/main/CHANGELOG.md);
+note that 0.2.0 is a complete rewrite with no API compatibility with the
+0.1.x query client.
 
 ## Development
 
@@ -134,18 +221,19 @@ uv run pre-commit run --all-files
 
 The default `uv run pytest` run is fully offline (`addopts = "-m 'not
 live'"`). A `live`-marked matrix in `tests/live/test_live_matrix.py`
-exercises the four presets against real provider endpoints:
+exercises the five presets against real provider endpoints:
 
 ```bash
 uv run pytest -m live
 ```
 
 Each case skips (not fails) when its API key env var
-(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) is unset,
-so this is safe to run without every provider configured. Successful
-calls overwrite `data/wire-corpus/<provider_kind>_<endpoint_kind>.json`
-with the raw response body; `tests/test_wire_corpus.py` re-parses
-those bodies offline on every normal run.
+(`OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
+`ANTHROPIC_API_KEY`) is unset, so this is safe to run without every
+provider configured. Successful calls overwrite
+`data/wire-corpus/<provider>_<protocol>.json` with the raw response
+body; `tests/test_wire_corpus.py` re-parses those bodies offline on
+every normal run.
 
 ### Audit corpus ground truth
 

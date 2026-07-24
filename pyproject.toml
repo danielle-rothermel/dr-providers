@@ -1,13 +1,24 @@
 [project]
 name = "dr-providers"
 version = "0.2.0"
-description = "Typed LLM provider-call kernel for OpenRouter, OpenAI, and Gemini: one request, response, and failure vocabulary across providers."
+description = "Typed LLM provider-call kernel for OpenAI, Anthropic, OpenRouter, and Gemini: identity-hashed configs, one request/response/failure vocabulary, no-throw transport."
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Danielle Rothermel", email = "danielle.rothermel@gmail.com" }
 ]
 requires-python = ">=3.12"
+keywords = [
+    "llm",
+    "openai",
+    "anthropic",
+    "openrouter",
+    "gemini",
+    "provider",
+    "transport",
+    "pydantic",
+    "typed",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -18,6 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "dr-serialize>=0.1.0,<0.2",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
 ]
@@ -30,9 +42,14 @@ serve = [
     "uvicorn>=0.35",
 ]
 
+[project.scripts]
+dr-providers = "dr_providers._entry:main"
+
 [project.urls]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
 Issues = "https://github.com/danielle-rothermel/dr-providers/issues"
+Documentation = "https://danielle-rothermel.github.io/dr-providers/"
+Changelog = "https://github.com/danielle-rothermel/dr-providers/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

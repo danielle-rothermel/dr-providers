@@ -1,20 +1,21 @@
 """Post-response conformance: check observed evidence, never predict.
 
 Violations are warnings with severity; the caller decides what is
-fatal. Library default severity is WARNING for every check (recorded
-conservative choice — see the open-questions section of whetstone's
-``llm_provider.md``).
+fatal. Library default severity is WARNING for every check.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dr_providers.config import ReasoningEffort
-from dr_providers.response import LlmResponse, LlmWarning
+from dr_providers.controls import ReasoningEffort
+from dr_providers.outcome import (
+    ProviderTransportResponse,
+    ProviderTransportWarning,
+)
 
 if TYPE_CHECKING:
-    from dr_providers.request import LlmRequest
+    from dr_providers.request import ProviderCallRequest
 
 REASONING_NOT_OBSERVED_CODE = "reasoning_not_observed"
 TOKEN_LIMIT_EXCEEDED_CODE = "token_limit_exceeded"  # noqa: S105
@@ -22,53 +23,56 @@ MODEL_SUBSTITUTION_CODE = "model_substitution"
 
 
 def conformance_warnings(
-    request: LlmRequest,
-    response: LlmResponse,
-) -> tuple[LlmWarning, ...]:
-    warnings: list[LlmWarning] = []
+    request: ProviderCallRequest,
+    response: ProviderTransportResponse,
+) -> tuple[ProviderTransportWarning, ...]:
+    warnings: list[ProviderTransportWarning] = []
     usage = response.usage
+    controls = request.config.controls
 
     reasoning_tokens = usage.reasoning_tokens if usage else None
     reasoning_requested = (
-        request.reasoning is not None
-        and request.reasoning is not ReasoningEffort.NONE
+        controls.reasoning is not None
+        and controls.reasoning is not ReasoningEffort.NONE
     )
     if reasoning_requested and not reasoning_tokens:
+        assert controls.reasoning is not None
         warnings.append(
-            LlmWarning(
+            ProviderTransportWarning(
                 code=REASONING_NOT_OBSERVED_CODE,
                 message=(
                     "reasoning was requested but the response reports "
                     "no reasoning tokens"
                 ),
-                metadata={"requested": request.reasoning.value},
+                metadata={"requested": controls.reasoning.value},
             )
         )
 
     completion_tokens = usage.completion_tokens if usage else None
+    token_limit = controls.token_limit
     if (
-        request.token_limit is not None
+        token_limit is not None
         and completion_tokens is not None
-        and completion_tokens > request.token_limit
+        and completion_tokens > token_limit
     ):
         warnings.append(
-            LlmWarning(
+            ProviderTransportWarning(
                 code=TOKEN_LIMIT_EXCEEDED_CODE,
                 message=(
                     f"response used {completion_tokens} completion tokens "
-                    f"despite a {request.token_limit}-token cap"
+                    f"despite a {token_limit}-token cap"
                 ),
                 metadata={
-                    "token_limit": request.token_limit,
+                    "token_limit": token_limit,
                     "completion_tokens": completion_tokens,
                 },
             )
         )
 
-    requested_model = request.provider_config.model
+    requested_model = request.config.route.model
     if response.model is not None and response.model != requested_model:
         warnings.append(
-            LlmWarning(
+            ProviderTransportWarning(
                 code=MODEL_SUBSTITUTION_CODE,
                 message=(
                     f"requested model {requested_model!r} but response "
@@ -84,9 +88,9 @@ def conformance_warnings(
 
 
 def with_conformance_warnings(
-    request: LlmRequest,
-    response: LlmResponse,
-) -> LlmResponse:
+    request: ProviderCallRequest,
+    response: ProviderTransportResponse,
+) -> ProviderTransportResponse:
     warnings = conformance_warnings(request, response)
     if not warnings:
         return response

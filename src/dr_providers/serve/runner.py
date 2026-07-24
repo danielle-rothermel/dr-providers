@@ -14,7 +14,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Sequence
 
     from dr_providers.provider import Provider
 
@@ -27,41 +27,43 @@ from pydantic import (
     StrictStr,
 )
 
-from dr_providers.config import (
-    MessageRole,
-    PromptMessage,
-    ProviderConfig,
-    ReasoningEffort,
-    gemini_chat_config,
-    openai_chat_config,
-    openai_responses_config,
-    openrouter_chat_config,
-)
-from dr_providers.failures import (
-    ProviderFailure,
-    ProviderFailureError,
+from dr_providers._factories import FACTORY_BY_KIND, ProviderFactoryKind
+from dr_providers.controls import GenerationControls, ReasoningEffort
+from dr_providers.outcome import (
+    ProviderTransportFailure,
+    ProviderTransportResponse,
 )
 from dr_providers.request import (
-    ENDPOINT_PATHS,
-    LlmRequest,
+    ProviderCallRequest,
     build_payload,
+    protocol_path,
 )
-from dr_providers.response import LlmResponse  # noqa: TC001
+from dr_providers.transcript import MessageRole, PromptMessage, Transcript
 
 
 class ServeProviderKind(StrEnum):
     OPENROUTER = "openrouter"
     OPENAI = "openai"
+    # Serve API spelling is snake_case; the CLI uses "openai-responses".
+    # Both map to the same shared factory registry (see _factories.py).
     OPENAI_RESPONSES = "openai_responses"
     GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
 
 
-CONFIG_FACTORIES: dict[ServeProviderKind, Callable[..., ProviderConfig]] = {
-    ServeProviderKind.OPENROUTER: openrouter_chat_config,
-    ServeProviderKind.OPENAI: openai_chat_config,
-    ServeProviderKind.OPENAI_RESPONSES: openai_responses_config,
-    ServeProviderKind.GEMINI: gemini_chat_config,
+# The serve kind → the canonical shared factory kind. The serve spelling of
+# the OpenAI Responses member already matches the canonical snake_case value.
+_KIND_TO_FACTORY_KIND: dict[ServeProviderKind, ProviderFactoryKind] = {
+    ServeProviderKind.OPENROUTER: ProviderFactoryKind.OPENROUTER,
+    ServeProviderKind.OPENAI: ProviderFactoryKind.OPENAI,
+    ServeProviderKind.OPENAI_RESPONSES: ProviderFactoryKind.OPENAI_RESPONSES,
+    ServeProviderKind.GEMINI: ProviderFactoryKind.GEMINI,
+    ServeProviderKind.ANTHROPIC: ProviderFactoryKind.ANTHROPIC,
 }
+
+# The anthropic preset requires a token limit; serve supplies this default when
+# a spec targeting anthropic omits one (see ``build_request``).
+DEFAULT_ANTHROPIC_TOKEN_LIMIT = 4096
 
 
 class QuerySpec(BaseModel):
@@ -86,8 +88,8 @@ class QueryResult(BaseModel):
 
     endpoint_path: StrictStr
     payload: dict[str, Any]
-    response: LlmResponse | None = None
-    failure: ProviderFailure | None = None
+    response: ProviderTransportResponse | None = None
+    failure: ProviderTransportFailure | None = None
 
     @property
     def ok(self) -> bool:
@@ -134,35 +136,50 @@ class VarianceReport(BaseModel):
     records: tuple[VarianceRecord, ...]
 
 
-def build_request(spec: QuerySpec) -> LlmRequest:
-    config = CONFIG_FACTORIES[spec.provider_kind](model=spec.model)
-    return LlmRequest(
-        provider_config=config,
-        messages=spec.messages,
-        temperature=spec.temperature,
-        top_p=spec.top_p,
-        token_limit=spec.token_limit,
-        reasoning=spec.reasoning,
-        extra_body=spec.extra_body,
+def build_request(spec: QuerySpec) -> ProviderCallRequest:
+    from dr_providers.controls import ProviderBodyExtensions  # noqa: PLC0415
+
+    # Anthropic's Messages preset REQUIRES a token limit; supply a sensible
+    # default when serving an anthropic spec that omits one so the call is
+    # well-formed rather than raising ControlValidationError.
+    token_limit = spec.token_limit
+    if (
+        token_limit is None
+        and spec.provider_kind is ServeProviderKind.ANTHROPIC
+    ):
+        token_limit = DEFAULT_ANTHROPIC_TOKEN_LIMIT
+    factory = FACTORY_BY_KIND[_KIND_TO_FACTORY_KIND[spec.provider_kind]]
+    config = factory(
+        model=spec.model,
+        controls=GenerationControls(
+            temperature=spec.temperature,
+            top_p=spec.top_p,
+            token_limit=token_limit,
+            reasoning=spec.reasoning,
+        ),
+        extensions=ProviderBodyExtensions(extra_body=dict(spec.extra_body)),
+    )
+    return ProviderCallRequest(
+        config=config,
+        transcript=Transcript(messages=spec.messages),
     )
 
 
 def run_query(spec: QuerySpec, provider: Provider) -> QueryResult:
     request = build_request(spec)
     payload = build_payload(request)
-    endpoint_path = ENDPOINT_PATHS[request.provider_config.endpoint_kind]
-    try:
-        response = provider.complete(request)
-    except ProviderFailureError as error:
+    endpoint_path = protocol_path(request.config)
+    outcome = provider.complete(request)
+    if isinstance(outcome, ProviderTransportResponse):
         return QueryResult(
             endpoint_path=endpoint_path,
             payload=payload,
-            failure=error.failure,
+            response=outcome,
         )
     return QueryResult(
         endpoint_path=endpoint_path,
         payload=payload,
-        response=response,
+        failure=outcome,
     )
 
 

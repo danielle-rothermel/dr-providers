@@ -1,4 +1,9 @@
-"""Contract tests for the v0.2 kernel (config, payload, parse, failures)."""
+"""Contract tests for the kernel: config, payload, parse, failures.
+
+Covers Provider Call Config presets, ``build_payload`` for every
+protocol, the least-processed parsers (no-throw, content-free), the
+failure taxonomy, and ScriptedProvider.
+"""
 
 from __future__ import annotations
 
@@ -8,22 +13,30 @@ from hashlib import sha256
 import pytest
 
 from dr_providers import (
-    EndpointKind,
+    ControlConstraints,
+    ControlValidationError,
     FailureClass,
-    LlmRequest,
+    GenerationControls,
     MessageRole,
-    PermanentProviderError,
     PromptMessage,
+    Protocol,
+    ProviderBodyExtensions,
+    ProviderCallConfig,
+    ProviderCallDefinition,
+    ProviderCallRequest,
     ProviderKind,
-    RateLimitedProviderError,
+    ProviderTransportFailure,
+    ProviderTransportResponse,
     ReasoningEffort,
     RequestControl,
     ScriptedOutcome,
     ScriptedProvider,
-    UnsupportedControlError,
+    TokenLimitParameter,
+    TokenUsage,
+    Transcript,
+    anthropic_messages_config,
     build_payload,
     classify_status_code,
-    endpoint_path,
     failure_record,
     gemini_chat_config,
     openai_chat_config,
@@ -32,9 +45,11 @@ from dr_providers import (
     parse_chat_completions_body,
     parse_response,
     parse_responses_body,
+    protocol_path,
     sanitize_kwargs,
     token_usage_from_body,
 )
+from dr_providers.route import ModelRoute
 
 MESSAGES = (
     PromptMessage(role=MessageRole.SYSTEM, content="be brief"),
@@ -42,44 +57,62 @@ MESSAGES = (
 )
 
 
+def request_for(config, messages=MESSAGES) -> ProviderCallRequest:
+    return ProviderCallRequest(
+        config=config, transcript=Transcript(messages=messages)
+    )
+
+
 class TestConfigPresets:
     def test_openrouter_chat(self) -> None:
         config = openrouter_chat_config(model="m")
-        assert config.provider_kind is ProviderKind.OPENROUTER
-        assert config.endpoint_kind is EndpointKind.CHAT_COMPLETIONS
-        assert config.api_key_env == "OPENROUTER_API_KEY"
-        assert config.throttle_identity == "openrouter:chat_completions:m"
+        assert config.route.provider is ProviderKind.OPENROUTER
+        assert config.route.protocol is Protocol.CHAT_COMPLETIONS
+        param = config.definition.constraints.token_limit_parameter
+        assert param is TokenLimitParameter.MAX_COMPLETION_TOKENS
+        assert config.quota_identity.model_dump() == {
+            "provider": "openrouter",
+            "protocol": "chat_completions",
+            "model": "m",
+        }
 
     def test_openai_responses(self) -> None:
         config = openai_responses_config(model="m")
-        assert config.endpoint_kind is EndpointKind.RESPONSES
-        assert config.token_limit_parameter.value == "max_output_tokens"
+        assert config.route.protocol is Protocol.RESPONSES
+        param = config.definition.constraints.token_limit_parameter
+        assert param.value == "max_output_tokens"
 
     def test_gemini_compat_preset(self) -> None:
         config = gemini_chat_config(model="gemini-2.5-flash")
-        assert config.provider_kind is ProviderKind.GEMINI
-        assert config.api_key_env == "GEMINI_API_KEY"
-        assert config.base_url is not None
-        assert "generativelanguage.googleapis.com" in config.base_url
-        assert config.endpoint_kind is EndpointKind.CHAT_COMPLETIONS
+        assert config.route.provider is ProviderKind.GEMINI
+        assert config.route.protocol is Protocol.CHAT_COMPLETIONS
 
-    def test_explicit_throttle_key_wins(self) -> None:
-        config = openai_chat_config(model="m").model_copy(
-            update={"throttle_key": "custom"}
+    def test_anthropic_messages_preset(self) -> None:
+        config = anthropic_messages_config(
+            model="claude", controls=GenerationControls(token_limit=64)
         )
-        assert config.throttle_identity == "custom"
+        assert config.route.provider is ProviderKind.ANTHROPIC
+        assert config.route.protocol is Protocol.ANTHROPIC_MESSAGES
+        param = config.definition.constraints.token_limit_parameter
+        assert param is TokenLimitParameter.MAX_TOKENS
+
+    def test_anthropic_messages_requires_token_limit(self) -> None:
+        # Anthropic requires max_tokens, so TOKEN_LIMIT is a required
+        # control: materializing without one is rejected.
+        with pytest.raises(ControlValidationError) as exc_info:
+            anthropic_messages_config(model="claude")
+        assert exc_info.value.failure.code == "missing_required_control"
 
 
 class TestBuildPayload:
     def test_chat_payload_shape(self) -> None:
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-            temperature=0.2,
-            token_limit=64,
+        request = request_for(
+            openai_chat_config(
+                model="m",
+                controls=GenerationControls(temperature=0.2, token_limit=64),
+            )
         )
-        payload = build_payload(request)
-        assert payload == {
+        assert build_payload(request) == {
             "model": "m",
             "messages": [
                 {"role": "system", "content": "be brief"},
@@ -90,10 +123,10 @@ class TestBuildPayload:
         }
 
     def test_responses_payload_lifts_system_to_instructions(self) -> None:
-        request = LlmRequest(
-            provider_config=openai_responses_config(model="m"),
-            messages=MESSAGES,
-            token_limit=64,
+        request = request_for(
+            openai_responses_config(
+                model="m", controls=GenerationControls(token_limit=64)
+            )
         )
         payload = build_payload(request)
         assert payload["instructions"] == "be brief"
@@ -101,127 +134,254 @@ class TestBuildPayload:
         assert payload["max_output_tokens"] == 64
         assert "messages" not in payload
 
+    def test_anthropic_payload_lifts_system_and_sets_max_tokens(self) -> None:
+        request = request_for(
+            anthropic_messages_config(
+                model="claude", controls=GenerationControls(token_limit=64)
+            )
+        )
+        payload = build_payload(request)
+        assert payload["system"] == "be brief"
+        assert payload["messages"] == [
+            {"role": "user", "content": "write add"}
+        ]
+        assert payload["max_tokens"] == 64
+        assert "input" not in payload
+
     def test_reasoning_object_for_openai_responses(self) -> None:
-        request = LlmRequest(
-            provider_config=openai_responses_config(model="m"),
-            messages=MESSAGES,
-            reasoning=ReasoningEffort.LOW,
+        request = request_for(
+            openai_responses_config(
+                model="m",
+                controls=GenerationControls(reasoning=ReasoningEffort.LOW),
+            )
         )
         payload = build_payload(request)
         assert payload["reasoning"] == {"effort": "low"}
         assert "reasoning_effort" not in payload
 
     def test_reasoning_object_for_openrouter(self) -> None:
-        request = LlmRequest(
-            provider_config=openrouter_chat_config(model="m"),
-            messages=MESSAGES,
-            reasoning=ReasoningEffort.HIGH,
+        request = request_for(
+            openrouter_chat_config(
+                model="m",
+                controls=GenerationControls(reasoning=ReasoningEffort.HIGH),
+            )
         )
         payload = build_payload(request)
         assert payload["reasoning"] == {"effort": "high"}
-        assert "reasoning_effort" not in payload
 
     def test_reasoning_effort_field_for_openai_chat(self) -> None:
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-            reasoning=ReasoningEffort.MEDIUM,
+        request = request_for(
+            openai_chat_config(
+                model="m",
+                controls=GenerationControls(reasoning=ReasoningEffort.MEDIUM),
+            )
         )
         payload = build_payload(request)
         assert payload["reasoning_effort"] == "medium"
         assert "reasoning" not in payload
 
-    def test_reasoning_effort_field_for_gemini(self) -> None:
-        request = LlmRequest(
-            provider_config=gemini_chat_config(model="m"),
-            messages=MESSAGES,
-            reasoning=ReasoningEffort.MINIMAL,
+    def test_reasoning_output_config_for_anthropic(self) -> None:
+        request = request_for(
+            anthropic_messages_config(
+                model="claude",
+                controls=GenerationControls(
+                    token_limit=64, reasoning=ReasoningEffort.MEDIUM
+                ),
+            )
         )
         payload = build_payload(request)
-        assert payload["reasoning_effort"] == "minimal"
+        # Anthropic Messages takes {"output_config": {"effort": ...}}, not a
+        # top-level {"reasoning": ...}.
+        assert payload["output_config"] == {"effort": "medium"}
         assert "reasoning" not in payload
 
+    def test_reasoning_unmappable_for_anthropic_rejected(self) -> None:
+        request = request_for(
+            anthropic_messages_config(
+                model="claude",
+                controls=GenerationControls(
+                    token_limit=64, reasoning=ReasoningEffort.XHIGH
+                ),
+            )
+        )
+        # XHIGH has no Anthropic effort equivalent: fail loudly rather than
+        # silently mis-map to a nearby level.
+        with pytest.raises(ControlValidationError) as exc_info:
+            build_payload(request)
+        assert exc_info.value.failure.code == "unmappable_reasoning_effort"
+
+    def test_reasoning_effort_field_for_gemini(self) -> None:
+        request = request_for(
+            gemini_chat_config(
+                model="m",
+                controls=GenerationControls(reasoning=ReasoningEffort.MINIMAL),
+            )
+        )
+        assert build_payload(request)["reasoning_effort"] == "minimal"
+
     def test_top_p_transported(self) -> None:
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-            top_p=0.9,
+        request = request_for(
+            openai_chat_config(
+                model="m", controls=GenerationControls(top_p=0.9)
+            )
         )
         assert build_payload(request)["top_p"] == 0.9
 
-    def test_top_p_unsupported_raises(self) -> None:
-        config = openai_chat_config(model="m").model_copy(
-            update={
-                "supported_controls": frozenset(
-                    {RequestControl.TEMPERATURE, RequestControl.TOKEN_LIMIT}
-                )
-            }
+    def test_extra_body_merged_into_payload(self) -> None:
+        request = request_for(
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(extra_body={"seed": 7}),
+            )
         )
-        request = LlmRequest(
-            provider_config=config,
-            messages=MESSAGES,
-            top_p=0.9,
-        )
-        with pytest.raises(UnsupportedControlError) as exc_info:
-            build_payload(request)
-        assert exc_info.value.failure.metadata["control"] == "top_p"
+        assert build_payload(request)["seed"] == 7
 
-    def test_top_p_unsupported_drop_opt_in(self) -> None:
-        config = openai_chat_config(model="m").model_copy(
-            update={
-                "supported_controls": frozenset(
-                    {RequestControl.TEMPERATURE, RequestControl.TOKEN_LIMIT}
+    def test_nested_extra_body_payload_is_json_serializable(self) -> None:
+        # Frozen extension values must be thawed on the way into the wire
+        # payload, or httpx's json= encoding would reject the request.
+        request = request_for(
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(
+                    extra_body={"provider": {"order": ["a", "b"]}}
                 ),
-                "allow_unsupported_control_drop": True,
-            }
+            )
         )
-        request = LlmRequest(
-            provider_config=config,
-            messages=MESSAGES,
-            top_p=0.9,
-        )
-        assert "top_p" not in build_payload(request)
+        payload = build_payload(request)
+        assert json.loads(json.dumps(payload))["provider"] == {
+            "order": ["a", "b"]
+        }
 
-    def test_unsupported_control_raises_loudly(self) -> None:
-        config = openai_chat_config(model="m").model_copy(
-            update={
-                "supported_controls": frozenset(
-                    {RequestControl.TOKEN_LIMIT, RequestControl.REASONING}
-                )
-            }
+    def test_protocol_paths(self) -> None:
+        assert protocol_path(openai_chat_config(model="m")) == (
+            "/chat/completions"
         )
-        request = LlmRequest(
-            provider_config=config,
-            messages=MESSAGES,
-            temperature=0.5,
+        assert protocol_path(openai_responses_config(model="m")) == (
+            "/responses"
         )
-        with pytest.raises(UnsupportedControlError) as exc_info:
-            build_payload(request)
+        assert protocol_path(
+            anthropic_messages_config(
+                model="m", controls=GenerationControls(token_limit=64)
+            )
+        ) == ("/messages")
+
+
+class TestDefinitionValidation:
+    def _constrained_definition(
+        self,
+        supported: frozenset[RequestControl],
+        *,
+        allow_drop: bool = False,
+        required: frozenset[RequestControl] = frozenset(),
+    ) -> ProviderCallDefinition:
+        return ProviderCallDefinition(
+            definition_id="test.chat",
+            route=ModelRoute(
+                provider=ProviderKind.OPENAI,
+                protocol=Protocol.CHAT_COMPLETIONS,
+                model="m",
+            ),
+            constraints=ControlConstraints(
+                supported_controls=supported,
+                token_limit_parameter=(
+                    TokenLimitParameter.MAX_COMPLETION_TOKENS
+                ),
+                allow_unsupported_control_drop=allow_drop,
+            ),
+            required_controls=required,
+        )
+
+    def test_unsupported_control_rejected_at_materialize(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT})
+        )
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(
+                controls=GenerationControls(temperature=0.5)
+            )
         assert exc_info.value.failure.metadata["control"] == "temperature"
 
     def test_unsupported_control_drop_opt_in(self) -> None:
-        config = openai_chat_config(model="m").model_copy(
-            update={
-                "supported_controls": frozenset(
-                    {RequestControl.TOKEN_LIMIT, RequestControl.REASONING}
-                ),
-                "allow_unsupported_control_drop": True,
-            }
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT}), allow_drop=True
         )
-        request = LlmRequest(
-            provider_config=config,
-            messages=MESSAGES,
-            temperature=0.5,
+        config = definition.materialize(
+            controls=GenerationControls(temperature=0.5)
         )
+        request = request_for(config)
         assert "temperature" not in build_payload(request)
 
-    def test_endpoint_paths(self) -> None:
-        assert endpoint_path(openai_chat_config(model="m")) == (
-            "/chat/completions"
+    def test_required_control_must_be_assigned(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT}),
+            required=frozenset({RequestControl.TOKEN_LIMIT}),
         )
-        assert endpoint_path(openai_responses_config(model="m")) == (
-            "/responses"
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(controls=GenerationControls())
+        assert exc_info.value.failure.code == "missing_required_control"
+
+    def test_undeclared_extension_rejected(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT})
         )
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(
+                extensions=ProviderBodyExtensions(extra_body={"nope": 1})
+            )
+        assert exc_info.value.failure.code == "undeclared_extension"
+
+    def test_required_control_not_supported_rejected(self) -> None:
+        # A Definition that requires a control its constraints do not
+        # support could never materialize; reject it at construction.
+        with pytest.raises(ControlValidationError) as exc_info:
+            ProviderCallDefinition(
+                definition_id="bad",
+                route=ModelRoute(
+                    provider=ProviderKind.OPENAI,
+                    protocol=Protocol.CHAT_COMPLETIONS,
+                    model="m",
+                ),
+                constraints=ControlConstraints(
+                    supported_controls=frozenset({RequestControl.TEMPERATURE}),
+                    token_limit_parameter=(
+                        TokenLimitParameter.MAX_COMPLETION_TOKENS
+                    ),
+                ),
+                required_controls=frozenset({RequestControl.TOKEN_LIMIT}),
+            )
+        assert exc_info.value.failure.code == "required_control_unsupported"
+
+    def test_reserved_extension_key_rejected(self) -> None:
+        # An extension declared with a reserved core wire key is rejected so
+        # it cannot silently overwrite a validated field at build time.
+        with pytest.raises(ControlValidationError) as exc_info:
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(extra_body={"model": "x"}),
+                extension_keys=frozenset({"model"}),
+            )
+        assert exc_info.value.failure.code == "reserved_extension_key"
+
+    def test_config_validates_on_direct_construction(self) -> None:
+        # The control/extension invariants live in model validation, so a
+        # directly-constructed Config (bypassing materialize) is validated.
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT}),
+            required=frozenset({RequestControl.TOKEN_LIMIT}),
+        )
+        with pytest.raises(ControlValidationError):
+            ProviderCallConfig(
+                definition=definition, controls=GenerationControls()
+            )
+
+    def test_extra_body_is_deeply_immutable(self) -> None:
+        extensions = ProviderBodyExtensions(
+            extra_body={"nested": {"k": [1, 2]}}
+        )
+        with pytest.raises(TypeError):
+            extensions.extra_body["nested"] = 1  # type: ignore[index]  # ty: ignore[invalid-assignment]
+        with pytest.raises(AttributeError):
+            extensions.extra_body["nested"]["k"].append(3)  # type: ignore[attr-defined]
 
 
 class TestParseResponses:
@@ -244,9 +404,9 @@ class TestParseResponses:
             },
         }
         response = parse_chat_completions_body(
-            body,
-            config=openai_chat_config(model="m"),
+            body, config=openai_chat_config(model="m")
         )
+        assert isinstance(response, ProviderTransportResponse)
         assert response.text == "hi"
         assert response.usage is not None
         assert response.usage.reasoning_tokens == 2
@@ -254,12 +414,32 @@ class TestParseResponses:
         assert response.cost.total_cost == 0.001
         assert response.model == "m-actual"
         assert response.finish_reason == "stop"
+        assert response.raw_body == body
+
+    def test_anthropic_body_parses_parts(self) -> None:
+        body = {
+            "id": "msg-1",
+            "model": "claude",
+            "stop_reason": "end_turn",
+            "content": [{"type": "text", "text": "hello"}],
+            "usage": {"input_tokens": 3, "output_tokens": 4},
+        }
+        response = parse_response(
+            body,
+            config=anthropic_messages_config(
+                model="claude", controls=GenerationControls(token_limit=64)
+            ),
+        )
+        assert isinstance(response, ProviderTransportResponse)
+        assert response.text == "hello"
+        assert response.finish_reason == "end_turn"
+        assert response.usage is not None
+        assert response.usage.total_tokens == 7
 
     def test_responses_body_reports_response_id(self) -> None:
         body = {
             "id": "resp-1",
             "status": "completed",
-            "output_text": "SDK convenience must not win",
             "output": [
                 {
                     "type": "message",
@@ -271,11 +451,9 @@ class TestParseResponses:
         response = parse_responses_body(
             body, config=openai_responses_config(model="m")
         )
+        assert isinstance(response, ProviderTransportResponse)
         assert response.response_id == "resp-1"
         assert response.finish_reason == "stop"
-        assert response.usage is not None
-        assert response.usage.prompt_tokens == 3
-        assert response.text == "hi"
         assert response.diagnostics is not None
         assert response.diagnostics.output_text_len == 2
 
@@ -296,6 +474,7 @@ class TestParseResponses:
         response = parse_responses_body(
             body, config=openai_responses_config(model="m")
         )
+        assert isinstance(response, ProviderTransportResponse)
         assert response.text == "part one part two"
 
     @pytest.mark.parametrize(
@@ -347,145 +526,30 @@ class TestParseResponses:
     def test_responses_failure_metadata_is_content_free(
         self, body: dict, expected_code: str
     ) -> None:
-        with pytest.raises(PermanentProviderError) as exc_info:
-            parse_responses_body(
-                body, config=openai_responses_config(model="m")
-            )
-
-        failure = exc_info.value.failure
+        failure = parse_responses_body(
+            body, config=openai_responses_config(model="m")
+        )
+        assert isinstance(failure, ProviderTransportFailure)
         assert failure.code == expected_code
-        serialized_failure = json.dumps(failure.model_dump())
+        # metadata must be content-free; the raw body is retained
+        # separately in raw_response_body (least-processed evidence).
+        serialized_metadata = json.dumps(failure.metadata)
         for private_value in (
             "PRIVATE_PROMPT",
             "PRIVATE_OUTPUT",
             "PRIVATE_REFUSAL",
             body["id"],
         ):
-            assert private_value not in serialized_failure
-        assert "response_preview" not in failure.metadata
+            assert private_value not in serialized_metadata
         assert len(failure.metadata["diagnostics"]["response_id_hash"]) == 16
+        assert failure.raw_response_body == body
 
-    @pytest.mark.parametrize(
-        ("status", "expected_code"),
-        [
-            ("failed", "response_failed"),
-            ("PRIVATE_STATUS", "response_no_text"),
-        ],
-        ids=["failed", "unknown_status"],
-    )
-    def test_responses_failure_is_entirely_content_free(
-        self, status: str, expected_code: str
-    ) -> None:
-        body = {
-            "id": "PRIVATE_RESPONSE_ID",
-            "status": status,
-            "model": "PRIVATE_MODEL_ECHO",
-            "prompt": "PRIVATE_PROMPT",
-            "incomplete_details": {"reason": "PRIVATE_INCOMPLETE_REASON"},
-            "error": {
-                "code": "PRIVATE_PROVIDER_ERROR_CODE",
-                "message": "PRIVATE_ERROR_MESSAGE",
-            },
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {"type": "output_text", "text": "PRIVATE_OUTPUT"},
-                        {"type": "refusal", "refusal": "PRIVATE_REFUSAL"},
-                        {
-                            "type": "PRIVATE_CONTENT_PART_TYPE",
-                            "payload": "PRIVATE_CONTENT_PAYLOAD",
-                        },
-                    ],
-                },
-                {
-                    "type": "PRIVATE_OUTPUT_ITEM_TYPE",
-                    "name": "PRIVATE_TOOL_NAME",
-                    "arguments": "PRIVATE_TOOL_ARGUMENTS",
-                },
-            ],
-        }
-        if status == "PRIVATE_STATUS":
-            body["output"] = body["output"][1:]
-
-        with pytest.raises(PermanentProviderError) as exc_info:
-            parse_responses_body(
-                body, config=openai_responses_config(model="m")
-            )
-
-        failure = exc_info.value.failure
-        assert failure.code == expected_code
-        serialized_failure = json.dumps(failure.model_dump())
-        for private_value in (
-            "PRIVATE_RESPONSE_ID",
-            "PRIVATE_STATUS",
-            "PRIVATE_MODEL_ECHO",
-            "PRIVATE_PROMPT",
-            "PRIVATE_INCOMPLETE_REASON",
-            "PRIVATE_PROVIDER_ERROR_CODE",
-            "PRIVATE_ERROR_MESSAGE",
-            "PRIVATE_OUTPUT",
-            "PRIVATE_REFUSAL",
-            "PRIVATE_CONTENT_PART_TYPE",
-            "PRIVATE_CONTENT_PAYLOAD",
-            "PRIVATE_OUTPUT_ITEM_TYPE",
-            "PRIVATE_TOOL_NAME",
-            "PRIVATE_TOOL_ARGUMENTS",
-        ):
-            assert private_value not in serialized_failure
-
-    def test_failed_response_retains_allowlisted_diagnostics(self) -> None:
-        body = {
-            "id": "resp-safe-diagnostics",
-            "status": "failed",
-            "incomplete_details": {"reason": "content_filter"},
-            "output": [
-                {
-                    "type": "message",
-                    "content": [
-                        {"type": "output_text", "text": "private"},
-                        {"type": "refusal", "refusal": "private"},
-                        {"type": "future_content"},
-                    ],
-                },
-                {"type": "reasoning"},
-                {"type": "function_call"},
-                {"type": "future_item"},
-            ],
-        }
-
-        with pytest.raises(PermanentProviderError) as exc_info:
-            parse_responses_body(
-                body, config=openai_responses_config(model="m")
-            )
-
-        diagnostics = exc_info.value.failure.metadata["diagnostics"]
-        assert diagnostics == {
-            "response_status": "failed",
-            "incomplete_reason": "content_filter",
-            "output_item_types": {
-                "function_call": 1,
-                "message": 1,
-                "reasoning": 1,
-                "unknown": 1,
-            },
-            "content_part_types": {
-                "output_text": 1,
-                "refusal": 1,
-                "unknown": 1,
-            },
-            "output_text_len": 7,
-            "refusal_len": 7,
-            "response_id_hash": sha256(body["id"].encode()).hexdigest()[:16],
-        }
-
-    def test_parse_dispatches_by_endpoint_kind(self) -> None:
-        chat_body = {
-            "choices": [{"message": {"content": "x"}}],
-        }
+    def test_parse_dispatches_by_protocol(self) -> None:
+        chat_body = {"choices": [{"message": {"content": "x"}}]}
         response = parse_response(
             chat_body, config=openrouter_chat_config(model="m")
         )
+        assert isinstance(response, ProviderTransportResponse)
         assert response.text == "x"
 
     @pytest.mark.parametrize(
@@ -493,11 +557,12 @@ class TestParseResponses:
         [{}, {"choices": []}, {"choices": [{"message": {}}]}],
         ids=["missing", "empty", "no_text"],
     )
-    def test_chat_parse_failures_are_permanent(self, body: dict) -> None:
-        with pytest.raises(PermanentProviderError):
-            parse_chat_completions_body(
-                body, config=openai_chat_config(model="m")
-            )
+    def test_chat_parse_failures_are_typed(self, body: dict) -> None:
+        outcome = parse_chat_completions_body(
+            body, config=openai_chat_config(model="m")
+        )
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.failure_class is FailureClass.PERMANENT
 
 
 class TestFailures:
@@ -546,43 +611,35 @@ class TestScriptedProvider:
         provider = ScriptedProvider(
             [ScriptedOutcome(text="scripted", finish_reason="stop")]
         )
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-            idempotency_key="attempt-1",
-        )
-        response = provider.complete(request)
-        assert response.text == "scripted"
+        outcome = provider.complete(request_for(openai_chat_config(model="m")))
+        assert isinstance(outcome, ProviderTransportResponse)
+        assert outcome.text == "scripted"
         assert provider.payloads[0]["model"] == "m"
-        assert provider.requests[0].idempotency_key == "attempt-1"
 
-    def test_scripted_failure_raises_carrier(self) -> None:
-        failure = failure_record(
+    def test_scripted_failure_returns_typed_outcome(self) -> None:
+        failure = ProviderTransportFailure(
             failure_class=FailureClass.RATE_LIMITED,
             message="scripted 429",
+            retryable=True,
         )
         provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-        )
-        with pytest.raises(RateLimitedProviderError) as exc_info:
-            provider.complete(request)
-        assert exc_info.value.failure.retryable is True
+        outcome = provider.complete(request_for(openai_chat_config(model="m")))
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.retryable is True
+        assert outcome.raw_request["model"] == "m"
 
     def test_last_outcome_repeats(self) -> None:
         provider = ScriptedProvider([ScriptedOutcome(text="only")])
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-        )
-        assert provider.complete(request).text == "only"
-        assert provider.complete(request).text == "only"
+        request = request_for(openai_chat_config(model="m"))
+        first = provider.complete(request)
+        second = provider.complete(request)
+        assert isinstance(first, ProviderTransportResponse)
+        assert isinstance(second, ProviderTransportResponse)
+        assert first.text == "only"
+        assert second.text == "only"
         assert len(provider.requests) == 2
 
     def test_response_carries_conformance_warnings(self) -> None:
-        from dr_providers import TokenUsage
-
         provider = ScriptedProvider(
             [
                 ScriptedOutcome(
@@ -591,34 +648,25 @@ class TestScriptedProvider:
                 )
             ]
         )
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-            token_limit=10,
+        request = request_for(
+            openai_chat_config(
+                model="m", controls=GenerationControls(token_limit=10)
+            )
         )
-        response = provider.complete(request)
-        codes = [warning.code for warning in response.warnings]
+        outcome = provider.complete(request)
+        assert isinstance(outcome, ProviderTransportResponse)
+        codes = [warning.code for warning in outcome.warnings]
         assert "token_limit_exceeded" in codes
 
-    def test_scripted_warnings_appended_once(self) -> None:
-        from dr_providers import LlmWarning, TokenUsage
-
-        scripted = LlmWarning(code="scripted", message="script")
-        provider = ScriptedProvider(
-            [
-                ScriptedOutcome(
-                    text="over budget",
-                    usage=TokenUsage(completion_tokens=99),
-                    warnings=(scripted,),
-                )
-            ]
+    def test_diagnostics_response_id_hash_stays_diagnostic(self) -> None:
+        body = {
+            "id": "resp-diag",
+            "status": "failed",
+            "output": [],
+        }
+        outcome = parse_responses_body(
+            body, config=openai_responses_config(model="m")
         )
-        request = LlmRequest(
-            provider_config=openai_chat_config(model="m"),
-            messages=MESSAGES,
-            token_limit=10,
-        )
-        response = provider.complete(request)
-        codes = [warning.code for warning in response.warnings]
-        assert codes.count("scripted") == 1
-        assert codes.count("token_limit_exceeded") == 1
+        assert isinstance(outcome, ProviderTransportFailure)
+        expected = sha256(b"resp-diag").hexdigest()[:16]
+        assert outcome.metadata["diagnostics"]["response_id_hash"] == expected

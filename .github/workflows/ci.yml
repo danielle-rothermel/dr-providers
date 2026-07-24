@@ -6,13 +6,29 @@ on:
   pull_request:
 
 jobs:
-  ci:
+  test:
+    runs-on: depot-ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.3.1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --all-extras
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run ty check
+      - run: uv run pytest
+
+  package:
     runs-on: depot-ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v8.3.1
         with:
           python-version: "3.12"
-      - run: uv sync --all-extras
-      - run: uv run ruff check .
-      - run: uv run pytest
+      - run: uv build
+      - run: uvx twine check dist/*
