@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from dr_serialize import build_identity_document, identity_hash
+from dr_serialize import build_identity_document, identity_document_hash
 
 from dr_providers import (
     ApiKeyEnv,
@@ -77,7 +77,7 @@ class TestConfigIdentityHash:
         config = openai_chat_config(
             model="m", controls=GenerationControls(token_limit=64)
         )
-        expected = identity_hash(
+        expected = identity_document_hash(
             build_identity_document(
                 schema=PROVIDER_CALL_CONFIG_SCHEMA,
                 schema_version=PROVIDER_CALL_CONFIG_SCHEMA_VERSION,

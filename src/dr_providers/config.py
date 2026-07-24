@@ -19,7 +19,7 @@ from typing import Any
 from dr_serialize import (
     IdentityDocument,
     build_identity_document,
-    identity_hash,
+    identity_document_hash,
 )
 from pydantic import BaseModel, ConfigDict
 
@@ -97,7 +97,7 @@ class ProviderCallConfig(BaseModel):
     @cached_property
     def identity_hash(self) -> str:
         """Full 64-char lowercase SHA-256 Config Identity Hash."""
-        return identity_hash(self.identity_document())
+        return identity_document_hash(self.identity_document())
 
 
 # --- Presets ---------------------------------------------------------------
