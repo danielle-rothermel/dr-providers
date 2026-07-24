@@ -35,12 +35,6 @@ serve = [
 Repository = "https://github.com/danielle-rothermel/dr-providers"
 Issues = "https://github.com/danielle-rothermel/dr-providers/issues"
 
-# TEMPORARY: editable path deps for cross-repo integration testing.
-# do-not-merge-as-is. Original PyPI source (restore before merge):
-#   dr-serialize is published to PyPI; drop this [tool.uv.sources] block.
-[tool.uv.sources]
-dr-serialize = { path = "../dr-serialize", editable = true }
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
