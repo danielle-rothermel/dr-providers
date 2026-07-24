@@ -10,7 +10,7 @@ Generation or classifies a Provider Semantic Failure downstream.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeGuard
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
@@ -25,7 +25,7 @@ class WarningSeverity(StrEnum):
     CRITICAL = "critical"
 
 
-class LlmWarning(BaseModel):
+class ProviderTransportWarning(BaseModel):
     """Conformance or parse observation; the caller decides fatality."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -89,7 +89,7 @@ class ProviderTransportResponse(BaseModel):
     raw_body: dict[str, Any] = Field(default_factory=dict)
     usage: TokenUsage | None = None
     cost: CostInfo | None = None
-    warnings: tuple[LlmWarning, ...] = ()
+    warnings: tuple[ProviderTransportWarning, ...] = ()
     finish_reason: StrictStr | None = None
     response_id: StrictStr | None = None
     model: StrictStr | None = None
@@ -121,11 +121,14 @@ ProviderTransportOutcome = ProviderTransportResponse | ProviderTransportFailure
 
 def is_response(
     outcome: ProviderTransportOutcome,
-) -> bool:
+) -> TypeGuard[ProviderTransportResponse]:
+    # ``TypeGuard`` (not ``TypeIs``): the stdlib ``typing.TypeIs`` lands in
+    # 3.13, and this package targets 3.12 without a typing_extensions
+    # dependency, so ``TypeGuard`` is the portable choice here.
     return isinstance(outcome, ProviderTransportResponse)
 
 
 def is_failure(
     outcome: ProviderTransportOutcome,
-) -> bool:
+) -> TypeGuard[ProviderTransportFailure]:
     return isinstance(outcome, ProviderTransportFailure)

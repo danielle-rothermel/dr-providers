@@ -16,18 +16,16 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from dr_providers.conformance import with_conformance_warnings
 from dr_providers.outcome import (
     CostInfo,
-    LlmWarning,
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
+    ProviderTransportWarning,
     TokenUsage,
 )
-from dr_providers.provider import Provider
 from dr_providers.request import ProviderCallRequest, build_payload
 
 __all__ = [
     "SCRIPTED_RESPONSE_ID_PREFIX",
-    "Provider",
     "ScriptedOutcome",
     "ScriptedProvider",
 ]
@@ -43,7 +41,7 @@ class ScriptedOutcome(BaseModel):
     text: StrictStr = ""
     usage: TokenUsage | None = None
     cost: CostInfo | None = None
-    warnings: tuple[LlmWarning, ...] = ()
+    warnings: tuple[ProviderTransportWarning, ...] = ()
     finish_reason: StrictStr | None = "stop"
     failure: ProviderTransportFailure | None = None
     raw_body: dict[str, Any] = Field(default_factory=dict)

@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -28,7 +28,7 @@ jobs:
       - name: Stage site from .defs
         run: |
           mkdir -p _site
-          cp .defs/doc.css .defs/favicon.svg .defs/vocab.html _site/
+          cp -R .defs/. _site/
           cp .defs/vocab.html _site/index.html
       - uses: actions/upload-pages-artifact@v5
         with:

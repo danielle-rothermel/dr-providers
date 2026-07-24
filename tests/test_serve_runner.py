@@ -24,6 +24,43 @@ def make_spec(**overrides: object) -> QuerySpec:
     return QuerySpec.model_validate(defaults)
 
 
+def test_run_query_anthropic_kind_supplies_default_token_limit() -> None:
+    from dr_providers.serve.runner import (
+        DEFAULT_ANTHROPIC_TOKEN_LIMIT,
+        build_request,
+    )
+
+    provider = ScriptedProvider([ScriptedOutcome(text="hi")])
+    spec = make_spec(
+        provider_kind=ServeProviderKind.ANTHROPIC, model="claude-test"
+    )
+    # anthropic's preset REQUIRES a token limit; build_request supplies the
+    # default when the spec omits one, so materialization succeeds.
+    request = build_request(spec)
+    assert request.config.route.provider.value == "anthropic"
+    assert request.config.controls.token_limit == DEFAULT_ANTHROPIC_TOKEN_LIMIT
+
+    result = run_query(spec, provider)
+    assert result.ok
+    assert result.endpoint_path == "/messages"
+    assert result.response is not None
+    assert result.response.text == "hi"
+
+
+def test_run_query_anthropic_kind_honors_explicit_token_limit() -> None:
+    provider = ScriptedProvider([ScriptedOutcome(text="hi")])
+    spec = make_spec(
+        provider_kind=ServeProviderKind.ANTHROPIC,
+        model="claude-test",
+        token_limit=256,
+    )
+    result = run_query(spec, provider)
+    assert result.ok
+    from dr_providers.serve.runner import build_request
+
+    assert build_request(spec).config.controls.token_limit == 256
+
+
 def test_run_query_returns_payload_and_response() -> None:
     provider = ScriptedProvider([ScriptedOutcome(text="hello")])
     result = run_query(make_spec(), provider)

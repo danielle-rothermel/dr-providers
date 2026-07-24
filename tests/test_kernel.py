@@ -14,12 +14,14 @@ import pytest
 
 from dr_providers import (
     ControlConstraints,
+    ControlValidationError,
     FailureClass,
     GenerationControls,
     MessageRole,
     PromptMessage,
     Protocol,
     ProviderBodyExtensions,
+    ProviderCallConfig,
     ProviderCallDefinition,
     ProviderCallRequest,
     ProviderKind,
@@ -32,7 +34,6 @@ from dr_providers import (
     TokenLimitParameter,
     TokenUsage,
     Transcript,
-    UnsupportedControlError,
     anthropic_messages_config,
     build_payload,
     classify_status_code,
@@ -67,8 +68,8 @@ class TestConfigPresets:
         config = openrouter_chat_config(model="m")
         assert config.route.provider is ProviderKind.OPENROUTER
         assert config.route.protocol is Protocol.CHAT_COMPLETIONS
-        env = config.definition.constraints.token_limit_parameter
-        assert env is TokenLimitParameter.MAX_COMPLETION_TOKENS
+        param = config.definition.constraints.token_limit_parameter
+        assert param is TokenLimitParameter.MAX_COMPLETION_TOKENS
         assert config.quota_identity.model_dump() == {
             "provider": "openrouter",
             "protocol": "chat_completions",
@@ -87,11 +88,20 @@ class TestConfigPresets:
         assert config.route.protocol is Protocol.CHAT_COMPLETIONS
 
     def test_anthropic_messages_preset(self) -> None:
-        config = anthropic_messages_config(model="claude")
+        config = anthropic_messages_config(
+            model="claude", controls=GenerationControls(token_limit=64)
+        )
         assert config.route.provider is ProviderKind.ANTHROPIC
         assert config.route.protocol is Protocol.ANTHROPIC_MESSAGES
         param = config.definition.constraints.token_limit_parameter
         assert param is TokenLimitParameter.MAX_TOKENS
+
+    def test_anthropic_messages_requires_token_limit(self) -> None:
+        # Anthropic requires max_tokens, so TOKEN_LIMIT is a required
+        # control: materializing without one is rejected.
+        with pytest.raises(ControlValidationError) as exc_info:
+            anthropic_messages_config(model="claude")
+        assert exc_info.value.failure.code == "missing_required_control"
 
 
 class TestBuildPayload:
@@ -170,6 +180,36 @@ class TestBuildPayload:
         assert payload["reasoning_effort"] == "medium"
         assert "reasoning" not in payload
 
+    def test_reasoning_output_config_for_anthropic(self) -> None:
+        request = request_for(
+            anthropic_messages_config(
+                model="claude",
+                controls=GenerationControls(
+                    token_limit=64, reasoning=ReasoningEffort.MEDIUM
+                ),
+            )
+        )
+        payload = build_payload(request)
+        # Anthropic Messages takes {"output_config": {"effort": ...}}, not a
+        # top-level {"reasoning": ...}.
+        assert payload["output_config"] == {"effort": "medium"}
+        assert "reasoning" not in payload
+
+    def test_reasoning_unmappable_for_anthropic_rejected(self) -> None:
+        request = request_for(
+            anthropic_messages_config(
+                model="claude",
+                controls=GenerationControls(
+                    token_limit=64, reasoning=ReasoningEffort.XHIGH
+                ),
+            )
+        )
+        # XHIGH has no Anthropic effort equivalent: fail loudly rather than
+        # silently mis-map to a nearby level.
+        with pytest.raises(ControlValidationError) as exc_info:
+            build_payload(request)
+        assert exc_info.value.failure.code == "unmappable_reasoning_effort"
+
     def test_reasoning_effort_field_for_gemini(self) -> None:
         request = request_for(
             gemini_chat_config(
@@ -196,6 +236,22 @@ class TestBuildPayload:
         )
         assert build_payload(request)["seed"] == 7
 
+    def test_nested_extra_body_payload_is_json_serializable(self) -> None:
+        # Frozen extension values must be thawed on the way into the wire
+        # payload, or httpx's json= encoding would reject the request.
+        request = request_for(
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(
+                    extra_body={"provider": {"order": ["a", "b"]}}
+                ),
+            )
+        )
+        payload = build_payload(request)
+        assert json.loads(json.dumps(payload))["provider"] == {
+            "order": ["a", "b"]
+        }
+
     def test_protocol_paths(self) -> None:
         assert protocol_path(openai_chat_config(model="m")) == (
             "/chat/completions"
@@ -203,9 +259,11 @@ class TestBuildPayload:
         assert protocol_path(openai_responses_config(model="m")) == (
             "/responses"
         )
-        assert protocol_path(anthropic_messages_config(model="m")) == (
-            "/messages"
-        )
+        assert protocol_path(
+            anthropic_messages_config(
+                model="m", controls=GenerationControls(token_limit=64)
+            )
+        ) == ("/messages")
 
 
 class TestDefinitionValidation:
@@ -237,7 +295,7 @@ class TestDefinitionValidation:
         definition = self._constrained_definition(
             frozenset({RequestControl.TOKEN_LIMIT})
         )
-        with pytest.raises(UnsupportedControlError) as exc_info:
+        with pytest.raises(ControlValidationError) as exc_info:
             definition.materialize(
                 controls=GenerationControls(temperature=0.5)
             )
@@ -258,7 +316,7 @@ class TestDefinitionValidation:
             frozenset({RequestControl.TOKEN_LIMIT}),
             required=frozenset({RequestControl.TOKEN_LIMIT}),
         )
-        with pytest.raises(UnsupportedControlError) as exc_info:
+        with pytest.raises(ControlValidationError) as exc_info:
             definition.materialize(controls=GenerationControls())
         assert exc_info.value.failure.code == "missing_required_control"
 
@@ -266,11 +324,64 @@ class TestDefinitionValidation:
         definition = self._constrained_definition(
             frozenset({RequestControl.TOKEN_LIMIT})
         )
-        with pytest.raises(UnsupportedControlError) as exc_info:
+        with pytest.raises(ControlValidationError) as exc_info:
             definition.materialize(
                 extensions=ProviderBodyExtensions(extra_body={"nope": 1})
             )
         assert exc_info.value.failure.code == "undeclared_extension"
+
+    def test_required_control_not_supported_rejected(self) -> None:
+        # A Definition that requires a control its constraints do not
+        # support could never materialize; reject it at construction.
+        with pytest.raises(ControlValidationError) as exc_info:
+            ProviderCallDefinition(
+                definition_id="bad",
+                route=ModelRoute(
+                    provider=ProviderKind.OPENAI,
+                    protocol=Protocol.CHAT_COMPLETIONS,
+                    model="m",
+                ),
+                constraints=ControlConstraints(
+                    supported_controls=frozenset({RequestControl.TEMPERATURE}),
+                    token_limit_parameter=(
+                        TokenLimitParameter.MAX_COMPLETION_TOKENS
+                    ),
+                ),
+                required_controls=frozenset({RequestControl.TOKEN_LIMIT}),
+            )
+        assert exc_info.value.failure.code == "required_control_unsupported"
+
+    def test_reserved_extension_key_rejected(self) -> None:
+        # An extension declared with a reserved core wire key is rejected so
+        # it cannot silently overwrite a validated field at build time.
+        with pytest.raises(ControlValidationError) as exc_info:
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(extra_body={"model": "x"}),
+                extension_keys=frozenset({"model"}),
+            )
+        assert exc_info.value.failure.code == "reserved_extension_key"
+
+    def test_config_validates_on_direct_construction(self) -> None:
+        # The control/extension invariants live in model validation, so a
+        # directly-constructed Config (bypassing materialize) is validated.
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT}),
+            required=frozenset({RequestControl.TOKEN_LIMIT}),
+        )
+        with pytest.raises(ControlValidationError):
+            ProviderCallConfig(
+                definition=definition, controls=GenerationControls()
+            )
+
+    def test_extra_body_is_deeply_immutable(self) -> None:
+        extensions = ProviderBodyExtensions(
+            extra_body={"nested": {"k": [1, 2]}}
+        )
+        with pytest.raises(TypeError):
+            extensions.extra_body["nested"] = 1  # type: ignore[index]  # ty: ignore[invalid-assignment]
+        with pytest.raises(AttributeError):
+            extensions.extra_body["nested"]["k"].append(3)  # type: ignore[attr-defined]
 
 
 class TestParseResponses:
@@ -314,7 +425,10 @@ class TestParseResponses:
             "usage": {"input_tokens": 3, "output_tokens": 4},
         }
         response = parse_response(
-            body, config=anthropic_messages_config(model="claude")
+            body,
+            config=anthropic_messages_config(
+                model="claude", controls=GenerationControls(token_limit=64)
+            ),
         )
         assert isinstance(response, ProviderTransportResponse)
         assert response.text == "hello"

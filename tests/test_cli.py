@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
 
-from dr_providers import cli
+from dr_providers import ProviderTransportPolicy, cli
 from dr_providers.controls import ReasoningEffort
 from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
 
@@ -18,14 +18,19 @@ runner = CliRunner()
 
 class ScriptedHttpProvider:
     """Wraps ScriptedProvider as a context manager, standing in for
-    HttpProvider so tests never touch the network."""
+    HttpProvider so tests never touch the network.
+
+    Records the constructor kwargs (notably ``policy``) so tests can assert the
+    transport policy the CLI built from its flags."""
 
     def __init__(self, scripted: ScriptedProvider) -> None:
         self._scripted = scripted
+        self.kwargs: dict[str, object] = {}
 
     def __call__(
-        self, *_args: object, **_kwargs: object
+        self, *_args: object, **kwargs: object
     ) -> ScriptedHttpProvider:
+        self.kwargs = kwargs
         return self
 
     def __enter__(self) -> ScriptedProvider:
@@ -34,14 +39,19 @@ class ScriptedHttpProvider:
     def __exit__(self, *exc: object) -> None:
         return None
 
+    @property
+    def requests(self) -> list[ProviderCallRequest]:
+        return self._scripted.requests
+
 
 def patch_http_provider(
     monkeypatch: pytest.MonkeyPatch,
     outcomes: list[ScriptedOutcome] | None = None,
-) -> ScriptedProvider:
+) -> ScriptedHttpProvider:
     scripted = ScriptedProvider(outcomes)
-    monkeypatch.setattr(cli, "HttpProvider", ScriptedHttpProvider(scripted))
-    return scripted
+    stub = ScriptedHttpProvider(scripted)
+    monkeypatch.setattr(cli, "HttpProvider", stub)
+    return stub
 
 
 def test_query_happy_path_prints_text(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -189,3 +199,98 @@ def test_bad_effort_value_exits_with_clear_message() -> None:
 
     assert result.exit_code != 0
     assert "extreme" in result.output
+
+
+def test_query_failure_path_prints_stderr_and_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dr_providers.failures import FailureClass
+    from dr_providers.outcome import ProviderTransportFailure
+
+    failure = ProviderTransportFailure(
+        failure_class=FailureClass.PERMANENT,
+        code="boom_code",
+        message="boom message",
+        retryable=False,
+    )
+    patch_http_provider(monkeypatch, [ScriptedOutcome(failure=failure)])
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "openrouter",
+            "--model",
+            "test/model",
+            "-m",
+            "hi",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "failure: boom_code: boom message" in result.stderr
+
+
+def test_retries_flag_and_provider_map_to_expected_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dr_providers.policy import ApiKeyEnv, ProviderBaseUrl
+
+    stub = patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "openrouter",
+            "--model",
+            "test/model",
+            "-m",
+            "hi",
+            "--retries",
+            "3",
+        ],
+    )
+
+    assert result.exit_code == 0
+    policy = stub.kwargs["policy"]
+    assert isinstance(policy, ProviderTransportPolicy)
+    # policy_for(OPENROUTER) derives env/base_url from the DEFAULT_* maps and
+    # --retries wires straight to native_retry_count.
+    assert policy.api_key_env == str(ApiKeyEnv.OPENROUTER)
+    assert policy.base_url == str(ProviderBaseUrl.OPENROUTER)
+    assert policy.native_retry_count == 3
+
+
+def test_anthropic_provider_maps_policy_and_supplies_token_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dr_providers.policy import ApiKeyEnv, ProviderBaseUrl
+
+    stub = patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "anthropic",
+            "--model",
+            "claude-test",
+            "-m",
+            "hi",
+        ],
+    )
+
+    assert result.exit_code == 0
+    request = stub.requests[0]
+    assert request.config.route.provider.value == "anthropic"
+    # the anthropic preset requires a token limit; the CLI supplies its default
+    # when --token-limit is omitted so the call materializes.
+    assert (
+        request.config.controls.token_limit
+        == cli.DEFAULT_ANTHROPIC_TOKEN_LIMIT
+    )
+    policy = stub.kwargs["policy"]
+    assert isinstance(policy, ProviderTransportPolicy)
+    assert policy.api_key_env == str(ApiKeyEnv.ANTHROPIC)
+    assert policy.base_url == str(ProviderBaseUrl.ANTHROPIC)

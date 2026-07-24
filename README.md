@@ -9,8 +9,9 @@ Python 3.12+.
 
 dr-providers is the typed LLM-provider HTTP transport kernel, with an
 optional `[serve]` FastAPI facade for localhost HTTP callers. It builds
-Provider Call Config/Request Identity Documents and full Identity Hashes
-through `dr-serialize`. Its neighboring repos are dr-serialize, dr-graph,
+Provider Call Definition, Config, and Request Identity Documents — each
+carrying its own full 64-char SHA-256 Identity Hash — through
+`dr-serialize`. Its neighboring repos are dr-serialize, dr-graph,
 dr-platform, dr-code, whetstone-ai, and unitbench. Whetstone-ai /
 dr-platform, dr-graph's graph runner, and unitbench playgrounds are
 consumers.
@@ -102,9 +103,13 @@ identities to the outcome and the complete least-processed raw request
 and success/failure bodies (authorization headers and credentials are
 never persisted).
 
-`HttpProvider` is a context manager: it owns and closes its httpx
-client on exit unless you inject your own (which is left open for you
-to manage).
+`HttpProvider` is a context manager. In the default (owned) mode each
+wire call runs on its own short-lived `httpx.Client` and daemon thread
+under a per-invocation wall-clock deadline, so one call's deadline breach
+tears down only that call's connection pool and never disturbs another.
+If you inject your own client it is shared and left open for you to
+manage; the transport cannot forcibly cancel a wedged call on a
+caller-owned sync client (see the `HttpProvider` docstring).
 
 ## Provider matrix
 
@@ -112,8 +117,9 @@ Presets in `dr_providers.config` build a Provider Call Definition and
 materialize its Config, fixing each provider's Model Route
 `(provider, protocol, model)`, the token-limit parameter, and the
 reasoning wire shape. Base URL and API key env var live on the separate
-`ProviderTransportPolicy` (`DEFAULT_BASE_URLS` / `DEFAULT_API_KEY_ENVS`
-map each provider kind to its defaults):
+`ProviderTransportPolicy`; `policy_for(kind, ...)` derives them from the
+`DEFAULT_BASE_URLS` / `DEFAULT_API_KEY_ENVS` per-provider maps (both in
+`dr_providers.policy`), each overridable:
 
 | Preset                       | Provider    | Protocol            | Reasoning wire shape                        |
 | ---------------------------- | ----------- | ------------------- | ------------------------------------------- |
@@ -121,7 +127,7 @@ map each provider kind to its defaults):
 | `openai_chat_config`         | `openai`    | `chat_completions`  | `reasoning_effort: ...` field               |
 | `openai_responses_config`    | `openai`    | `responses`         | `reasoning: {"effort": ...}` object         |
 | `gemini_chat_config`         | `gemini`    | `chat_completions`  | `reasoning_effort: ...` field (OpenAI-compat endpoint) |
-| `anthropic_messages_config`  | `anthropic` | `anthropic_messages`| `reasoning: {"effort": ...}` object         |
+| `anthropic_messages_config`  | `anthropic` | `anthropic_messages`| `output_config: {"effort": ...}` object     |
 
 Both the OpenAI-compatible / OpenRouter `chat_completions` path and the
 Anthropic `anthropic_messages` path are first-class, each usable with a
@@ -129,16 +135,17 @@ custom base URL via the transport policy.
 
 `ReasoningEffort` is a shared enum (`NONE`, `MINIMAL`, `LOW`, `MEDIUM`,
 `HIGH`, `XHIGH`); each Definition's `reasoning_shape` constraint
-determines how `build_payload()` serializes it on the wire. For the full
-story — how
-each provider actually accepts reasoning/effort/thinking, Gemini's
-generation-dependent thinking configs, and links to the provider docs —
-see [docs/reasoning-controls.md](docs/reasoning-controls.md).
+determines how `build_payload()` serializes it on the wire. Anthropic
+Messages accepts only `low`/`medium`/`high`, so `NONE`, `MINIMAL`, and
+`XHIGH` are rejected with a `ControlValidationError` rather than silently
+coerced. Anthropic also requires `max_tokens`, so `anthropic_messages_config`
+marks `TOKEN_LIMIT` a required control (the CLI and serve facade default it
+to 4096 when unset).
 
-OpenAI Responses bodies are normalized from wire `output[]` parts into text,
-typed no-text failures, and content-free diagnostics. See
-[docs/responses-normalization.md](docs/responses-normalization.md) for the
-failure codes, privacy boundary, and schema evidence.
+OpenAI Responses bodies are normalized from wire `output[]` parts into
+text, typed no-text failures, and content-free diagnostics
+(`ResponsesDiagnostics`). See the [vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
+for the authoritative per-name mapping of the parse/diagnostic surface.
 
 ## Testing with ScriptedProvider
 
@@ -167,10 +174,12 @@ from dr_providers import (
 )
 ```
 
-See `dr_providers.__all__` for the full list. `HttpProvider` loads
-lazily so importing the pure modules (route, controls, definition,
-config, request, response, outcome, policy, evidence) never pulls in
-httpx.
+`dr_providers.__all__` is the authoritative export list; the
+[vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
+maps every one of those names to the contract term it implements, so
+this README does not repeat the per-name detail. `HttpProvider` loads
+lazily so importing the pure modules (route, controls, config, request,
+response, outcome, policy, evidence) never pulls in httpx.
 
 ## Serve facade
 
@@ -193,7 +202,7 @@ uv run pre-commit run --all-files
 
 The default `uv run pytest` run is fully offline (`addopts = "-m 'not
 live'"`). A `live`-marked matrix in `tests/live/test_live_matrix.py`
-exercises the four presets against real provider endpoints:
+exercises the five presets against real provider endpoints:
 
 ```bash
 uv run pytest -m live

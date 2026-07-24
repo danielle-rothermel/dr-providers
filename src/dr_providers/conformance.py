@@ -9,7 +9,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from dr_providers.controls import ReasoningEffort
-from dr_providers.outcome import LlmWarning, ProviderTransportResponse
+from dr_providers.outcome import (
+    ProviderTransportResponse,
+    ProviderTransportWarning,
+)
 
 if TYPE_CHECKING:
     from dr_providers.request import ProviderCallRequest
@@ -22,8 +25,8 @@ MODEL_SUBSTITUTION_CODE = "model_substitution"
 def conformance_warnings(
     request: ProviderCallRequest,
     response: ProviderTransportResponse,
-) -> tuple[LlmWarning, ...]:
-    warnings: list[LlmWarning] = []
+) -> tuple[ProviderTransportWarning, ...]:
+    warnings: list[ProviderTransportWarning] = []
     usage = response.usage
     controls = request.config.controls
 
@@ -35,7 +38,7 @@ def conformance_warnings(
     if reasoning_requested and not reasoning_tokens:
         assert controls.reasoning is not None
         warnings.append(
-            LlmWarning(
+            ProviderTransportWarning(
                 code=REASONING_NOT_OBSERVED_CODE,
                 message=(
                     "reasoning was requested but the response reports "
@@ -53,7 +56,7 @@ def conformance_warnings(
         and completion_tokens > token_limit
     ):
         warnings.append(
-            LlmWarning(
+            ProviderTransportWarning(
                 code=TOKEN_LIMIT_EXCEEDED_CODE,
                 message=(
                     f"response used {completion_tokens} completion tokens "
@@ -69,7 +72,7 @@ def conformance_warnings(
     requested_model = request.config.route.model
     if response.model is not None and response.model != requested_model:
         warnings.append(
-            LlmWarning(
+            ProviderTransportWarning(
                 code=MODEL_SUBSTITUTION_CODE,
                 message=(
                     f"requested model {requested_model!r} but response "

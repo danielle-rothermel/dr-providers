@@ -17,12 +17,16 @@ from typing import Any
 import pytest
 
 from dr_providers import (
+    GenerationControls,
+    ProviderCallConfig,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    anthropic_messages_config,
     openai_chat_config,
     openai_responses_config,
     parse_response,
 )
+from dr_providers.route import Protocol
 
 CORPUS_PATH = (
     Path(__file__).resolve().parents[1]
@@ -30,6 +34,25 @@ CORPUS_PATH = (
     / "kernel-corpus"
     / "responses.jsonl"
 )
+
+
+def _config_for(protocol: str, model: str) -> ProviderCallConfig:
+    """Explicit protocol -> config dispatch; unknown protocols raise.
+
+    Keying on ``protocol`` (a Model Route component) instead of an
+    if/else keeps a future protocol from silently misrouting to an
+    OpenAI parser branch.
+    """
+    if protocol == Protocol.CHAT_COMPLETIONS.value:
+        return openai_chat_config(model=model)
+    if protocol == Protocol.RESPONSES.value:
+        return openai_responses_config(model=model)
+    if protocol == Protocol.ANTHROPIC_MESSAGES.value:
+        return anthropic_messages_config(
+            model=model, controls=GenerationControls(token_limit=1)
+        )
+    msg = f"corpus entry has unknown protocol {protocol!r}"
+    raise ValueError(msg)
 
 
 def corpus_entries() -> list[dict[str, Any]]:
@@ -45,11 +68,9 @@ def corpus_entries() -> list[dict[str, Any]]:
     ids=[entry["name"] for entry in corpus_entries()],
 )
 def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
-    model = entry["config_model"]
-    if entry["endpoint_kind"] == "chat_completions":
-        config = openai_chat_config(model=model)
-    else:
-        config = openai_responses_config(model=model)
+    protocol = entry["protocol"]
+    config = _config_for(protocol, entry["config_model"])
+    is_responses = protocol == Protocol.RESPONSES.value
 
     outcome = parse_response(entry["body"], config=config)
 
@@ -58,7 +79,10 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == expected_failure["code"]
         assert outcome.retryable is False
-        assert outcome.metadata["diagnostics"] == _expected_diagnostics(entry)
+        if is_responses:
+            assert outcome.metadata["diagnostics"] == _expected_diagnostics(
+                entry
+            )
         return
 
     assert isinstance(outcome, ProviderTransportResponse)
@@ -79,7 +103,7 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
         assert outcome.cost is not None
         assert outcome.cost.total_cost == expected["cost"]
     assert outcome.raw_body == entry["body"]
-    if entry["endpoint_kind"] == "responses":
+    if is_responses:
         assert outcome.diagnostics is not None
         assert outcome.diagnostics.model_dump() == _expected_diagnostics(entry)
     else:

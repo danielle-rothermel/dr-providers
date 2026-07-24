@@ -19,9 +19,9 @@ Two protocol families are first-class:
 
 from __future__ import annotations
 
-import concurrent.futures
 import contextlib
 import os
+import threading
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -104,6 +104,30 @@ class HttpProvider:
     The Provider Transport Policy supplies credentials env var, base URL,
     timeout, and native retry count. An explicit ``api_key`` overrides
     the env lookup (for tests). An injected client is left open on close.
+
+    Client lifecycle and deadline isolation
+    ---------------------------------------
+    Each wire call runs on its own short-lived daemon thread under a hard
+    per-invocation wall-clock deadline. On a deadline breach the transport
+    returns the typed timeout/stalled outcome immediately WITHOUT joining
+    the worker, so a wedged socket read can never make the call hang.
+
+    * OWNED client (``client is None``): every wire call gets its OWN
+      ``httpx.Client`` (its own connection pool). A deadline breach closes
+      only that call's client -- unblocking only that call's worker -- so a
+      timed-out request can never tear down the pool or fail a concurrent
+      healthy call on the same provider. Each per-call client is closed as
+      its call completes, so ``close()`` has no owned state to release.
+    * INJECTED (caller-owned) client: the transport must not close a client
+      it does not own, so a deadline breach cannot forcibly unblock the
+      wedged ``client.post`` -- that worker stays blocked until httpx's own
+      idle/read timeout fires (bounded, but not instant). RESIDUAL LIMITATION:
+      with a caller-owned SYNC httpx client there is no clean cancellation, so
+      one leaked worker thread + socket may linger for up to the idle timeout
+      per timed-out call. It is a DAEMON thread, so it never blocks interpreter
+      exit and never corrupts other calls; the deadline still returns the
+      typed outcome on schedule. Inject a per-call client, or accept the
+      idle-bounded lag, if this matters.
     """
 
     def __init__(
@@ -119,9 +143,9 @@ class HttpProvider:
         self._api_key = api_key
 
     def close(self) -> None:
-        if self._owns_client and self._client is not None:
-            self._client.close()
-            self._client = None
+        """Owned wire clients are per-call and already closed per call; an
+        injected client is caller-owned and left open. Kept for the
+        context-manager contract."""
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -134,10 +158,7 @@ class HttpProvider:
     ) -> ProviderTransportOutcome:
         """Return the typed no-throw outcome for one request."""
         payload = build_payload(request)
-        outcome = self._complete_with_retries(request, payload)
-        if isinstance(outcome, ProviderTransportResponse):
-            return with_conformance_warnings(request, outcome)
-        return outcome
+        return self._run_pipeline(request, payload)
 
     def invoke(
         self, request: ProviderCallRequest
@@ -151,15 +172,24 @@ class HttpProvider:
             headers=headers or {},
             body=payload,
         )
-        outcome = self._complete_with_retries(request, payload)
-        if isinstance(outcome, ProviderTransportResponse):
-            outcome = with_conformance_warnings(request, outcome)
+        outcome = self._run_pipeline(request, payload)
         return ProviderInvocationEvidence.build(
             request=request,
             policy=self._policy,
             raw_request=raw_request,
             outcome=outcome,
         )
+
+    def _run_pipeline(
+        self,
+        request: ProviderCallRequest,
+        payload: dict[str, Any],
+    ) -> ProviderTransportOutcome:
+        """Shared complete/invoke pipeline: retries plus conformance."""
+        outcome = self._complete_with_retries(request, payload)
+        if isinstance(outcome, ProviderTransportResponse):
+            return with_conformance_warnings(request, outcome)
+        return outcome
 
     def _complete_with_retries(
         self,
@@ -207,31 +237,60 @@ class HttpProvider:
         invocation — including response streaming/JSON decode — so a
         stalled response that defeats the per-read timeout (a trickling
         edge that keeps resetting the per-read timer) can never exceed the
-        budget. On breach the wedged socket is interrupted and a typed
-        timeout failure is returned; nothing hangs and nothing raises.
+        budget. On breach the typed timeout failure is returned; nothing
+        hangs and nothing raises.
+
+        The call runs on its OWN short-lived daemon thread — never a shared
+        executor — so a timed-out worker can never block a concurrent call
+        or interpreter exit. For an owned client the worker gets a fresh
+        per-call client; a deadline breach closes ONLY that client, so only
+        the timed-out call is unblocked and no other in-flight call is
+        disturbed. For an injected client the worker cannot be forcibly
+        unblocked (see the class docstring's residual limitation).
         """
         deadline = (
             self._policy.timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
         )
-        # Do NOT use the executor as a context manager: its __exit__ joins the
-        # worker thread, which would re-block for the whole idle read budget on
-        # a deadline breach. The idle read timeout is now large (a legitimate
-        # long stream must not be capped), so on breach we interrupt the wedged
-        # socket and shut the pool down WITHOUT waiting on the (now-erroring)
-        # worker, returning the typed failure immediately.
-        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        future = pool.submit(self._wire_call, request, url, headers, payload)
-        try:
-            result = future.result(timeout=deadline)
-        except concurrent.futures.TimeoutError:
-            # Interrupt the wedged C-level socket read so the worker thread
-            # errors out instead of lingering blocked for the idle budget, then
-            # return the typed stalled-response failure without joining it.
-            self._interrupt_wedged_client()
-            pool.shutdown(wait=False)
+        outcome_box: list[ProviderTransportOutcome] = []
+        error_box: list[BaseException] = []
+        # A per-call client for the owned case so an interrupt tears down only
+        # this call's pool; the injected client is shared and left untouched.
+        if self._owns_client or self._client is None:
+            call_client = httpx.Client()
+        else:
+            call_client = self._client
+        done = threading.Event()
+
+        def worker() -> None:
+            try:
+                outcome_box.append(
+                    self._wire_call(
+                        request, url, headers, payload, call_client
+                    )
+                )
+            except BaseException as error:  # noqa: BLE001 -- box, never raise
+                error_box.append(error)
+            finally:
+                done.set()
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+        if not done.wait(timeout=deadline):
+            # The worker is wedged in a socket read past the deadline. Close
+            # this call's OWNED client to unblock it (best-effort), then return
+            # the typed failure WITHOUT joining the leaked daemon worker.
+            if self._owns_client:
+                with contextlib.suppress(Exception):
+                    call_client.close()
             return self._deadline_timeout_failure(url, payload, deadline)
-        pool.shutdown(wait=True)
-        return result
+        # Completed within the deadline: close the owned per-call client and
+        # surface the outcome (or re-raise an unexpected programming error).
+        if self._owns_client:
+            with contextlib.suppress(Exception):
+                call_client.close()
+        if error_box:
+            raise error_box[0]
+        return outcome_box[0]
 
     def _wire_call(
         self,
@@ -239,9 +298,10 @@ class HttpProvider:
         url: str,
         headers: dict[str, str],
         payload: dict[str, Any],
+        client: httpx.Client,
     ) -> ProviderTransportOutcome:
         try:
-            http_response = self._httpx_client().post(
+            http_response = client.post(
                 url,
                 json=payload,
                 headers=headers,
@@ -314,20 +374,6 @@ class HttpProvider:
                 "deadline_seconds": deadline,
             },
         )
-
-    def _interrupt_wedged_client(self) -> None:
-        """Close the owned client to unblock a wedged socket read.
-
-        Closing tears down the underlying connection pool, forcing the
-        blocked C-level ``recv`` in the worker thread to error out instead
-        of lingering forever. Only an owned client is closed and rebuilt;
-        an injected client is left alone (the caller owns its lifecycle).
-        """
-        if self._owns_client and self._client is not None:
-            # best-effort unblock: any close error is irrelevant here.
-            with contextlib.suppress(Exception):
-                self._client.close()
-            self._client = None
 
     def _outcome_from_response(
         self,
@@ -424,11 +470,6 @@ class HttpProvider:
                 ANTHROPIC_VERSION_HEADER: ANTHROPIC_VERSION,
             }
         return {AUTHORIZATION_HEADER: f"Bearer {api_key}"}
-
-    def _httpx_client(self) -> httpx.Client:
-        if self._client is None:
-            self._client = httpx.Client()
-        return self._client
 
 
 _RETRYABLE = frozenset({FailureClass.TRANSIENT, FailureClass.RATE_LIMITED})

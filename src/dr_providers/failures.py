@@ -1,10 +1,18 @@
 """Failure taxonomy and credential redaction.
 
-dr-providers classifies transport-level failure only: an expected
-Provider Transport Failure carries a ``ProviderFailure`` record inside
-the closed no-throw Provider Transport Outcome. Whetstone owns semantic
-failure taxonomy and retry policy. Unexpected programming/infrastructure
-errors still raise ``ProviderFailureError``.
+dr-providers classifies transport-level failure only. There are two
+distinct shapes and they are NOT nested in each other:
+
+  * ``ProviderTransportFailure`` (``outcome.py``) is the FLAT expected
+    transport-outcome value. It carries the failure fields (``failure_class``,
+    ``code``, ``message``, ``retryable``) directly on itself alongside the raw
+    request/response evidence — it does not embed a ``ProviderFailure``.
+  * ``ProviderFailure`` (below) is a compact classification record carried
+    ONLY by the raised-error path: ``ProviderFailureError.failure`` holds one,
+    and it is raised solely for unexpected programming/infrastructure errors,
+    never returned as an expected transport outcome.
+
+Whetstone owns semantic failure taxonomy and retry policy.
 """
 
 from __future__ import annotations
@@ -25,7 +33,6 @@ SANITIZE_KEYS = frozenset(
         "x-goog-api-key",
     }
 )
-AUTHORIZATION_HEADER = "Authorization"
 
 RATE_LIMIT_STATUS = 429
 TRANSIENT_STATUS_CODES = frozenset({408, 409, 425})
@@ -127,12 +134,14 @@ class UnknownProviderError(ProviderFailureError):
     failure_class = FailureClass.UNKNOWN
 
 
-class UnsupportedControlError(PermanentProviderError):
-    """A Config assigns a control the route cannot transport.
+class ControlValidationError(PermanentProviderError):
+    """A Definition/Config assignment violates a control invariant.
 
-    This is a construction-time programming error (the Definition
-    rejects the assignment), so it raises rather than returning a
-    transport outcome.
+    Raised at Definition or Config validation time for an unsupported
+    control, a missing required control, an undeclared extension key, or
+    an extension that would overwrite a reserved core wire field. These
+    are construction-time programming errors, so they raise rather than
+    returning a transport outcome.
     """
 
 

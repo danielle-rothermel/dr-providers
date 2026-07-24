@@ -153,12 +153,39 @@ class TestHttpProvider:
         assert outcome.status_code == status
 
     def test_transport_error_is_transient_no_throw(self) -> None:
+        # A non-timeout httpx.HTTPError (here ConnectError) exercises the
+        # generic transport_error branch, distinct from the timeout branch.
         def handler(_req: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectTimeout("boom")
+            raise httpx.ConnectError("boom")
 
         provider = mock_provider(handler)
         outcome = provider.complete(openai_request())
         assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.failure_class is FailureClass.TRANSIENT
+        assert outcome.code == "transport_error"
+        assert outcome.retryable is True
+
+    @pytest.mark.parametrize(
+        ("error", "expected_code"),
+        [
+            (httpx.ConnectError("down"), "transport_error"),
+            (httpx.ConnectTimeout("slow connect"), "timeout"),
+            (httpx.ReadTimeout("idle stall"), "stalled_response"),
+        ],
+    )
+    def test_httpx_error_classification(
+        self, error: httpx.HTTPError, expected_code: str
+    ) -> None:
+        # Unit-level classification: a ConnectError is a generic transport
+        # error; a ConnectTimeout is a plain timeout; a ReadTimeout is an idle
+        # stall (no bytes within the idle window) -> stalled_response.
+        def handler(_req: httpx.Request) -> httpx.Response:
+            raise error
+
+        provider = mock_provider(handler)
+        outcome = provider.complete(openai_request())
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.code == expected_code
         assert outcome.failure_class is FailureClass.TRANSIENT
         assert outcome.retryable is True
 
@@ -273,8 +300,11 @@ class TestInvocationEvidence:
         request = openai_request(token_limit=64)
         evidence = provider.invoke(request)
 
-        assert evidence.request_identity == request.identity_payload()
-        assert evidence.policy_identity == OPENAI_POLICY.identity_payload()
+        # identity payloads are deeply frozen (nested lists become tuples of
+        # frozen maps), so compare via the JSON-serialized (thawed) form.
+        stable = evidence.stable_payload()
+        assert stable["request_identity"] == request.identity_payload()
+        assert stable["policy_identity"] == OPENAI_POLICY.identity_payload()
         assert isinstance(evidence.outcome, ProviderTransportResponse)
         assert evidence.response is not None
         # complete least-processed raw success body, no truncation.
@@ -367,11 +397,29 @@ class TestConformance:
 
 
 class TestHttpProviderLifecycle:
-    def test_context_manager_closes_owned_client(self) -> None:
+    def test_owned_per_call_client_closed_after_complete(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Owned wire calls build a per-call client; each must be closed as
+        # its call completes, leaving no shared client for close() to hold.
+        real_client = httpx.Client
+        created: list[httpx.Client] = []
+
+        def tracking_client(*_args: object, **_kwargs: object) -> httpx.Client:
+            client = real_client(
+                transport=httpx.MockTransport(
+                    lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+                )
+            )
+            created.append(client)
+            return client
+
+        monkeypatch.setattr(httpx, "Client", tracking_client)
         with HttpProvider(policy=OPENAI_POLICY, api_key="k") as provider:
-            client = provider._httpx_client()
-            assert not client.is_closed
-        assert client.is_closed
+            outcome = provider.complete(openai_request())
+        assert isinstance(outcome, ProviderTransportResponse)
+        assert created
+        assert all(client.is_closed for client in created)
 
     def test_injected_client_left_open(self) -> None:
         client = httpx.Client(
@@ -389,6 +437,22 @@ class TestHttpProviderLifecycle:
 
     def test_close_is_idempotent(self) -> None:
         provider = HttpProvider(policy=OPENAI_POLICY, api_key="k")
-        provider._httpx_client()
         provider.close()
         provider.close()
+
+
+class TestOutcomeGuards:
+    def test_is_response_and_is_failure_narrow(self) -> None:
+        from dr_providers import is_failure, is_response
+
+        response = ProviderTransportResponse(text="hi")
+        failure = ProviderTransportFailure(
+            failure_class=FailureClass.PERMANENT,
+            code="x",
+            message="m",
+            retryable=False,
+        )
+        assert is_response(response) is True
+        assert is_failure(response) is False
+        assert is_failure(failure) is True
+        assert is_response(failure) is False

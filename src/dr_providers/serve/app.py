@@ -5,24 +5,28 @@ playground e2e uses) or ``live`` (raw-httpx transport; requires the
 provider's API key env var and is never exercised by tests).
 """
 
+import contextlib
 import os
+from collections.abc import Iterator
 from enum import StrEnum
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
-from dr_providers.config import DEFAULT_API_KEY_ENVS, DEFAULT_BASE_URLS
 from dr_providers.failures import (
+    ControlValidationError,
     FailureClass,
-    UnsupportedControlError,
 )
 from dr_providers.outcome import (
     CostInfo,
     ProviderTransportFailure,
     TokenUsage,
 )
-from dr_providers.policy import ProviderTransportPolicy
+from dr_providers.policy import (
+    DEFAULT_API_KEY_ENVS,
+    policy_for,
+)
 from dr_providers.provider import Provider
 from dr_providers.request import build_payload, protocol_path
 from dr_providers.scripted import ScriptedOutcome, ScriptedProvider
@@ -35,14 +39,13 @@ from dr_providers.serve.runner import (
     run_query,
     run_variance,
 )
-from dr_providers.transport import HttpProvider
+from dr_providers.transport import MISSING_API_KEY_CODE, HttpProvider
 
 SERVE_TITLE = "dr-providers serve"
 SERVE_VERSION = "0.2.0"
 LOCALHOST_ORIGIN_REGEX = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 MAX_VARIANCE_SAMPLES = 25
 MAX_VARIANCE_MODELS = 8
-MISSING_API_KEY_CODE = "missing_api_key"
 
 
 class ProviderChoiceKind(StrEnum):
@@ -133,12 +136,22 @@ class HealthResponse(BaseModel):
     version: str
 
 
-def resolve_provider(choice: ProviderChoice, spec: QuerySpec) -> Provider:
+@contextlib.contextmanager
+def resolve_provider(
+    choice: ProviderChoice, spec: QuerySpec
+) -> Iterator[Provider]:
+    """Yield a Provider and guarantee its lifecycle is closed.
+
+    A live ``HttpProvider`` owns an httpx client, so it is context-managed to
+    avoid leaking a socket/client per request; the scripted peer holds no
+    resources and takes the no-op path.
+    """
     if choice.kind is ProviderChoiceKind.SCRIPTED:
         outcomes = [
             outcome.to_outcome() for outcome in choice.scripted_outcomes
         ]
-        return ScriptedProvider(outcomes or None)
+        yield ScriptedProvider(outcomes or None)
+        return
     kind = build_request(spec).config.route.provider
     api_key_env = str(DEFAULT_API_KEY_ENVS[kind])
     api_key = os.environ.get(api_key_env)
@@ -150,11 +163,9 @@ def resolve_provider(choice: ProviderChoice, spec: QuerySpec) -> Provider:
                 "to run live queries"
             ),
         )
-    policy = ProviderTransportPolicy(
-        api_key_env=api_key_env,
-        base_url=str(DEFAULT_BASE_URLS[kind]),
-    )
-    return HttpProvider(policy=policy, api_key=api_key)
+    policy = policy_for(kind)
+    with HttpProvider(policy=policy, api_key=api_key) as provider:
+        yield provider
 
 
 def create_app() -> FastAPI:
@@ -175,12 +186,12 @@ def create_app() -> FastAPI:
         request: BuildPayloadRequest,
     ) -> BuildPayloadResponse:
         try:
-            llm_request = build_request(request.spec)
+            call_request = build_request(request.spec)
             return BuildPayloadResponse(
-                endpoint_path=protocol_path(llm_request.config),
-                payload=build_payload(llm_request),
+                endpoint_path=protocol_path(call_request.config),
+                payload=build_payload(call_request),
             )
-        except UnsupportedControlError as error:
+        except ControlValidationError as error:
             raise HTTPException(
                 status_code=422,
                 detail=error.failure.model_dump(mode="json"),
@@ -188,10 +199,10 @@ def create_app() -> FastAPI:
 
     @app.post("/query", response_model=QueryResult)
     def query(request: QueryRequest) -> QueryResult:
-        provider = resolve_provider(request.provider, request.spec)
         try:
-            return run_query(request.spec, provider)
-        except UnsupportedControlError as error:
+            with resolve_provider(request.provider, request.spec) as provider:
+                return run_query(request.spec, provider)
+        except ControlValidationError as error:
             raise HTTPException(
                 status_code=422,
                 detail=error.failure.model_dump(mode="json"),
@@ -214,14 +225,14 @@ def create_app() -> FastAPI:
             model=request.models[0],
             messages=(),
         )
-        provider = resolve_provider(request.provider, first_spec)
-        return run_variance(
-            request.prompt,
-            models=request.models,
-            samples=request.samples,
-            provider_kind=request.provider_kind,
-            provider=provider,
-            temperature=request.temperature,
-        )
+        with resolve_provider(request.provider, first_spec) as provider:
+            return run_variance(
+                request.prompt,
+                models=request.models,
+                samples=request.samples,
+                provider_kind=request.provider_kind,
+                provider=provider,
+                temperature=request.temperature,
+            )
 
     return app

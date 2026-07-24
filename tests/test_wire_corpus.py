@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from dr_providers import (
+    GenerationControls,
     ProviderCallConfig,
     ProviderKind,
     ProviderTransportResponse,
@@ -52,7 +53,12 @@ def _config_for_stem(stem: str) -> ProviderCallConfig:
     if protocol == Protocol.RESPONSES.value:
         return openai_responses_config(model="wire-corpus-replay")
     if protocol == Protocol.ANTHROPIC_MESSAGES.value:
-        return anthropic_messages_config(model="wire-corpus-replay")
+        # Anthropic requires a token limit to materialize; the value is
+        # irrelevant to parsing a captured response body.
+        return anthropic_messages_config(
+            model="wire-corpus-replay",
+            controls=GenerationControls(token_limit=1),
+        )
     factories = {
         ProviderKind.OPENROUTER: openrouter_chat_config,
         ProviderKind.OPENAI: openai_chat_config,

@@ -16,11 +16,12 @@ from importlib.metadata import version
 from typing import Any
 
 from dr_providers.config import (
-    DEFAULT_API_KEY_ENVS,
-    DEFAULT_BASE_URLS,
     PROVIDER_CALL_CONFIG_SCHEMA,
     PROVIDER_CALL_CONFIG_SCHEMA_VERSION,
+    PROVIDER_CALL_DEFINITION_SCHEMA,
+    PROVIDER_CALL_DEFINITION_SCHEMA_VERSION,
     ProviderCallConfig,
+    ProviderCallDefinition,
     anthropic_messages_config,
     gemini_chat_config,
     openai_chat_config,
@@ -40,11 +41,6 @@ from dr_providers.controls import (
     RequestControl,
     TokenLimitParameter,
 )
-from dr_providers.definition import (
-    PROVIDER_CALL_DEFINITION_SCHEMA,
-    PROVIDER_CALL_DEFINITION_SCHEMA_VERSION,
-    ProviderCallDefinition,
-)
 from dr_providers.evidence import (
     PROVIDER_INVOCATION_EVIDENCE_SCHEMA,
     PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
@@ -56,6 +52,7 @@ from dr_providers.failures import (
     RECOVERABLE_FAILURE_CLASSES,
     RETRYABLE_FAILURE_CLASSES,
     SANITIZE_KEYS,
+    ControlValidationError,
     FailureClass,
     PermanentProviderError,
     ProviderFailure,
@@ -64,7 +61,6 @@ from dr_providers.failures import (
     ResourceExhaustionProviderError,
     TransientProviderError,
     UnknownProviderError,
-    UnsupportedControlError,
     classify_status_code,
     failure_record,
     raise_failure,
@@ -73,10 +69,10 @@ from dr_providers.failures import (
 )
 from dr_providers.outcome import (
     CostInfo,
-    LlmWarning,
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
+    ProviderTransportWarning,
     ResponsesDiagnostics,
     TokenUsage,
     WarningSeverity,
@@ -84,13 +80,19 @@ from dr_providers.outcome import (
     is_response,
 )
 from dr_providers.policy import (
+    DEFAULT_API_KEY_ENVS,
+    DEFAULT_BASE_URLS,
     DEFAULT_IDLE_TIMEOUT_SECONDS,
     DEFAULT_TIMEOUT_SECONDS,
+    ApiKeyEnv,
+    ProviderBaseUrl,
     ProviderTransportPolicy,
     policy_for,
 )
 from dr_providers.provider import Provider
 from dr_providers.request import (
+    PROVIDER_CALL_REQUEST_SCHEMA,
+    PROVIDER_CALL_REQUEST_SCHEMA_VERSION,
     ProviderCallRequest,
     build_payload,
     protocol_path,
@@ -104,10 +106,8 @@ from dr_providers.response import (
     token_usage_from_body,
 )
 from dr_providers.route import (
-    ApiKeyEnv,
     ModelRoute,
     Protocol,
-    ProviderBaseUrl,
     ProviderKind,
     ProviderQuotaIdentity,
 )
@@ -133,6 +133,8 @@ __all__ = [
     "PROVIDER_CALL_CONFIG_SCHEMA_VERSION",
     "PROVIDER_CALL_DEFINITION_SCHEMA",
     "PROVIDER_CALL_DEFINITION_SCHEMA_VERSION",
+    "PROVIDER_CALL_REQUEST_SCHEMA",
+    "PROVIDER_CALL_REQUEST_SCHEMA_VERSION",
     "PROVIDER_INVOCATION_EVIDENCE_SCHEMA",
     "PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION",
     "RECOVERABLE_FAILURE_CLASSES",
@@ -140,11 +142,11 @@ __all__ = [
     "SANITIZE_KEYS",
     "ApiKeyEnv",
     "ControlConstraints",
+    "ControlValidationError",
     "CostInfo",
     "FailureClass",
     "GenerationControls",
     "HttpProvider",
-    "LlmWarning",
     "MessageRole",
     "ModelRoute",
     "PermanentProviderError",
@@ -165,6 +167,7 @@ __all__ = [
     "ProviderTransportOutcome",
     "ProviderTransportPolicy",
     "ProviderTransportResponse",
+    "ProviderTransportWarning",
     "RateLimitedProviderError",
     "RawHttpRequest",
     "ReasoningEffort",
@@ -179,7 +182,6 @@ __all__ = [
     "Transcript",
     "TransientProviderError",
     "UnknownProviderError",
-    "UnsupportedControlError",
     "WarningSeverity",
     "anthropic_messages_config",
     "build_payload",

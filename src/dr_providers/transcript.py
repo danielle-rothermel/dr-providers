@@ -25,10 +25,15 @@ class PromptMessage(BaseModel):
     content: StrictStr
 
     def provider_dict(self) -> dict[str, str]:
+        # The wire shape sent in the request body.
         return {"role": self.role.value, "content": self.content}
 
     def identity_payload(self) -> dict[str, str]:
-        return {"role": self.role.value, "content": self.content}
+        # The identity shape is byte-identical to the wire shape today, but the
+        # two names carry different intent (wire body vs Request identity) and
+        # may diverge; identity delegates to the wire shape to stay in lockstep
+        # until they must differ.
+        return self.provider_dict()
 
 
 class Transcript(BaseModel):

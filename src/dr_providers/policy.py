@@ -5,21 +5,66 @@ native retry count is zero (its default), and the policy holds no semantic
 failure classification, logical-attempt bound, backoff, or DBOS policy —
 those belong to Whetstone's Provider Execution Policy. Transport policy is
 excluded from every Definition/Config/Request identity.
+
+This module also owns the transport-facing credential/base-URL vocabulary
+(``ApiKeyEnv``, ``ProviderBaseUrl`` and the ``DEFAULT_*`` provider maps),
+which are transport-policy concerns rather than identity concerns.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
-from dr_providers.failures import sanitize_headers
-
-if TYPE_CHECKING:
-    from dr_providers.route import ApiKeyEnv
+from dr_providers.route import ProviderKind
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_IDLE_TIMEOUT_SECONDS = 90.0
+
+
+class ApiKeyEnv(StrEnum):
+    """Environment variables the transport reads provider API keys from."""
+
+    OPENROUTER = "OPENROUTER_API_KEY"
+    OPENAI = "OPENAI_API_KEY"
+    GEMINI = "GEMINI_API_KEY"
+    ANTHROPIC = "ANTHROPIC_API_KEY"
+
+
+class ProviderBaseUrl(StrEnum):
+    """Default base URLs used by the preset provider transport policies."""
+
+    OPENROUTER = "https://openrouter.ai/api/v1"
+    OPENAI = "https://api.openai.com/v1"
+    ANTHROPIC = "https://api.anthropic.com/v1"
+    # The OpenAI-compat surface, not "Gemini's URL": a future native
+    # Gemini endpoint would be a sibling member, not this one.
+    GEMINI_OPENAI_COMPAT = (
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    )
+
+
+DEFAULT_BASE_URLS: dict[ProviderKind, ProviderBaseUrl] = {
+    ProviderKind.OPENROUTER: ProviderBaseUrl.OPENROUTER,
+    ProviderKind.OPENAI: ProviderBaseUrl.OPENAI,
+    ProviderKind.GEMINI: ProviderBaseUrl.GEMINI_OPENAI_COMPAT,
+    ProviderKind.ANTHROPIC: ProviderBaseUrl.ANTHROPIC,
+}
+
+DEFAULT_API_KEY_ENVS: dict[ProviderKind, ApiKeyEnv] = {
+    ProviderKind.OPENROUTER: ApiKeyEnv.OPENROUTER,
+    ProviderKind.OPENAI: ApiKeyEnv.OPENAI,
+    ProviderKind.GEMINI: ApiKeyEnv.GEMINI,
+    ProviderKind.ANTHROPIC: ApiKeyEnv.ANTHROPIC,
+}
 
 
 class ProviderTransportPolicy(BaseModel):
@@ -38,16 +83,16 @@ class ProviderTransportPolicy(BaseModel):
     primary stall detector: a LEGITIMATE long streaming response (e.g. a
     reasoning model emitting 18k tokens over many minutes) is making steady
     progress and must NOT be killed merely for running long. The primary
-    stall detector is ``idle_timeout_seconds`` (below); ``timeout_seconds``
+    stall detector is the effective idle timeout (below); ``timeout_seconds``
     is the absolute cap that also catches a pathological dribble (a wedged
     edge sending one byte per idle window forever, which defeats a naive
     no-NEW-bytes idle timer).
 
     Enforcement layers:
 
-      * httpx timeout discipline -- ``connect = min(30, timeout_seconds)``
+      * httpx timeout discipline -- ``connect = min(30, effective idle)``
         (a stalled TCP/TLS handshake fails fast); the streaming READ phase is
-        bounded by ``idle_timeout_seconds`` (per-read, i.e. per inter-byte
+        bounded by the effective idle timeout (per-read, i.e. per inter-byte
         gap), so a genuine idle stall fails as ``stalled_response`` promptly
         WITHOUT capping a progressing stream.
       * an overall per-invocation deadline (hard watchdog) of
@@ -65,20 +110,36 @@ class ProviderTransportPolicy(BaseModel):
     This is the PRIMARY stall detector and the semantic replacement for the
     old flat deadline: a response that keeps producing bytes (a legitimate
     long stream) never trips it, while a response that goes silent for longer
-    than ``idle_timeout_seconds`` fails promptly. It is applied as httpx's
-    per-read (per inter-byte) timeout on the streaming read phase. A
-    pathological dribble that sends a single byte just inside every idle
-    window defeats this timer by design -- that case is caught by the
-    absolute ``timeout_seconds`` cap.
+    than the idle timeout fails promptly. It is applied as httpx's per-read
+    (per inter-byte) timeout on the streaming read phase. A pathological
+    dribble that sends a single byte just inside every idle window defeats
+    this timer by design -- that case is caught by the absolute
+    ``timeout_seconds`` cap.
+
+    The effective idle timeout is clamped to at most ``timeout_seconds``: an
+    idle window wider than the absolute cap could never fire before the cap
+    interrupts the call, so it is silently narrowed to ``timeout_seconds`` at
+    construction.
     """
     native_retry_count: StrictInt = 0
+
+    @model_validator(mode="after")
+    def _clamp_idle_to_timeout(self) -> ProviderTransportPolicy:
+        # The idle timeout is the primary stall detector; if it is set wider
+        # than the absolute cap it could never fire, so clamp it down rather
+        # than reject an otherwise-coherent policy.
+        if self.idle_timeout_seconds > self.timeout_seconds:
+            object.__setattr__(
+                self, "idle_timeout_seconds", self.timeout_seconds
+            )
+        return self
 
     def identity_payload(self) -> dict[str, Any]:
         """Policy identity for Invocation Evidence binding.
 
         Never includes credential material: only the *name* of the env
-        var, the base URL, timeout, and native retry count. This binds
-        the policy to evidence without persisting any secret.
+        var, the base URL, timeout, idle timeout, and native retry count.
+        This binds the policy to evidence without persisting any secret.
         """
         return {
             "api_key_env": self.api_key_env,
@@ -89,26 +150,31 @@ class ProviderTransportPolicy(BaseModel):
         }
 
 
-def policy_for(
+def policy_for(  # noqa: PLR0913 -- explicit keyword-only overrides
+    kind: ProviderKind,
     *,
-    api_key_env: ApiKeyEnv | str,
+    api_key_env: ApiKeyEnv | str | None = None,
     base_url: str | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
     native_retry_count: int = 0,
 ) -> ProviderTransportPolicy:
+    """Build a transport policy for a provider kind from the DEFAULT maps.
+
+    ``api_key_env`` and ``base_url`` default to the provider's standard
+    env-var name and base URL, and either may be overridden (e.g. a proxy
+    base URL or a non-standard key env var).
+    """
+    resolved_key_env = (
+        DEFAULT_API_KEY_ENVS[kind] if api_key_env is None else api_key_env
+    )
+    resolved_base_url = (
+        str(DEFAULT_BASE_URLS[kind]) if base_url is None else base_url
+    )
     return ProviderTransportPolicy(
-        api_key_env=str(api_key_env),
-        base_url=base_url,
+        api_key_env=str(resolved_key_env),
+        base_url=resolved_base_url,
         timeout_seconds=timeout_seconds,
         idle_timeout_seconds=idle_timeout_seconds,
         native_retry_count=native_retry_count,
     )
-
-
-__all__ = [
-    "DEFAULT_TIMEOUT_SECONDS",
-    "ProviderTransportPolicy",
-    "policy_for",
-    "sanitize_headers",
-]

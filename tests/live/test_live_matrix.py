@@ -6,13 +6,13 @@ is unset, so ``uv run pytest -m live`` is safe to run without every
 provider's key configured.
 
 Every successful call writes its raw response body to
-``data/wire-corpus/<provider_kind>_<endpoint_kind>.json`` (pretty
-JSON, overwritten each run). ``tests/test_wire_corpus.py`` re-parses
-those bodies offline so a kernel parser regression is caught without
+``data/wire-corpus/<provider>_<protocol>.json`` (pretty JSON,
+overwritten each run). ``tests/test_wire_corpus.py`` re-parses those
+bodies offline so a kernel parser regression is caught without
 touching the network.
 
 Temperature is set to 0.0 only for the openrouter and gemini cases.
-All four presets declare ``temperature`` in ``supported_controls``,
+All five presets declare ``temperature`` in ``supported_controls``,
 so the kernel is willing to transport it everywhere, but the
 ``gpt-5-mini`` reasoning model used for the openai cases rejects it
 at the wire level ("Unsupported parameter: 'temperature' is not

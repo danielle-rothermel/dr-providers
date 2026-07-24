@@ -35,28 +35,6 @@ class Protocol(StrEnum):
     ANTHROPIC_MESSAGES = "anthropic_messages"
 
 
-class ApiKeyEnv(StrEnum):
-    """Environment variables the preset routes read API keys from."""
-
-    OPENROUTER = "OPENROUTER_API_KEY"
-    OPENAI = "OPENAI_API_KEY"
-    GEMINI = "GEMINI_API_KEY"
-    ANTHROPIC = "ANTHROPIC_API_KEY"
-
-
-class ProviderBaseUrl(StrEnum):
-    """Default base URLs used by the preset provider configs."""
-
-    OPENROUTER = "https://openrouter.ai/api/v1"
-    OPENAI = "https://api.openai.com/v1"
-    ANTHROPIC = "https://api.anthropic.com/v1"
-    # The OpenAI-compat surface, not "Gemini's URL": a future native
-    # Gemini endpoint would be a sibling member, not this one.
-    GEMINI_OPENAI_COMPAT = (
-        "https://generativelanguage.googleapis.com/v1beta/openai"
-    )
-
-
 class ModelRoute(BaseModel):
     """Executable target tuple ``(provider, protocol, model)``.
 

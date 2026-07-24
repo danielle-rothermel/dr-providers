@@ -3,36 +3,63 @@
 A Provider Call Request is immutable and identity-bearing: it references
 exactly one Provider Call Config and carries exactly one Transcript. Its
 identity is the Config Identity Hash plus the Transcript — no copied
-controls and no transport policy. ``build_payload`` reads the referenced
-Config's controls to construct the least-processed wire body for the
-route's protocol (chat_completions, responses, or anthropic_messages).
+controls and no transport policy — and the Request is itself identified by
+a full 64-char SHA-256 Identity Hash. ``build_payload`` reads the
+referenced Config's controls to construct the least-processed wire body
+for the route's protocol (chat_completions, responses, or
+anthropic_messages).
 """
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any
 
+from dr_serialize import (
+    IdentityDocument,
+    build_identity_document,
+    identity_document_hash,
+)
 from pydantic import BaseModel, ConfigDict
 
+from dr_providers._frozen import _thaw
 from dr_providers.config import (  # noqa: TC001 -- pydantic field
     ProviderCallConfig,
 )
 from dr_providers.controls import (
     GenerationControls,
+    ReasoningEffort,
     ReasoningRequestShape,
     RequestControl,
 )
+from dr_providers.failures import (
+    ControlValidationError,
+    FailureClass,
+    failure_record,
+)
 from dr_providers.route import Protocol
-from dr_providers.transcript import MessageRole, Transcript
+from dr_providers.transcript import MessageRole, PromptMessage, Transcript
 
 CHAT_COMPLETIONS_PATH = "/chat/completions"
 RESPONSES_PATH = "/responses"
 ANTHROPIC_MESSAGES_PATH = "/messages"
 
+PROVIDER_CALL_REQUEST_SCHEMA = "dr_providers.provider_call_request"
+PROVIDER_CALL_REQUEST_SCHEMA_VERSION = 1
+
 PROTOCOL_PATHS: dict[Protocol, str] = {
     Protocol.CHAT_COMPLETIONS: CHAT_COMPLETIONS_PATH,
     Protocol.RESPONSES: RESPONSES_PATH,
     Protocol.ANTHROPIC_MESSAGES: ANTHROPIC_MESSAGES_PATH,
+}
+
+# Anthropic's Messages ``output_config.effort`` accepts only these levels.
+# Cross-provider levels with no Anthropic equivalent (NONE/MINIMAL/XHIGH)
+# are rejected loudly rather than silently coerced to a nearby value.
+_ANTHROPIC_EFFORT: dict[ReasoningEffort, str] = {
+    ReasoningEffort.LOW: "low",
+    ReasoningEffort.MEDIUM: "medium",
+    ReasoningEffort.HIGH: "high",
 }
 
 
@@ -51,6 +78,18 @@ class ProviderCallRequest(BaseModel):
             "config_identity_hash": self.config.identity_hash,
             "transcript": self.transcript.identity_payload(),
         }
+
+    def identity_document(self) -> IdentityDocument:
+        return build_identity_document(
+            schema=PROVIDER_CALL_REQUEST_SCHEMA,
+            schema_version=PROVIDER_CALL_REQUEST_SCHEMA_VERSION,
+            payload=self.identity_payload(),
+        )
+
+    @cached_property
+    def identity_hash(self) -> str:
+        """Full 64-char lowercase SHA-256 Request Identity Hash."""
+        return identity_document_hash(self.identity_document())
 
 
 def protocol_path(config: ProviderCallConfig) -> str:
@@ -74,12 +113,12 @@ def build_payload(request: ProviderCallRequest) -> dict[str, Any]:
             "messages": [m.provider_dict() for m in messages],
         }
     elif protocol is Protocol.RESPONSES:
-        instructions, input_messages = _responses_input_messages(messages)
+        instructions, input_messages = _input_messages(messages)
         kwargs = {"model": config.route.model, "input": input_messages}
         if instructions is not None:
             kwargs["instructions"] = instructions
     else:
-        system, chat_messages = _anthropic_input_messages(messages)
+        system, chat_messages = _input_messages(messages)
         kwargs = {
             "model": config.route.model,
             "messages": chat_messages,
@@ -108,7 +147,10 @@ def _set_controls(kwargs: dict[str, Any], config: ProviderCallConfig) -> None:
     ):
         kwargs[constraints.token_limit_parameter.value] = controls.token_limit
     _set_reasoning(kwargs, config, controls)
-    kwargs.update(config.extensions.extra_body)
+    # Reserved core keys are rejected when the Config is validated, so an
+    # extension can never overwrite a validated core wire field here. Thaw
+    # so nested frozen mappings stay JSON-serializable on the wire.
+    kwargs.update(_thaw(config.extensions.extra_body))
 
 
 def _set_reasoning(
@@ -120,6 +162,12 @@ def _set_reasoning(
     effort = controls.reasoning
     if effort is None or not constraints.supports(RequestControl.REASONING):
         return
+    if config.route.protocol is Protocol.ANTHROPIC_MESSAGES:
+        # The Anthropic Messages API rejects a top-level {"reasoning": ...};
+        # it takes {"output_config": {"effort": ...}} with a restricted set
+        # of effort levels.
+        kwargs["output_config"] = {"effort": _anthropic_effort(effort)}
+        return
     shape = constraints.reasoning_shape
     if shape is ReasoningRequestShape.EFFORT_FIELD:
         kwargs["reasoning_effort"] = effort.value
@@ -127,21 +175,33 @@ def _set_reasoning(
         kwargs["reasoning"] = {"effort": effort.value}
 
 
-def _responses_input_messages(
-    messages: tuple[Any, ...],
-) -> tuple[str | None, list[dict[str, Any]]]:
-    dicts = [m.provider_dict() for m in messages]
-    if dicts and dicts[0].get("role") == MessageRole.SYSTEM.value:
-        return dicts[0].get("content"), dicts[1:]
-    return None, dicts
+def _anthropic_effort(effort: ReasoningEffort) -> str:
+    mapped = _ANTHROPIC_EFFORT.get(effort)
+    if mapped is None:
+        raise ControlValidationError(
+            failure_record(
+                failure_class=FailureClass.PERMANENT,
+                code="unmappable_reasoning_effort",
+                message=(
+                    f"reasoning effort {effort.value!r} has no Anthropic "
+                    f"Messages effort equivalent; use one of "
+                    f"{sorted(e.value for e in _ANTHROPIC_EFFORT)!r}"
+                ),
+                metadata={"effort": effort.value},
+            )
+        )
+    return mapped
 
 
-def _anthropic_input_messages(
-    messages: tuple[Any, ...],
+def _input_messages(
+    messages: tuple[PromptMessage, ...],
 ) -> tuple[str | None, list[dict[str, Any]]]:
-    """Lift a leading system message into the top-level ``system`` field,
-    which the Anthropic Messages protocol requires separate from the
-    conversational ``messages`` array."""
+    """Lift a leading system message into a separate top-level field.
+
+    Both the Responses (``instructions``) and Anthropic Messages
+    (``system``) protocols carry a leading system message separately from
+    the conversational array, so the split is identical for both.
+    """
     dicts = [m.provider_dict() for m in messages]
     if dicts and dicts[0].get("role") == MessageRole.SYSTEM.value:
         return dicts[0].get("content"), dicts[1:]

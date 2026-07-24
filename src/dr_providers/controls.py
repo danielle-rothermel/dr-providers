@@ -8,10 +8,21 @@ is declared by the Provider Call Definition, not by the request.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
+
+from dr_providers._frozen import _deep_freeze, _thaw
 
 
 class RequestControl(StrEnum):
@@ -21,6 +32,15 @@ class RequestControl(StrEnum):
     TOP_P = "top_p"
     TOKEN_LIMIT = "token_limit"  # noqa: S105 -- knob name, not a secret
     REASONING = "reasoning"
+
+
+# The GenerationControls attribute name backing each control. Each control
+# maps to exactly ``member.value``; this dict is the single source of truth
+# for that correspondence and is asserted exhaustive over RequestControl.
+CONTROL_ATTR: dict[RequestControl, str] = {
+    control: control.value for control in RequestControl
+}
+assert set(CONTROL_ATTR) == set(RequestControl)
 
 
 class TokenLimitParameter(StrEnum):
@@ -78,12 +98,7 @@ class GenerationControls(BaseModel):
 
 
 DEFAULT_SUPPORTED_CONTROLS: frozenset[RequestControl] = frozenset(
-    {
-        RequestControl.TEMPERATURE,
-        RequestControl.TOP_P,
-        RequestControl.TOKEN_LIMIT,
-        RequestControl.REASONING,
-    }
+    RequestControl
 )
 
 
@@ -122,11 +137,42 @@ class ControlConstraints(BaseModel):
 
 class ProviderBodyExtensions(BaseModel):
     """Output-affecting provider body extensions merged into the wire
-    payload."""
+    payload.
+
+    ``extra_body`` is deeply immutable: nested mappings become read-only
+    proxies and lists become tuples, so an extension set cannot be mutated
+    after construction and thus can never drift from the cached identity
+    hash of the owning Config.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    extra_body: dict[str, Any] = Field(default_factory=dict)
+    extra_body: Mapping[str, Any] = Field(default_factory=dict)
+
+    @field_validator("extra_body", mode="before")
+    @classmethod
+    def _reject_non_mapping(cls, value: Any) -> Any:
+        if value is None:
+            return {}
+        if not isinstance(value, Mapping):
+            msg = "extra_body must be a mapping"
+            raise TypeError(msg)
+        return value
+
+    @model_validator(mode="after")
+    def _freeze_extra_body(self) -> ProviderBodyExtensions:
+        # Pydantic canonicalizes a ``Mapping`` field into a plain dict, so
+        # deep-freeze after validation and reassign the read-only proxy: the
+        # whole structure (including the top level) is then immutable and can
+        # never drift from the owning Config's cached identity hash.
+        object.__setattr__(self, "extra_body", _deep_freeze(self.extra_body))
+        return self
+
+    @field_serializer("extra_body")
+    def _serialize_extra_body(
+        self, value: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        return _thaw(value)
 
     def identity_payload(self) -> dict[str, Any]:
-        return dict(self.extra_body)
+        return _thaw(self.extra_body)

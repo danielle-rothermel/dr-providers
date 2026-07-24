@@ -10,47 +10,44 @@ extra) is only imported when running the CLI, so it is free to import
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 import typer
 
-from dr_providers.config import (
-    DEFAULT_API_KEY_ENVS,
-    DEFAULT_BASE_URLS,
-    ProviderCallConfig,
-    anthropic_messages_config,
-    gemini_chat_config,
-    openai_chat_config,
-    openai_responses_config,
-    openrouter_chat_config,
-)
+from dr_providers._factories import FACTORY_BY_KIND, ProviderFactoryKind
 from dr_providers.controls import GenerationControls, ReasoningEffort
 from dr_providers.outcome import ProviderTransportResponse
-from dr_providers.policy import ProviderTransportPolicy
+from dr_providers.policy import policy_for
 from dr_providers.request import ProviderCallRequest
 from dr_providers.transcript import MessageRole, PromptMessage, Transcript
 from dr_providers.transport import HttpProvider
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
 DEFAULT_RETRIES = 0
+
+# Anthropic's Messages preset REQUIRES a token limit; when the CLI targets
+# anthropic and no ``--token-limit`` is passed we supply this sensible default
+# so the call is well-formed. Documented in ``--token-limit``'s help below.
+DEFAULT_ANTHROPIC_TOKEN_LIMIT = 4096
 
 
 class ProviderChoice(StrEnum):
     OPENROUTER = "openrouter"
     OPENAI = "openai"
+    # CLI spelling is hyphenated; the serve surface uses "openai_responses".
+    # Both map to the same shared factory registry (see _factories.py).
     OPENAI_RESPONSES = "openai-responses"
     GEMINI = "gemini"
     ANTHROPIC = "anthropic"
 
 
-CONFIG_FACTORIES: dict[ProviderChoice, Callable[..., ProviderCallConfig]] = {
-    ProviderChoice.OPENROUTER: openrouter_chat_config,
-    ProviderChoice.OPENAI: openai_chat_config,
-    ProviderChoice.OPENAI_RESPONSES: openai_responses_config,
-    ProviderChoice.GEMINI: gemini_chat_config,
-    ProviderChoice.ANTHROPIC: anthropic_messages_config,
+# The CLI choice → the canonical shared factory kind. Only the OpenAI Responses
+# spelling differs between surfaces; every other member is name-identical.
+_CHOICE_TO_FACTORY_KIND: dict[ProviderChoice, ProviderFactoryKind] = {
+    ProviderChoice.OPENROUTER: ProviderFactoryKind.OPENROUTER,
+    ProviderChoice.OPENAI: ProviderFactoryKind.OPENAI,
+    ProviderChoice.OPENAI_RESPONSES: ProviderFactoryKind.OPENAI_RESPONSES,
+    ProviderChoice.GEMINI: ProviderFactoryKind.GEMINI,
+    ProviderChoice.ANTHROPIC: ProviderFactoryKind.ANTHROPIC,
 }
 
 PROVIDER_OPTION = typer.Option("--provider", help="Provider to call.")
@@ -65,7 +62,12 @@ TEMPERATURE_OPTION = typer.Option(
 )
 TOP_P_OPTION = typer.Option("--top-p", help="Nucleus sampling top-p.")
 TOKEN_LIMIT_OPTION = typer.Option(
-    "--token-limit", help="Max output/completion tokens."
+    "--token-limit",
+    help=(
+        "Max output/completion tokens. Required by the anthropic preset; "
+        f"if omitted for --provider anthropic, defaults to "
+        f"{DEFAULT_ANTHROPIC_TOKEN_LIMIT}."
+    ),
 )
 RETRIES_OPTION = typer.Option(
     "--retries",
@@ -88,7 +90,10 @@ def query(  # noqa: PLR0913
     retries: Annotated[int, RETRIES_OPTION] = DEFAULT_RETRIES,
 ) -> None:
     """Run a single-shot provider query and print the response text."""
-    config = CONFIG_FACTORIES[provider](
+    if token_limit is None and provider is ProviderChoice.ANTHROPIC:
+        token_limit = DEFAULT_ANTHROPIC_TOKEN_LIMIT
+    factory = FACTORY_BY_KIND[_CHOICE_TO_FACTORY_KIND[provider]]
+    config = factory(
         model=model,
         controls=GenerationControls(
             temperature=temperature,
@@ -106,12 +111,7 @@ def query(  # noqa: PLR0913
         transcript=Transcript(messages=tuple(messages)),
     )
 
-    kind = config.route.provider
-    policy = ProviderTransportPolicy(
-        api_key_env=str(DEFAULT_API_KEY_ENVS[kind]),
-        base_url=str(DEFAULT_BASE_URLS[kind]),
-        native_retry_count=retries,
-    )
+    policy = policy_for(config.route.provider, native_retry_count=retries)
     with HttpProvider(policy=policy) as http_provider:
         outcome = http_provider.complete(request)
 

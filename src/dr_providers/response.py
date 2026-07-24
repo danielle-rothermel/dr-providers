@@ -13,7 +13,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, assert_never
 
 from dr_providers.failures import FailureClass
 from dr_providers.outcome import (
@@ -98,7 +98,9 @@ def parse_response(
         return parse_chat_completions_body(body, config=config)
     if protocol is Protocol.ANTHROPIC_MESSAGES:
         return parse_anthropic_messages_body(body, config=config)
-    return parse_responses_body(body, config=config)
+    if protocol is Protocol.RESPONSES:
+        return parse_responses_body(body, config=config)
+    assert_never(protocol)
 
 
 def parse_chat_completions_body(
@@ -118,9 +120,6 @@ def parse_chat_completions_body(
     choice = choices[0]
     message = _get(choice, "message")
     text = _content_to_text(_get(message, "content"))
-    if text is None:
-        value = _get(choice, "text")
-        text = value if isinstance(value, str) else None
     if text is None or not text.strip():
         return _parse_failure(
             "provider response produced no generation text", body, config
@@ -146,7 +145,9 @@ def parse_anthropic_messages_body(
         return _parse_failure(
             "anthropic response missing content list", body, config
         )
-    text = _anthropic_text(content)
+    text, parse_error = _anthropic_text(content)
+    if parse_error is not None:
+        return _parse_failure(parse_error, body, config)
     if text is None or not text.strip():
         return _parse_failure(
             "anthropic response produced no generation text", body, config
@@ -154,7 +155,7 @@ def parse_anthropic_messages_body(
     return ProviderTransportResponse(
         text=text,
         raw_body=dict(body),
-        usage=_anthropic_usage(body),
+        usage=token_usage_from_body(body),
         cost=cost_from_body(body),
         finish_reason=_optional_str(body.get("stop_reason")),
         response_id=_optional_str(body.get("id")),
@@ -247,6 +248,10 @@ def token_usage_from_body(body: Mapping[str, Any]) -> TokenUsage | None:
             reasoning = _optional_int(details.get("reasoning_tokens"))
             if reasoning is not None:
                 break
+    # Providers that omit an explicit total (e.g. Anthropic Messages)
+    # still let us derive it from prompt + completion.
+    if total is None and prompt is not None and completion is not None:
+        total = prompt + completion
     if (prompt, completion, total, reasoning) == (None, None, None, None):
         return None
     return TokenUsage(
@@ -257,32 +262,25 @@ def token_usage_from_body(body: Mapping[str, Any]) -> TokenUsage | None:
     )
 
 
-def _anthropic_usage(body: Mapping[str, Any]) -> TokenUsage | None:
-    usage = body.get("usage")
-    if not isinstance(usage, Mapping):
-        return None
-    prompt = _optional_int(usage.get("input_tokens"))
-    completion = _optional_int(usage.get("output_tokens"))
-    total = None
-    if prompt is not None and completion is not None:
-        total = prompt + completion
-    if (prompt, completion) == (None, None):
-        return None
-    return TokenUsage(
-        prompt_tokens=prompt,
-        completion_tokens=completion,
-        total_tokens=total,
-    )
+def _anthropic_text(content: Sequence[Any]) -> tuple[str | None, str | None]:
+    """Concatenate Anthropic text blocks, failing on malformed content.
 
-
-def _anthropic_text(content: Sequence[Any]) -> str | None:
+    Returns ``(text, None)`` on success or ``(None, parse_error)`` when a
+    text block is not a mapping or carries a non-string ``text`` value —
+    silently skipping such blocks would produce truncated text with no
+    signal.
+    """
     parts: list[str] = []
     for part in content:
-        if isinstance(part, Mapping) and part.get("type") == "text":
-            text = part.get("text")
-            if isinstance(text, str):
-                parts.append(text)
-    return "".join(parts) or None
+        if not isinstance(part, Mapping):
+            return None, "anthropic response content block is not an object"
+        if part.get("type") != "text":
+            continue
+        text = part.get("text")
+        if not isinstance(text, str):
+            return None, "anthropic response text block value is not a string"
+        parts.append(text)
+    return ("".join(parts) or None), None
 
 
 def cost_from_body(body: Mapping[str, Any]) -> CostInfo | None:
@@ -516,7 +514,7 @@ def _content_to_text(content: Any) -> str | None:
 def _get(value: Any, key: str) -> Any:
     if isinstance(value, Mapping):
         return value.get(key)
-    return getattr(value, key, None)
+    return None
 
 
 def _optional_str(value: Any) -> str | None:
