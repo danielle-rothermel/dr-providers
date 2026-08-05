@@ -54,7 +54,7 @@
     <tr><td><dfn class="term-name" id="term-provider-transport-response">Provider Transport Response</dfn></td><td>A typed successful transport value containing the raw response body as received, without normalization, plus provider identifiers, usage, cost, warnings, and diagnostics available at the transport boundary. It does not assert semantic acceptance by the caller.</td></tr>
     <tr><td><dfn class="term-name" id="term-provider-transport-failure">Provider Transport Failure</dfn></td><td>A typed expected transport failure value retaining the complete raw request and failure-response bytes as received, without normalization, plus transport diagnostics, without the caller's semantic classification or retry decisions.</td></tr>
     <tr><td><dfn class="term-name" id="term-provider-transport-outcome">Provider Transport Outcome</dfn></td><td>The closed union of a <a class="term-ref" href="#term-provider-transport-response">provider transport response</a> or a <a class="term-ref" href="#term-provider-transport-failure">provider transport failure</a> that never raises for an expected result. Unexpected programming and infrastructure errors remain exceptions.</td></tr>
-    <tr><td><dfn class="term-name" id="term-provider-invocation-evidence">Provider Invocation Evidence</dfn></td><td>A stable serializable artifact for one completed transport invocation, binding the exact <a class="term-ref" href="#term-provider-call-request">provider call request</a> and <a class="term-ref" href="#term-provider-transport-policy">provider transport policy</a> identities to its <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a> and the complete raw request and success-or-failure bytes as received, without normalization. Credential material and authorization headers are excluded, and it retains bodies without silent truncation.</td></tr>
+    <tr><td><dfn class="term-name" id="term-provider-invocation-evidence">Provider Invocation Evidence</dfn></td><td>A stable serializable artifact for one completed transport invocation, binding the exact <a class="term-ref" href="#term-provider-call-request">provider call request</a> and <a class="term-ref" href="#term-provider-transport-policy">provider transport policy</a> identities to its <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a> and the complete raw request and success-or-failure bytes as received, without normalization. The standard <code>HttpProvider</code> path redacts known credential header names before binding evidence; direct raw-request inputs and base URLs remain trusted caller inputs. Bodies are retained without silent truncation.</td></tr>
   </tbody>
 </table>
 </div>
@@ -71,7 +71,7 @@
   <li><span class="must">Excludes</span> the <a class="term-ref" href="#term-provider-transport-policy">provider transport policy</a> from identity, and <span class="key">defaults its native retry count to zero</span>.</li>
   <li><span class="must">Returns</span> a <span class="key">closed</span> <a class="term-ref" href="#term-provider-transport-outcome">provider transport outcome</a> for every expected result; only unexpected programming and infrastructure errors raise.</li>
   <li><span class="must">Retains</span> complete raw request, response, and failure bodies as received in <a class="term-ref" href="#term-provider-invocation-evidence">provider invocation evidence</a> <span class="key">without silent truncation</span>.</li>
-  <li><span class="must">Redacts</span> credential material and authorization headers from all retained evidence.</li>
+  <li><span class="must">Redacts</span> known credential header names when <code>HttpProvider</code> builds retained request evidence; callers keep direct <code>RawHttpRequest</code> inputs and base URLs free of credentials.</li>
   <li><span class="must">Derives</span> a <a class="term-ref" href="#term-provider-quota-identity">provider quota identity</a> as exactly the <code>(provider, protocol, model)</code> tuple — no credential, account, or override component.</li>
   <li><span class="must">Leaves</span> semantic acceptance, failure taxonomy, retry, backoff, checkpointing, result storage, and concurrency to the caller.</li>
 </ul>
@@ -183,7 +183,7 @@
     <tr>
       <td><a class="term-ref" href="#term-provider-invocation-evidence">Provider Invocation Evidence</a></td>
       <td><code>ProviderInvocationEvidence</code>, <code>RawHttpRequest</code>, <code>PROVIDER_INVOCATION_EVIDENCE_SCHEMA</code>, <code>PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION</code></td>
-      <td><code>RawHttpRequest</code> is the retained request record with authorization headers redacted; the schema constants name its <a class="term-ref" href="#term-identity-document">identity document</a>.</td>
+      <td><code>RawHttpRequest</code> is the retained request record. <code>HttpProvider</code> constructs it through the redacting builder; direct construction and deserialization retain supplied trusted headers. The schema constants name its <a class="term-ref" href="#term-identity-document">identity document</a>.</td>
     </tr>
     <tr>
       <td>Transport failure taxonomy</td>
@@ -198,7 +198,7 @@
     <tr>
       <td>Credential redaction</td>
       <td><code>sanitize_headers</code>, <code>sanitize_kwargs</code>, <code>SANITIZE_KEYS</code></td>
-      <td>Strip authorization headers and credential-like keys before persistence; <code>SANITIZE_KEYS</code> is the redacted key set.</td>
+      <td>Redact authorization headers and credential-like keys when the helpers are applied; <code>HttpProvider</code> uses <code>sanitize_headers</code> through the <code>RawHttpRequest</code> builder before binding evidence, and <code>SANITIZE_KEYS</code> is the redacted key set.</td>
     </tr>
     <tr>
       <td>Conformance warnings</td>
