@@ -88,7 +88,7 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
     else:
         assert outcome.cost is not None
         assert outcome.cost.total_cost == expected["cost"]
-    assert outcome.raw_body == entry["body"]
+    assert outcome.response_body == entry["body"]
     if is_responses:
         assert outcome.diagnostics is not None
         assert outcome.diagnostics.model_dump() == _expected_diagnostics(entry)

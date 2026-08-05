@@ -131,10 +131,10 @@ request and policy identity payloads, structured request metadata, the
 constructed JSON request-body mapping, and the response body decoded as JSON
 when possible or retained as text otherwise. It does not retain original HTTP
 wire bytes. The standard `HttpProvider` path redacts known credential header
-names; direct `RawHttpRequest` construction and deserialization remain
-trusted-data paths. Evidence fields containing dictionaries remain mutable
-after construction, so callers should serialize the snapshot before sharing
-or persistence.
+names; direct `ProviderHttpRequestEvidence` construction and deserialization
+remain trusted-data paths. Evidence fields containing dictionaries remain
+mutable after construction, so callers should serialize the snapshot before
+sharing or persistence.
 
 ## Repository validation
 

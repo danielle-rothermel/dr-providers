@@ -121,4 +121,4 @@ def test_responses_failure_metadata_is_content_free(
     ):
         assert private_value not in serialized_metadata
     assert len(failure.metadata["diagnostics"]["response_id_hash"]) == 16
-    assert failure.raw_response_body == body
+    assert failure.response_body == body

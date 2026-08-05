@@ -104,7 +104,7 @@ def parse_failure(
         code=PARSE_ERROR_CODE,
         message=message,
         retryable=False,
-        raw_response_body=dict(body),
+        response_body=dict(body),
         metadata={
             "provider": config.route.provider.value,
             "protocol": config.route.protocol.value,

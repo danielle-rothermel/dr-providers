@@ -13,6 +13,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Saturate socket and watchdog waits at the platform timeout ceiling while
   preserving requested finite timeout policy values, preventing large values
   from raising `OverflowError` during provider invocation.
+- Reject non-finite generation controls and extension mappings outside strict
+  finite JSON during model construction, before identity or HTTP encoding.
 
 ### Changed
 
@@ -30,6 +32,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   identity hashes change.
 - Provider transport policies require strict finite positive timeout values
   and a strict nonnegative native retry count at model construction.
+- Provider Invocation Evidence v2 names retained HTTP request evidence and
+  constructed request and decoded response bodies directly, without
+  `raw_*`/`stable_*` terminology or compatibility aliases.
+
+### Removed
+
+- Remove the obsolete model-specific live-test shell script; the maintained
+  mise-aware live matrix is the provider-level verification path.
 
 ## [0.2.1] - 2026-08-05
 

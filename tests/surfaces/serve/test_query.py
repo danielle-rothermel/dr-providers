@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from dr_providers.core.failures import FailureClass
 from dr_providers.modeling.controls import ReasoningEffort
@@ -28,6 +29,20 @@ def make_spec(**overrides: object) -> QuerySpec:
     }
     defaults.update(overrides)
     return QuerySpec.model_validate(defaults)
+
+
+@pytest.mark.parametrize("field", ["temperature", "top_p"])
+@pytest.mark.parametrize(
+    "value",
+    [float("nan"), float("inf"), float("-inf")],
+    ids=["nan", "positive-infinity", "negative-infinity"],
+)
+def test_query_spec_rejects_nonfinite_generation_controls(
+    field: str,
+    value: float,
+) -> None:
+    with pytest.raises(ValidationError):
+        make_spec(**{field: value})
 
 
 @pytest.mark.parametrize(

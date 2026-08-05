@@ -212,7 +212,7 @@ def test_idle_stall_returns_exact_typed_evidence() -> None:
     assert failure.code == STALLED_RESPONSE_CODE
     assert failure.failure_class is FailureClass.TRANSIENT
     assert failure.retryable is True
-    assert failure.raw_request
+    assert failure.request_body
     assert failure.metadata == {
         "url": f"{server.base_url}/chat/completions",
         "timeout_seconds": POLICY_TIMEOUT_SECONDS,

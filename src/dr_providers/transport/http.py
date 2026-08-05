@@ -14,8 +14,8 @@ from dr_providers.core.failures import (
 from dr_providers.modeling.route import Protocol
 from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import (
+    ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
-    RawHttpRequest,
 )
 from dr_providers.outcomes.models import (
     ProviderTransportFailure,
@@ -117,7 +117,7 @@ class HttpProvider:
         payload = build_payload(request)
         url = self._request_url(request.config)
         headers = self._headers(request.config)
-        raw_request = RawHttpRequest.build(
+        http_request = ProviderHttpRequestEvidence.build(
             url=url or "<missing_base_url>",
             headers=headers or {},
             body=payload,
@@ -126,7 +126,7 @@ class HttpProvider:
         return ProviderInvocationEvidence.build(
             request=request,
             policy=self._policy,
-            raw_request=raw_request,
+            http_request=http_request,
             outcome=outcome,
         )
 
@@ -247,7 +247,7 @@ class HttpProvider:
                 code=TRANSPORT_ERROR_CODE,
                 message=f"{type(error).__name__}: {error}",
                 retryable=True,
-                raw_request=dict(payload),
+                request_body=dict(payload),
                 metadata={"url": url},
             )
         return self._outcome_from_response(
@@ -267,7 +267,7 @@ class HttpProvider:
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
             message=f"{type(error).__name__}: {error}",
             retryable=True,
-            raw_request=dict(payload),
+            request_body=dict(payload),
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
@@ -292,7 +292,7 @@ class HttpProvider:
                 "stalled without completing"
             ),
             retryable=True,
-            raw_request=dict(payload),
+            request_body=dict(payload),
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
@@ -317,8 +317,8 @@ class HttpProvider:
                 code=INVALID_JSON_CODE,
                 message="provider response body is not valid JSON",
                 retryable=False,
-                raw_request=dict(payload),
-                raw_response_body=http_response.text,
+                request_body=dict(payload),
+                response_body=http_response.text,
                 metadata={"url": url},
             )
         if not isinstance(body, Mapping):
@@ -327,14 +327,14 @@ class HttpProvider:
                 code=PARSE_ERROR_CODE,
                 message="provider response JSON must be an object",
                 retryable=False,
-                raw_request=dict(payload),
-                raw_response_body=body,
+                request_body=dict(payload),
+                response_body=body,
                 status_code=http_response.status_code,
                 metadata={"url": url},
             )
         outcome = parse_response(body, config=request.config)
         if isinstance(outcome, ProviderTransportFailure):
-            return outcome.model_copy(update={"raw_request": dict(payload)})
+            return outcome.model_copy(update={"request_body": dict(payload)})
         return outcome
 
     def _http_status_failure(
@@ -344,18 +344,18 @@ class HttpProvider:
         payload: dict[str, Any],
     ) -> ProviderTransportFailure:
         failure_class = classify_status_code(http_response.status_code)
-        raw_body: Any
+        response_body: Any
         try:
-            raw_body = http_response.json()
+            response_body = http_response.json()
         except ValueError:
-            raw_body = http_response.text
+            response_body = http_response.text
         return ProviderTransportFailure(
             failure_class=failure_class,
             code=f"{HTTP_STATUS_CODE_PREFIX}{http_response.status_code}",
             message=http_response.text,
             retryable=failure_class in _RETRYABLE,
-            raw_request=dict(payload),
-            raw_response_body=raw_body,
+            request_body=dict(payload),
+            response_body=response_body,
             status_code=http_response.status_code,
             metadata={"url": url},
         )
@@ -373,7 +373,7 @@ class HttpProvider:
                 f"{config.quota_identity.label()!r} has no base_url"
             ),
             retryable=False,
-            raw_request=dict(payload),
+            request_body=dict(payload),
         )
 
     def _missing_api_key_failure(
@@ -387,7 +387,7 @@ class HttpProvider:
                 f"environment variable {self._policy.api_key_env!r} is not set"
             ),
             retryable=False,
-            raw_request=dict(payload),
+            request_body=dict(payload),
         )
 
     def _request_url(self, config: ProviderCallConfig) -> str | None:

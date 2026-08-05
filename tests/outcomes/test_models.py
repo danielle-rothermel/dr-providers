@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from dr_providers import (
     FailureClass,
     ProviderTransportFailure,
@@ -20,3 +23,19 @@ class TestOutcomeGuards:
         assert is_failure(response) is False
         assert is_failure(failure) is True
         assert is_response(failure) is False
+
+
+def test_removed_persisted_field_names_are_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ProviderTransportResponse.model_validate(
+            {"text": "hi", "raw_body": {}}
+        )
+    with pytest.raises(ValidationError):
+        ProviderTransportFailure.model_validate(
+            {
+                "failure_class": FailureClass.PERMANENT,
+                "message": "bad",
+                "retryable": False,
+                "raw_request": {},
+            }
+        )

@@ -68,4 +68,4 @@ def test_wire_corpus_entry_parses(corpus_file: Path) -> None:
 
     assert isinstance(outcome, ProviderTransportResponse)
     assert outcome.text.strip()
-    assert outcome.raw_body == body
+    assert outcome.response_body == body

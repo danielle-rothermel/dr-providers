@@ -4,7 +4,12 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
 
-from dr_serialize import Jsonable, canonical_sorted_values
+from dr_serialize import (
+    Jsonable,
+    StrictJsonError,
+    canonical_sorted_values,
+    validate_strict_json,
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -15,7 +20,12 @@ from pydantic import (
     model_validator,
 )
 
-from dr_providers.core.frozen import _deep_freeze, _thaw
+from dr_providers.core.failures import (
+    ControlValidationError,
+    FailureClass,
+    failure_record,
+)
+from dr_providers.core.frozen import _deep_freeze, _FrozenMap, _thaw
 
 
 class RequestControl(StrEnum):
@@ -57,8 +67,16 @@ class GenerationControls(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    temperature: float | None = None
-    top_p: float | None = None
+    temperature: float | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        strict=True,
+    )
+    top_p: float | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        strict=True,
+    )
     token_limit: StrictInt | None = None
     reasoning: ReasoningEffort | None = None
 
@@ -131,9 +149,26 @@ class ProviderBodyExtensions(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _freeze_extra_body(self) -> ProviderBodyExtensions:
-        # Pydantic converts Mapping fields to dicts; freeze after validation.
-        object.__setattr__(self, "extra_body", _deep_freeze(self.extra_body))
+    def _validate_and_freeze_extra_body(self) -> ProviderBodyExtensions:
+        if isinstance(self.extra_body, _FrozenMap):
+            return self
+        # Pydantic converts Mapping fields to dicts; validate before freezing.
+        try:
+            validated = validate_strict_json(dict(self.extra_body))
+        except StrictJsonError as error:
+            raise ControlValidationError(
+                failure_record(
+                    failure_class=FailureClass.PERMANENT,
+                    code="invalid_extension_json",
+                    message=(
+                        "extra_body must contain only strict finite JSON "
+                        f"values: {error}"
+                    ),
+                    metadata=error.diagnostics(),
+                ),
+                underlying=error,
+            ) from error
+        object.__setattr__(self, "extra_body", _deep_freeze(validated))
         return self
 
     @field_serializer("extra_body")

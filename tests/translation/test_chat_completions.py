@@ -40,7 +40,7 @@ def test_chat_body_parses_parts() -> None:
     assert response.cost.total_cost == 0.001
     assert response.model == "m-actual"
     assert response.finish_reason == "stop"
-    assert response.raw_body == body
+    assert response.response_body == body
 
 
 @pytest.mark.parametrize(

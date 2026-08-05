@@ -75,7 +75,7 @@ class ProviderTransportResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     text: StrictStr
-    raw_body: dict[str, Any] = Field(default_factory=dict)
+    response_body: dict[str, Any] = Field(default_factory=dict)
     usage: TokenUsage | None = None
     cost: CostInfo | None = None
     warnings: tuple[ProviderTransportWarning, ...] = ()
@@ -97,8 +97,8 @@ class ProviderTransportFailure(BaseModel):
     code: StrictStr | None = None
     message: StrictStr
     retryable: bool
-    raw_request: dict[str, Any] = Field(default_factory=dict)
-    raw_response_body: Any | None = None
+    request_body: dict[str, Any] = Field(default_factory=dict)
+    response_body: Any | None = None
     status_code: StrictInt | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

@@ -36,7 +36,7 @@ class ScriptedOutcome(BaseModel):
     warnings: tuple[ProviderTransportWarning, ...] = ()
     finish_reason: StrictStr | None = "stop"
     failure: ProviderTransportFailure | None = None
-    raw_body: dict[str, Any] = Field(default_factory=dict)
+    response_body: dict[str, Any] = Field(default_factory=dict)
 
 
 class ScriptedProvider:
@@ -62,12 +62,12 @@ class ScriptedProvider:
         outcome = self._outcomes[index]
         if outcome.failure is not None:
             return outcome.failure.model_copy(
-                update={"raw_request": dict(payload)}
+                update={"request_body": dict(payload)}
             )
         response_id = f"{SCRIPTED_RESPONSE_ID_PREFIX}-{len(self.requests)}"
         response = ProviderTransportResponse(
             text=outcome.text,
-            raw_body=dict(outcome.raw_body),
+            response_body=dict(outcome.response_body),
             usage=outcome.usage,
             cost=outcome.cost,
             warnings=outcome.warnings,

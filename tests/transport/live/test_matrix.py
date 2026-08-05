@@ -143,7 +143,7 @@ def test_live_matrix(
     assert outcome.text.strip()
     assert outcome.usage is not None
 
-    _stage_capture(case, outcome.raw_body)
+    _stage_capture(case, outcome.response_body)
 
 
 def _stage_capture(case: LiveCase, body: dict[str, object]) -> None:

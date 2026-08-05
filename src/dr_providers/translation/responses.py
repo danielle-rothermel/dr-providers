@@ -113,7 +113,7 @@ def parse_responses_body(
         )
     return ProviderTransportResponse(
         text=walk.text,
-        raw_body=dict(body),
+        response_body=dict(body),
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
         finish_reason=_finish_reason_from_responses_body(body),
@@ -359,7 +359,7 @@ def _responses_failure(
         code=code,
         message=message,
         retryable=False,
-        raw_response_body=dict(body),
+        response_body=dict(body),
         metadata={
             "provider": config.route.provider.value,
             "protocol": config.route.protocol.value,

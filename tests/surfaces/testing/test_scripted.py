@@ -48,7 +48,10 @@ class TestScriptedProvider:
             [
                 ScriptedOutcome(
                     text="scripted full response",
-                    raw_body={"id": "raw-scripted", "nested": {"ok": True}},
+                    response_body={
+                        "id": "response-scripted",
+                        "nested": {"ok": True},
+                    },
                     usage=usage,
                     cost=cost,
                     warnings=(warning,),
@@ -62,7 +65,10 @@ class TestScriptedProvider:
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome == ProviderTransportResponse(
             text="scripted full response",
-            raw_body={"id": "raw-scripted", "nested": {"ok": True}},
+            response_body={
+                "id": "response-scripted",
+                "nested": {"ok": True},
+            },
             usage=usage,
             cost=cost,
             warnings=(warning,),
@@ -91,7 +97,7 @@ class TestScriptedProvider:
         outcome = provider.complete(request_for(openai_chat_config(model="m")))
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.retryable is True
-        assert outcome.raw_request["model"] == "m"
+        assert outcome.request_body["model"] == "m"
 
     def test_outcomes_are_consumed_in_order_then_last_repeats(self) -> None:
         provider = ScriptedProvider(

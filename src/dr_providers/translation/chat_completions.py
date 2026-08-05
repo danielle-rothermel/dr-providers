@@ -35,7 +35,7 @@ def parse_chat_completions_body(
         )
     return ProviderTransportResponse(
         text=text,
-        raw_body=dict(body),
+        response_body=dict(body),
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
         finish_reason=optional_str(get_value(choice, "finish_reason")),

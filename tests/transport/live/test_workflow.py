@@ -43,7 +43,7 @@ class _SuccessfulProvider:
     def complete(self, _request: object) -> ProviderTransportResponse:
         return ProviderTransportResponse(
             text="hello",
-            raw_body={"id": "response-1"},
+            response_body={"id": "response-1"},
             usage=TokenUsage(total_tokens=1),
         )
 

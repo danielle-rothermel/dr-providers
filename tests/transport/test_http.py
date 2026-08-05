@@ -122,8 +122,8 @@ class TestHttpProvider:
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == f"http_status_{status}"
         assert outcome.status_code == status
-        assert outcome.raw_response_body == CHAT_BODY_OK
-        assert outcome.raw_request
+        assert outcome.response_body == CHAT_BODY_OK
+        assert outcome.request_body
 
     def test_redirect_is_not_followed_even_when_client_default_follows(
         self,
@@ -171,9 +171,9 @@ class TestHttpProvider:
         assert outcome.failure_class is FailureClass.PERMANENT
         assert outcome.code == "response_parse_error"
         assert outcome.retryable is False
-        assert outcome.raw_response_body == body
+        assert outcome.response_body == body
         assert outcome.status_code == 200
-        assert outcome.raw_request
+        assert outcome.request_body
 
     def test_anthropic_uses_x_api_key_and_version_headers(self) -> None:
         seen: dict[str, Any] = {}

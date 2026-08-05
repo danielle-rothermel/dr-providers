@@ -17,11 +17,11 @@ from dr_providers import (
     ProviderBaseUrl,
     ProviderCallConfig,
     ProviderCallRequest,
+    ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
-    RawHttpRequest,
     Transcript,
     anthropic_messages_config,
     openai_chat_config,
@@ -58,19 +58,19 @@ ANTHROPIC_POLICY = ProviderTransportPolicy(
     base_url=str(ProviderBaseUrl.ANTHROPIC),
 )
 
-RAW_REQUEST = RawHttpRequest(
+HTTP_REQUEST = ProviderHttpRequestEvidence(
     url="https://example.test/v1",
     headers={"Content-Type": "application/json"},
     body={"model": "m"},
 )
-SUCCESS = ProviderTransportResponse(text="hi", raw_body={"id": "resp-1"})
+SUCCESS = ProviderTransportResponse(text="hi", response_body={"id": "resp-1"})
 FAILURE = ProviderTransportFailure(
     failure_class=FailureClass.PERMANENT,
     code="invalid_request",
     message="bad request",
     retryable=False,
-    raw_request={"method": "POST"},
-    raw_response_body={"error": "bad"},
+    request_body={"method": "POST"},
+    response_body={"error": "bad"},
     status_code=400,
     metadata={"provider": "openai"},
 )
@@ -84,7 +84,7 @@ def evidence_for(
     return ProviderInvocationEvidence(
         request_identity={"request": "req-1"},
         policy_identity={"policy": "policy-1"},
-        raw_request=RAW_REQUEST,
+        http_request=HTTP_REQUEST,
         response=response,
         failure=failure,
     )
@@ -101,7 +101,7 @@ def expected_document(
         "payload": {
             "request_identity": {"request": "req-1"},
             "policy_identity": {"policy": "policy-1"},
-            "raw_request": {
+            "http_request": {
                 "method": "POST",
                 "url": "https://example.test/v1",
                 "headers": {"Content-Type": "application/json"},
@@ -151,7 +151,7 @@ class TestInvocationEvidence:
             "properties"
         ]
         assert "schema_version" not in properties
-        assert "schema_version" not in evidence.stable_payload()
+        assert "schema_version" not in evidence.identity_payload()
         assert (
             evidence.identity_document().schema_version
             == PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION
@@ -171,6 +171,15 @@ class TestInvocationEvidence:
                         PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION
                     ),
                 }
+            )
+
+    def test_removed_http_request_field_name_is_rejected(self) -> None:
+        data = evidence_for(response=SUCCESS).model_dump(mode="python")
+        http_request = data.pop("http_request")
+
+        with pytest.raises(ValidationError):
+            ProviderInvocationEvidence.model_validate(
+                {**data, "raw_request": http_request}
             )
 
     def test_sanitize_kwargs_redacts_credentials(self) -> None:
@@ -216,13 +225,13 @@ class TestInvocationEvidence:
         request = openai_request(token_limit=64)
         evidence = provider.invoke(request)
 
-        stable = evidence.stable_payload()
-        assert stable["request_identity"] == request.identity_payload()
-        assert stable["policy_identity"] == OPENAI_POLICY.identity_payload()
+        payload = evidence.identity_payload()
+        assert payload["request_identity"] == request.identity_payload()
+        assert payload["policy_identity"] == OPENAI_POLICY.identity_payload()
         assert isinstance(evidence.outcome, ProviderTransportResponse)
         assert evidence.response is not None
-        assert evidence.response.raw_body == CHAT_BODY_OK
-        assert evidence.raw_request.body["model"] == "m"
+        assert evidence.response.response_body == CHAT_BODY_OK
+        assert evidence.http_request.body["model"] == "m"
 
     def test_evidence_retains_complete_failure_body(self) -> None:
         long_message = "x" * 5000
@@ -233,17 +242,17 @@ class TestInvocationEvidence:
         evidence = provider.invoke(openai_request())
         failure = evidence.failure
         assert failure is not None
-        assert failure.raw_response_body == big_body
-        assert long_message in json.dumps(failure.raw_response_body)
+        assert failure.response_body == big_body
+        assert long_message in json.dumps(failure.response_body)
 
     def test_evidence_never_persists_authorization_header(self) -> None:
         provider = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
         evidence = provider.invoke(openai_request())
-        headers = evidence.raw_request.headers
+        headers = evidence.http_request.headers
         assert headers.get("Authorization") == "<redacted>"
-        serialized = evidence.to_stable_dict()
+        serialized = evidence.identity_document().to_json_dict()
         assert "test-key" not in str(serialized)
         assert "Bearer test-key" not in str(serialized)
 
@@ -256,14 +265,18 @@ class TestInvocationEvidence:
             policy=ANTHROPIC_POLICY,
         )
         evidence = provider.invoke(request_for(config))
-        assert "test-key" not in str(evidence.to_stable_dict())
+        assert "test-key" not in str(
+            evidence.identity_document().to_json_dict()
+        )
 
     def test_success_document_shape(self) -> None:
-        assert evidence_for(response=SUCCESS).to_stable_dict() == (
+        assert evidence_for(
+            response=SUCCESS
+        ).identity_document().to_json_dict() == (
             expected_document(
                 response={
                     "text": "hi",
-                    "raw_body": {"id": "resp-1"},
+                    "response_body": {"id": "resp-1"},
                     "usage": None,
                     "cost": None,
                     "warnings": [],
@@ -276,15 +289,17 @@ class TestInvocationEvidence:
         )
 
     def test_failure_document_shape(self) -> None:
-        assert evidence_for(failure=FAILURE).to_stable_dict() == (
+        assert evidence_for(
+            failure=FAILURE
+        ).identity_document().to_json_dict() == (
             expected_document(
                 failure={
                     "failure_class": "permanent",
                     "code": "invalid_request",
                     "message": "bad request",
                     "retryable": False,
-                    "raw_request": {"method": "POST"},
-                    "raw_response_body": {"error": "bad"},
+                    "request_body": {"method": "POST"},
+                    "response_body": {"error": "bad"},
                     "status_code": 400,
                     "metadata": {"provider": "openai"},
                 }
@@ -299,9 +314,11 @@ class TestInvocationEvidence:
     def test_document_json_round_trip(
         self, evidence: ProviderInvocationEvidence
     ) -> None:
-        document = json.loads(json.dumps(evidence.to_stable_dict()))
+        document = json.loads(
+            json.dumps(evidence.identity_document().to_json_dict())
+        )
         restored = ProviderInvocationEvidence.model_validate(
             document["payload"]
         )
 
-        assert restored.to_stable_dict() == document
+        assert restored.identity_document().to_json_dict() == document

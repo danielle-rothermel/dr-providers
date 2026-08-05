@@ -57,8 +57,16 @@ class QuerySpec(BaseModel):
     provider_kind: ServeProviderKind
     model: StrictStr
     messages: tuple[PromptMessage, ...]
-    temperature: float | None = None
-    top_p: float | None = None
+    temperature: float | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        strict=True,
+    )
+    top_p: float | None = Field(
+        default=None,
+        allow_inf_nan=False,
+        strict=True,
+    )
     token_limit: StrictInt | None = None
     reasoning: ReasoningEffort | None = None
     extra_body: dict[str, Any] = Field(default_factory=dict)

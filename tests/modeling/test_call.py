@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from dr_providers import (
     ControlConstraints,
@@ -78,6 +79,30 @@ class TestConfigPresets:
                 ),
             )
         assert exc_info.value.failure.code == "unmappable_reasoning_effort"
+
+    @pytest.mark.parametrize("field", ["temperature", "top_p"])
+    @pytest.mark.parametrize(
+        "value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "positive-inf", "negative-inf"],
+    )
+    def test_generation_controls_reject_non_finite_values(
+        self, field: str, value: float
+    ) -> None:
+        with pytest.raises(ValidationError):
+            GenerationControls.model_validate({field: value})
+
+    @pytest.mark.parametrize("field", ["temperature", "top_p"])
+    @pytest.mark.parametrize(
+        "value",
+        ["0.5", True],
+        ids=["numeric-string", "boolean"],
+    )
+    def test_generation_controls_reject_coercive_values(
+        self, field: str, value: object
+    ) -> None:
+        with pytest.raises(ValidationError):
+            GenerationControls.model_validate({field: value})
 
 
 class TestDefinitionValidation:
@@ -191,6 +216,40 @@ class TestDefinitionValidation:
             extensions.extra_body["nested"] = 1  # type: ignore[index]  # ty: ignore[invalid-assignment]
         with pytest.raises(AttributeError):
             extensions.extra_body["nested"]["k"].append(3)  # type: ignore[attr-defined]
+
+    @pytest.mark.parametrize(
+        "value",
+        [float("nan"), float("inf"), float("-inf")],
+        ids=["nan", "positive-inf", "negative-inf"],
+    )
+    def test_extra_body_rejects_nested_non_finite_values(
+        self, value: float
+    ) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            ProviderBodyExtensions(extra_body={"nested": [value]})
+
+        assert exc_info.value.failure.code == "invalid_extension_json"
+        assert exc_info.value.failure.metadata == {
+            "path": ["nested", 0],
+            "detail": repr(value),
+            "reason": "non-finite number",
+            "type_name": "float",
+        }
+
+    @pytest.mark.parametrize(
+        "value",
+        [{1, 2}, (1, 2), object()],
+        ids=["set", "tuple", "object"],
+    )
+    def test_extra_body_rejects_non_json_runtime_types(
+        self, value: object
+    ) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            ProviderBodyExtensions(extra_body={"value": value})
+
+        assert exc_info.value.failure.code == "invalid_extension_json"
+        assert exc_info.value.failure.metadata["path"] == ["value"]
+        assert exc_info.value.failure.metadata["reason"] == "unsupported type"
 
     def test_extra_body_is_isolated_from_source_aliases(self) -> None:
         source: dict[str, Any] = {"nested": {"k": [1, 2]}}

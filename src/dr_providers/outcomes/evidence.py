@@ -66,7 +66,7 @@ PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 2
 
 
-class RawHttpRequest(BaseModel):
+class ProviderHttpRequestEvidence(BaseModel):
     """``build()`` redacts known credential headers; direct construction and
     deserialization do not sanitize. Immutability does not prove redaction.
     """
@@ -79,7 +79,7 @@ class RawHttpRequest(BaseModel):
     body: Mapping[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _freeze_maps(self) -> RawHttpRequest:
+    def _freeze_maps(self) -> ProviderHttpRequestEvidence:
         object.__setattr__(self, "headers", _deep_freeze(dict(self.headers)))
         object.__setattr__(self, "body", _deep_freeze(dict(self.body)))
         return self
@@ -100,7 +100,7 @@ class RawHttpRequest(BaseModel):
         headers: dict[str, str],
         body: dict[str, Any],
         method: str = "POST",
-    ) -> RawHttpRequest:
+    ) -> ProviderHttpRequestEvidence:
         return cls(
             method=method,
             url=url,
@@ -119,7 +119,7 @@ class ProviderInvocationEvidence(BaseModel):
 
     request_identity: Mapping[str, Any]
     policy_identity: Mapping[str, Any]
-    raw_request: RawHttpRequest
+    http_request: ProviderHttpRequestEvidence
     response: ProviderTransportResponse | None = None
     failure: ProviderTransportFailure | None = None
 
@@ -164,7 +164,7 @@ class ProviderInvocationEvidence(BaseModel):
         *,
         request: ProviderCallRequest,
         policy: ProviderTransportPolicy,
-        raw_request: RawHttpRequest,
+        http_request: ProviderHttpRequestEvidence,
         outcome: ProviderTransportOutcome,
     ) -> ProviderInvocationEvidence:
         response = (
@@ -176,21 +176,17 @@ class ProviderInvocationEvidence(BaseModel):
         return cls(
             request_identity=request.identity_payload(),
             policy_identity=policy.identity_payload(),
-            raw_request=raw_request,
+            http_request=http_request,
             response=response,
             failure=failure,
         )
 
-    def stable_payload(self) -> dict[str, Any]:
+    def identity_payload(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
 
     def identity_document(self) -> IdentityDocument:
         return build_identity_document(
             schema=PROVIDER_INVOCATION_EVIDENCE_SCHEMA,
             schema_version=PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
-            payload=self.stable_payload(),
+            payload=self.identity_payload(),
         )
-
-    def to_stable_dict(self) -> dict[str, Any]:
-        """Return the schema-wrapped persistence document."""
-        return self.identity_document().to_json_dict()
