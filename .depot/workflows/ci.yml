@@ -1,7 +1,5 @@
 # Depot CI Migration
 # Source: .github/workflows/ci.yml
-#
-# No changes were necessary.
 
 name: CI
 on:
@@ -17,7 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
-      - run: uv sync --frozen --all-extras
+      - run: uv sync --all-extras
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run ty check
