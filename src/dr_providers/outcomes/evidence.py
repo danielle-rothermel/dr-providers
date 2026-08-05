@@ -140,12 +140,12 @@ class ProviderInvocationEvidence(BaseModel):
 
     Exactly one of ``response``/``failure`` is set (enforced), and the
     identity payloads are deeply immutable so the persisted record can never
-    be tampered with after construction.
+    be tampered with after construction. Its Identity Document owns the schema
+    name and version; neither belongs to this bare payload model.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: int = PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION
     request_identity: Mapping[str, Any]
     policy_identity: Mapping[str, Any]
     raw_request: RawHttpRequest

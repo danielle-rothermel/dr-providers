@@ -116,6 +116,10 @@ class ProviderCallRequest(BaseModel):
     def identity_hash(self) -> str: ...
 ```
 
+The Definition, Config, and Request payload models do not carry schema names
+or versions. Their `IdentityDocument` envelopes are the sole owners of
+`schema` and `schema_version`.
+
 ## Translation
 
 Translation is the pure boundary between provider-independent call contracts
@@ -220,6 +224,10 @@ class ProviderInvocationEvidence(BaseModel):
     response: ProviderTransportResponse | None = None
     failure: ProviderTransportFailure | None = None
 ```
+
+`ProviderInvocationEvidence` is likewise the bare payload model. Its stable
+persistence form is an `IdentityDocument` envelope carrying `schema`,
+`schema_version`, and that payload.
 
 `base_url` is retained verbatim in policy identity and as the base of the raw
 request URL captured in invocation evidence. Callers must not embed credentials

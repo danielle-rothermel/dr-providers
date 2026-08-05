@@ -22,7 +22,6 @@ HASH_SEEDS = ("0", "1", "4", "4242")
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 EXPECTED_JSON_DUMP = {
-    "schema_version": 1,
     "definition_id": "test.chat",
     "route": {
         "provider": "openai",
@@ -45,7 +44,7 @@ EXPECTED_JSON_DUMP = {
 }
 
 EXPECTED_JSON_BYTES = (
-    b'{"schema_version":1,"definition_id":"test.chat","route":'
+    b'{"definition_id":"test.chat","route":'
     b'{"provider":"openai","protocol":"chat_completions","model":"m"},'
     b'"constraints":{"supported_controls":["reasoning","temperature",'
     b'"token_limit","top_p"],"token_limit_parameter":'

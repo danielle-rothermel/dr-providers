@@ -6,8 +6,11 @@ import json
 from typing import Any
 
 import httpx
+import pytest
+from pydantic import ValidationError
 
 from dr_providers import (
+    PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
     ApiKeyEnv,
     GenerationControls,
     MessageRole,
@@ -15,6 +18,7 @@ from dr_providers import (
     ProviderBaseUrl,
     ProviderCallConfig,
     ProviderCallRequest,
+    ProviderInvocationEvidence,
     ProviderTransportPolicy,
     ProviderTransportResponse,
     Transcript,
@@ -81,6 +85,39 @@ def mock_provider(
 
 
 class TestInvocationEvidence:
+    def test_schema_version_exists_only_on_identity_document(self) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+        )
+        evidence = provider.invoke(openai_request())
+
+        assert "schema_version" not in ProviderInvocationEvidence.model_fields
+        properties = ProviderInvocationEvidence.model_json_schema()[
+            "properties"
+        ]
+        assert "schema_version" not in properties
+        assert "schema_version" not in evidence.stable_payload()
+        assert (
+            evidence.identity_document().schema_version
+            == PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION
+        )
+
+    def test_explicit_schema_version_is_rejected(self) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+        )
+        data = provider.invoke(openai_request()).model_dump(mode="python")
+
+        with pytest.raises(ValidationError):
+            ProviderInvocationEvidence.model_validate(
+                {
+                    **data,
+                    "schema_version": (
+                        PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION
+                    ),
+                }
+            )
+
     def test_sanitize_kwargs_redacts_credentials(self) -> None:
         assert sanitize_kwargs({"api_key": "secret", "temperature": 0.7}) == {
             "api_key": "<redacted>",

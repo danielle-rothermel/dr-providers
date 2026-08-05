@@ -80,15 +80,14 @@ class ProviderCallDefinition(BaseModel):
     extension Variables the Definition exposes.
 
     The Definition is itself identified: its identity payload fully
-    captures ``definition_id``, ``schema_version``, ``constraints``,
-    ``required_controls`` and ``extension_keys`` so that a Config which
-    embeds the Definition Identity Hash is bound to every declared
-    variable and constraint.
+    captures ``definition_id``, ``constraints``, ``required_controls`` and
+    ``extension_keys`` so that a Config which embeds the Definition Identity
+    Hash is bound to every declared variable and constraint. The surrounding
+    Identity Document owns the schema name and version.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: int = PROVIDER_CALL_DEFINITION_SCHEMA_VERSION
     definition_id: StrictStr
     route: ModelRoute
     constraints: ControlConstraints
@@ -134,7 +133,6 @@ class ProviderCallDefinition(BaseModel):
     def identity_payload(self) -> dict[str, Any]:
         """Identity effects the Definition declares (its own identity)."""
         return {
-            "schema_version": self.schema_version,
             "definition_id": self.definition_id,
             "route": self.route.identity_payload(),
             "constraints": self.constraints.identity_payload(),
