@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
 
+from dr_serialize import Jsonable, canonical_sorted_values
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -118,6 +119,13 @@ class ControlConstraints(BaseModel):
     token_limit_parameter: TokenLimitParameter
     reasoning_shape: ReasoningRequestShape = ReasoningRequestShape.NONE
     allow_unsupported_control_drop: bool = False
+
+    @field_serializer("supported_controls", when_used="json")
+    def _serialize_supported_controls(
+        self,
+        value: frozenset[RequestControl],
+    ) -> list[Jsonable]:
+        return canonical_sorted_values(control.value for control in value)
 
     def supports(self, control: RequestControl) -> bool:
         return control in self.supported_controls

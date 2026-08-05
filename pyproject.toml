@@ -1,6 +1,6 @@
 [project]
 name = "dr-providers"
-version = "0.2.0"
+version = "0.2.1"
 description = "Typed LLM provider-call kernel for OpenAI, Anthropic, OpenRouter, and Gemini: identity-hashed configs, one request/response/failure vocabulary, no-throw transport."
 readme = "README.md"
 license = "MIT"
@@ -29,7 +29,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "dr-serialize>=0.1.0,<0.2",
+    "dr-serialize>=0.1.1,<0.2",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
 ]
