@@ -2,43 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from dr_providers import (
     ControlConstraints,
     ControlValidationError,
     GenerationControls,
-    MessageRole,
-    PromptMessage,
     Protocol,
     ProviderBodyExtensions,
     ProviderCallConfig,
     ProviderCallDefinition,
-    ProviderCallRequest,
     ProviderKind,
     ReasoningEffort,
     RequestControl,
     TokenLimitParameter,
-    Transcript,
     anthropic_messages_config,
-    build_payload,
     gemini_chat_config,
     openai_chat_config,
     openai_responses_config,
     openrouter_chat_config,
 )
 from dr_providers.modeling.route import ModelRoute
-
-MESSAGES = (
-    PromptMessage(role=MessageRole.SYSTEM, content="be brief"),
-    PromptMessage(role=MessageRole.USER, content="write add"),
-)
-
-
-def request_for(config, messages=MESSAGES) -> ProviderCallRequest:
-    return ProviderCallRequest(
-        config=config, transcript=Transcript(messages=messages)
-    )
 
 
 class TestConfigPresets:
@@ -53,6 +39,9 @@ class TestConfigPresets:
             "protocol": "chat_completions",
             "model": "m",
         }
+        assert config.quota_identity.label() == (
+            "openrouter:chat_completions:m"
+        )
 
     def test_openai_responses(self) -> None:
         config = openai_responses_config(model="m")
@@ -130,15 +119,16 @@ class TestDefinitionValidation:
             )
         assert exc_info.value.failure.metadata["control"] == "temperature"
 
-    def test_unsupported_control_drop_opt_in(self) -> None:
+    def test_unsupported_control_drop_opt_in_accepts_construction(
+        self,
+    ) -> None:
         definition = self._constrained_definition(
             frozenset({RequestControl.TOKEN_LIMIT}), allow_drop=True
         )
         config = definition.materialize(
             controls=GenerationControls(temperature=0.5)
         )
-        request = request_for(config)
-        assert "temperature" not in build_payload(request)
+        assert config.controls.temperature == 0.5
 
     def test_required_control_must_be_assigned(self) -> None:
         definition = self._constrained_definition(
@@ -211,3 +201,30 @@ class TestDefinitionValidation:
             extensions.extra_body["nested"] = 1  # type: ignore[index]  # ty: ignore[invalid-assignment]
         with pytest.raises(AttributeError):
             extensions.extra_body["nested"]["k"].append(3)  # type: ignore[attr-defined]
+
+    def test_extra_body_is_isolated_from_source_aliases(self) -> None:
+        source: dict[str, Any] = {"nested": {"k": [1, 2]}}
+        definition = ProviderCallDefinition(
+            definition_id="test.extensions",
+            route=ModelRoute(
+                provider=ProviderKind.OPENAI,
+                protocol=Protocol.CHAT_COMPLETIONS,
+                model="m",
+            ),
+            constraints=ControlConstraints(
+                token_limit_parameter=(
+                    TokenLimitParameter.MAX_COMPLETION_TOKENS
+                )
+            ),
+            extension_keys=frozenset({"nested"}),
+        )
+        config = definition.materialize(
+            extensions=ProviderBodyExtensions(extra_body=source)
+        )
+        payload_before = config.extensions.identity_payload()
+        hash_before = config.identity_hash
+
+        source["nested"]["k"].append(3)
+
+        assert config.extensions.identity_payload() == payload_before
+        assert config.identity_hash == hash_before

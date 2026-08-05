@@ -116,15 +116,12 @@ PURE_MODULES = (
 
 def test_public_api_exports() -> None:
     assert set(dr_providers.__all__) == EXPECTED_ALL
+    for name in EXPECTED_ALL:
+        assert getattr(dr_providers, name) is not None
 
 
 def test_version() -> None:
     assert dr_providers.__version__ == version("dr-providers")
-
-
-def test_top_level_imports() -> None:
-    assert dr_providers.ProviderCallRequest is not None
-    assert dr_providers.HttpProvider is not None
 
 
 def test_import_root_does_not_load_httpx() -> None:

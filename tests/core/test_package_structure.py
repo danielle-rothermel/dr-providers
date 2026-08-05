@@ -17,7 +17,7 @@ FUNCTIONAL_AREAS = {
     "translation",
     "transport",
 }
-TEST_AREAS = FUNCTIONAL_AREAS | {"data"}
+APPROVED_TEST_AREAS = FUNCTIONAL_AREAS | {"data"}
 SURFACE_AREAS = {"cli", "serve", "testing"}
 
 
@@ -46,8 +46,8 @@ def test_source_tree_exposes_only_functional_areas() -> None:
     assert _directories_with_python(PACKAGE_ROOT / "surfaces") == SURFACE_AREAS
 
 
-def test_test_tree_mirrors_functional_areas() -> None:
-    assert _directories_with_python(TEST_ROOT) == TEST_AREAS
+def test_test_tree_uses_only_approved_top_level_areas() -> None:
+    assert _directories_with_python(TEST_ROOT) == APPROVED_TEST_AREAS
 
 
 def test_inner_areas_do_not_depend_on_surfaces() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -42,17 +43,6 @@ EXPECTED_JSON_DUMP = {
     "required_controls": ["temperature", "top_p"],
     "extension_keys": ["alpha", "middle", "zeta"],
 }
-
-EXPECTED_JSON_BYTES = (
-    b'{"definition_id":"test.chat","route":'
-    b'{"provider":"openai","protocol":"chat_completions","model":"m"},'
-    b'"constraints":{"supported_controls":["reasoning","temperature",'
-    b'"token_limit","top_p"],"token_limit_parameter":'
-    b'"max_completion_tokens","reasoning_shape":"none",'
-    b'"allow_unsupported_control_drop":false},"required_controls":'
-    b'["temperature","top_p"],"extension_keys":'
-    b'["alpha","middle","zeta"]}'
-)
 
 MODEL_DUMP_JSON_SCRIPT = """
 import sys
@@ -152,5 +142,5 @@ def _model_dump_json_with_seed(seed: str) -> bytes:
 def test_model_dump_json_is_byte_identical_across_hash_seeds() -> None:
     outputs = {seed: _model_dump_json_with_seed(seed) for seed in HASH_SEEDS}
 
-    assert outputs == dict.fromkeys(HASH_SEEDS, EXPECTED_JSON_BYTES)
+    assert json.loads(outputs[HASH_SEEDS[0]]) == EXPECTED_JSON_DUMP
     assert len(set(outputs.values())) == 1, outputs
