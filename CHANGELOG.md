@@ -16,6 +16,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Cut over the implementation to functional-area module paths under
+  `dr_providers.modeling`, `dr_providers.translation`,
+  `dr_providers.transport`, `dr_providers.outcomes`, `dr_providers.core`, and
+  `dr_providers.surfaces`. The top-level `dr_providers` exports remain the
+  stable import surface; the removed module paths have no compatibility
+  aliases.
 - Provider Call Definition and Provider Invocation Evidence are bare payload
   models; their `IdentityDocument` envelopes are the sole owners of `schema`
   and `schema_version`, and both envelopes now use schema version 2. This is a
@@ -49,17 +55,21 @@ provider-call transport kernel. Code written against 0.1.x will not import.
 - Typed Provider Call Definition -> Config -> Request identity, each carrying
   its own full 64-char SHA-256 Identity Hash via `dr-serialize`
   canonicalization.
-- No-throw `HttpProvider`: expected outcomes return a closed
+- `HttpProvider` returns expected outcomes as a closed
   `ProviderTransportResponse | ProviderTransportFailure` instead of raising,
-  with idle-stall and overall wall-clock (per-invocation deadline) timeout
-  enforcement.
+  while unexpected programming or infrastructure errors may still raise.
+  Idle-stall and watchdog deadlines bound each native attempt's caller-visible
+  wait; a caller-injected synchronous client can leave a daemon worker and
+  socket lingering until the caller-owned operation eventually ends.
 - Provider presets for OpenAI (`chat_completions` and `responses`), Anthropic
   (`anthropic_messages`), OpenRouter, and Gemini, fixing each route's
   protocol, token-limit parameter, and reasoning wire shape.
 - Provider Invocation Evidence records binding request + policy identities to
-  the outcome and the complete least-processed raw request/response bodies
-  (the standard `HttpProvider` path redacts known credential header names
-  before binding request evidence; direct raw-request inputs remain trusted).
+  the outcome, structured request metadata, the constructed JSON request-body
+  mapping, and response bodies decoded as JSON when possible or retained as
+  text otherwise (the standard `HttpProvider` path redacts known credential
+  header names before binding request evidence; direct raw-request inputs
+  remain trusted).
 - `ScriptedProvider` for network-free testing against the same `Provider`
   interface.
 - `dr-providers` console script and a typer CLI in the optional `[cli]` extra;

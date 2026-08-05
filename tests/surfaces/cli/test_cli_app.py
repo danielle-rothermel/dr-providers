@@ -21,8 +21,6 @@ runner = CliRunner()
 
 
 class ScriptedHttpProvider:
-    """Record CLI construction while delegating calls to a scripted peer."""
-
     def __init__(self, scripted: ScriptedProvider) -> None:
         self._scripted = scripted
         self.kwargs: dict[str, object] = {}

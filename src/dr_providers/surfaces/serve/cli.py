@@ -1,9 +1,3 @@
-"""CLI for the serve facade: run the local server or dump its OpenAPI spec.
-
-Facades bind to localhost only — the host is intentionally not an
-option.
-"""
-
 import json
 
 import typer
@@ -27,7 +21,7 @@ def serve(port: int = PORT_OPTION) -> None:
 
 @app.command()
 def openapi() -> None:
-    """Print the OpenAPI schema (input for generated TS clients)."""
+    """Print the OpenAPI schema."""
     typer.echo(json.dumps(create_app().openapi(), indent=2, sort_keys=True))
 
 

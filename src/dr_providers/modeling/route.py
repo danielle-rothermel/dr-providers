@@ -1,12 +1,3 @@
-"""Model Route, Protocol, and Provider Quota Identity.
-
-The Model Route is the executable target tuple ``(provider, protocol,
-model)`` — no credentials, accounts, or generation controls. The
-Provider Quota Identity is exactly that tuple with no credential,
-account, or override component; Whetstone derives collision-free Stage
-labels from it.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -22,25 +13,13 @@ class ProviderKind(StrEnum):
 
 
 class Protocol(StrEnum):
-    """Wire protocol of a Model Route (a Model Route component).
-
-    ``chat_completions`` is the OpenAI-compatible / OpenRouter surface,
-    ``responses`` is the OpenAI Responses surface, and
-    ``anthropic_messages`` is the Anthropic Messages surface. All three
-    are first-class transport paths.
-    """
-
     CHAT_COMPLETIONS = "chat_completions"
     RESPONSES = "responses"
     ANTHROPIC_MESSAGES = "anthropic_messages"
 
 
 class ModelRoute(BaseModel):
-    """Executable target tuple ``(provider, protocol, model)``.
-
-    Excludes credentials, accounts, and generation controls. This is
-    the identity-bearing route component of a Provider Call Config.
-    """
+    """Identity excludes credentials, accounts, and generation controls."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -65,11 +44,7 @@ class ModelRoute(BaseModel):
 
 
 class ProviderQuotaIdentity(BaseModel):
-    """Best-effort quota identity: exactly ``(provider, protocol, model)``.
-
-    No credential, account, or override component. Whetstone derives
-    collision-free Stage labels from this tuple and owns concurrency.
-    """
+    """Quota identity excludes credentials, accounts, and overrides."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -78,5 +53,4 @@ class ProviderQuotaIdentity(BaseModel):
     model: StrictStr
 
     def label(self) -> str:
-        """Stable collision-free label string for Stage admission."""
         return f"{self.provider.value}:{self.protocol.value}:{self.model}"

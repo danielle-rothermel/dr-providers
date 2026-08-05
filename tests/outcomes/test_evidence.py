@@ -1,5 +1,3 @@
-"""Provider invocation evidence tests."""
-
 from __future__ import annotations
 
 import json
@@ -218,14 +216,11 @@ class TestInvocationEvidence:
         request = openai_request(token_limit=64)
         evidence = provider.invoke(request)
 
-        # identity payloads are deeply frozen (nested lists become tuples of
-        # frozen maps), so compare via the JSON-serialized (thawed) form.
         stable = evidence.stable_payload()
         assert stable["request_identity"] == request.identity_payload()
         assert stable["policy_identity"] == OPENAI_POLICY.identity_payload()
         assert isinstance(evidence.outcome, ProviderTransportResponse)
         assert evidence.response is not None
-        # complete least-processed raw success body, no truncation.
         assert evidence.response.raw_body == CHAT_BODY_OK
         assert evidence.raw_request.body["model"] == "m"
 
@@ -238,8 +233,6 @@ class TestInvocationEvidence:
         evidence = provider.invoke(openai_request())
         failure = evidence.failure
         assert failure is not None
-        # no silent preview truncation of the failure evidence: the
-        # complete raw body is retained verbatim.
         assert failure.raw_response_body == big_body
         assert long_message in json.dumps(failure.raw_response_body)
 

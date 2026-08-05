@@ -1,10 +1,3 @@
-"""FastAPI facade over query/build_payload/variance ([serve] extra).
-
-Providers: ``scripted`` (scripted outcomes, no network — what the
-playground e2e uses) or ``live`` (raw-httpx transport; requires the
-provider's API key env var and is never exercised by tests).
-"""
-
 import contextlib
 import os
 from collections.abc import Iterator
@@ -59,7 +52,7 @@ class ProviderChoiceKind(StrEnum):
 
 
 class ProviderChoice(BaseModel):
-    """Which provider executes the call: scripted or live."""
+    """Which implementation executes the call: scripted or live HTTP."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -145,12 +138,6 @@ class HealthResponse(BaseModel):
 def resolve_provider(
     choice: ProviderChoice, spec: QuerySpec
 ) -> Iterator[Provider]:
-    """Yield a Provider and guarantee its lifecycle is closed.
-
-    A live ``HttpProvider`` owns an httpx client, so it is context-managed to
-    avoid leaking a socket/client per request; the scripted peer holds no
-    resources and takes the no-op path.
-    """
     if choice.kind is ProviderChoiceKind.SCRIPTED:
         outcomes = [
             outcome.to_outcome() for outcome in choice.scripted_outcomes

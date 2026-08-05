@@ -1,23 +1,3 @@
-"""Live provider verification matrix.
-
-Marked ``live``; excluded from the default run via ``addopts = "-m
-'not live'"``. A selected case fails when its API key env var is unset,
-preventing a credential-free run from reporting vacuous success. Select
-cases explicitly with ``scripts/run_live_matrix.py``.
-
-Verification is read-only. Refreshing curated wire evidence is a separate,
-explicit operation owned by ``scripts/capture_live_corpus.py``.
-
-Temperature is set to 0.0 only for the openrouter and gemini cases.
-All five presets declare ``temperature`` in ``supported_controls``,
-so the kernel is willing to transport it everywhere, but the
-``gpt-5-mini`` reasoning model used for the openai cases rejects it
-at the wire level ("Unsupported parameter: 'temperature' is not
-supported with this model") even though the config layer has no way
-to know that ahead of time. Omitting it for openai keeps this matrix
-green without papering over that provider-side restriction.
-"""
-
 from __future__ import annotations
 
 import json

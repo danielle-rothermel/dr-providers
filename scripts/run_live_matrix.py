@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Run selected live-provider cases under the repository's mise environment."""
 
 from __future__ import annotations
 
@@ -27,7 +26,12 @@ from scripts.live_matrix_support import (  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run selected live-provider cases under the repository's "
+            "mise environment."
+        )
+    )
     selectors = parser.add_mutually_exclusive_group()
     selectors.add_argument(
         "--provider",

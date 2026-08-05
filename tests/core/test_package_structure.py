@@ -1,5 +1,3 @@
-"""Package-layout boundary tests."""
-
 from __future__ import annotations
 
 import ast

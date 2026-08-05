@@ -1,12 +1,3 @@
-"""Shared deep-immutability helpers for identity-bearing frozen models.
-
-A ``_FrozenMap`` is a read-only, deep-copyable, pickle-safe mapping used to
-make nested dict/list fields of otherwise-``frozen`` pydantic models actually
-immutable, so a persisted structure (a Config's extra_body, an Evidence
-record's redacted headers/identity payloads) can never drift from — or be
-tampered into disagreeing with — the artifact it was serialized as.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -14,13 +5,7 @@ from typing import Any
 
 
 class _FrozenMap(Mapping[str, Any]):
-    """A read-only mapping that is deep-copyable and pickle-safe.
-
-    ``types.MappingProxyType`` cannot be deep-copied on every CPython, and
-    pydantic deep-copies field defaults, so a small explicit frozen mapping
-    is used instead. Mutating item access raises, keeping the structure
-    unable to drift from the owning model's persisted/identity form.
-    """
+    """Frozen mapping compatible with Pydantic's default deepcopy."""
 
     __slots__ = ("_data",)
 
@@ -53,12 +38,7 @@ class _FrozenMap(Mapping[str, Any]):
 
 
 def _deep_freeze(value: Any) -> Any:
-    """Recursively convert mappings/sequences into immutable equivalents.
-
-    Mappings become read-only frozen maps and lists/tuples become tuples, so
-    a nested structure cannot be mutated after construction and thus cannot
-    desync from its owning model's persisted/identity form.
-    """
+    """Prevent nested mutation from desynchronizing persisted identity."""
     if isinstance(value, Mapping):
         return _FrozenMap({str(k): _deep_freeze(v) for k, v in value.items()})
     if isinstance(value, list | tuple):
@@ -67,7 +47,6 @@ def _deep_freeze(value: Any) -> Any:
 
 
 def _thaw(value: Any) -> Any:
-    """Recursively convert frozen maps/tuples back into plain dicts/lists."""
     if isinstance(value, Mapping):
         return {k: _thaw(v) for k, v in value.items()}
     if isinstance(value, tuple):

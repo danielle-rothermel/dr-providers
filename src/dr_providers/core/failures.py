@@ -1,20 +1,3 @@
-"""Shared failure taxonomy and raised-error carriers.
-
-dr-providers classifies transport-level failure only. There are two
-distinct shapes and they are NOT nested in each other:
-
-  * ``ProviderTransportFailure`` (``outcomes.models``) is the FLAT expected
-    transport-outcome value. It carries the failure fields (``failure_class``,
-    ``code``, ``message``, ``retryable``) directly on itself alongside the raw
-    request/response evidence — it does not embed a ``ProviderFailure``.
-  * ``ProviderFailure`` (below) is a compact classification record carried
-    ONLY by the raised-error path: ``ProviderFailureError.failure`` holds one,
-    and it is raised solely for unexpected programming/infrastructure errors,
-    never returned as an expected transport outcome.
-
-Whetstone owns semantic failure taxonomy and retry policy.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -47,11 +30,7 @@ RETRYABLE_FAILURE_CLASSES = frozenset(
 
 
 class ProviderFailure(BaseModel):
-    """Transport failure classification record.
-
-    Carried inside a Provider Transport Failure and by the exception
-    types used only for unexpected raises.
-    """
+    """Classification record carried only by ``ProviderFailureError``."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -79,11 +58,7 @@ def failure_record(
 
 
 class ProviderFailureError(Exception):
-    """Carrier for a :class:`ProviderFailure` record.
-
-    Raised only for unexpected programming/infrastructure errors, never
-    for expected transport outcomes (which are returned, not thrown).
-    """
+    """Raised carrier for a :class:`ProviderFailure` record."""
 
     failure_class: ClassVar[FailureClass] = FailureClass.UNKNOWN
 
@@ -119,14 +94,7 @@ class UnknownProviderError(ProviderFailureError):
 
 
 class ControlValidationError(PermanentProviderError):
-    """A Definition/Config assignment violates a control invariant.
-
-    Raised at Definition or Config validation time for an unsupported
-    control, a missing required control, an undeclared extension key, or
-    an extension that would overwrite a reserved core wire field. These
-    are construction-time programming errors, so they raise rather than
-    returning a transport outcome.
-    """
+    pass
 
 
 FAILURE_ERROR_TYPES: dict[FailureClass, type[ProviderFailureError]] = {
@@ -143,6 +111,5 @@ def raise_failure(
     *,
     underlying: BaseException | None = None,
 ) -> ProviderFailureError:
-    """Build the carrier exception matching the record's class."""
     error_type = FAILURE_ERROR_TYPES[failure.failure_class]
     return error_type(failure, underlying=underlying)

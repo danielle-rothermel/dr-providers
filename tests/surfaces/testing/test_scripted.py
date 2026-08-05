@@ -1,5 +1,3 @@
-"""Deterministic scripted-provider surface tests."""
-
 from __future__ import annotations
 
 from dr_providers import (

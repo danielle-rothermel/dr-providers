@@ -1,5 +1,3 @@
-"""Shared response-translation helper tests."""
-
 from typing import Any
 
 import pytest

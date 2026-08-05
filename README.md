@@ -3,241 +3,162 @@
 [![CI](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml/badge.svg)](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/dr-providers.svg)](https://pypi.org/project/dr-providers/)
 
-| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) | [dr-serialize v0.1.1 (local checkout)](https://github.com/danielle-rothermel/dr-serialize) |
+| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) | [dr-serialize (local checkout)](https://github.com/danielle-rothermel/dr-serialize) |
 | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**
-It supports OpenRouter, OpenAI, Gemini, and Anthropic and is organized into
-these functional areas:
+It supports OpenRouter, OpenAI, Gemini, and Anthropic while keeping call
+identity, provider translation, transport policy, and outcomes separate.
 
-- **[Modeling](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/modeling)**
-  builds validated, identity-hashed definitions, configs, and requests from
-  provider routes, generation controls, and transcripts.
-- **[Translation](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/translation)**
-  maps the shared call model into provider request and response wire formats.
-- **[Transport](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/transport)**
-  owns credentials, endpoints, timeout and retry policy, and bounded HTTP
-  execution.
-- **[Outcomes](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/outcomes)**
-  represents expected successes and failures as typed data and preserves
-  raw HTTP evidence in versioned invocation records, with known credential
-  header names redacted on the standard `HttpProvider` invocation path.
-- **Infrastructure**
-  - **[Core](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/core)**
-    holds the shared provider protocol, failure vocabulary, and immutable-value
-    primitives.
-  - **[Surfaces](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/surfaces)**
-    groups the user-facing and testing adapters:
-    - **[Testing](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/surfaces/testing)**
-      provides a deterministic scripted provider.
-    - **[CLI](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/surfaces/cli)**
-      provides the `dr-providers` command-line interface.
-    - **[Serve](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/surfaces/serve)**
-      provides an optional localhost HTTP facade.
+## Package map
 
-The sketches below are intentionally abridged contract shapes. They omit
-validation and provider-specific internals so the linked packages remain the
-authoritative definitions.
+| Package | Responsibility |
+| --- | --- |
+| `dr_providers.modeling` | Identity-bearing definitions, configs, requests, routes, controls, and transcripts |
+| `dr_providers.translation` | Pure provider request-body construction and parsed-response translation |
+| `dr_providers.transport` | Credentials, endpoints, timeout and native-retry policy, and HTTP execution |
+| `dr_providers.outcomes` | Typed responses, expected failures, invocation evidence, and conformance warnings |
+| `dr_providers.core` | Shared provider protocol and failure vocabulary |
+| `dr_providers.surfaces.testing` | Deterministic `ScriptedProvider` for network-free tests |
+| `dr_providers.surfaces.cli` | Optional `dr-providers` one-shot CLI |
+| `dr_providers.surfaces.serve` | Optional localhost FastAPI facade |
 
-## Modeling
+The top-level `dr_providers` exports are the stable import surface. The
+functional-area module paths make ownership discoverable but are not a second
+public API to mirror in application imports.
 
-Modeling describes a provider call without transport policy or credentials. A
-definition fixes a route and its constraints, a config assigns controls, and a
-request combines that config with an ordered transcript.
+## Install
 
-```python
-class ProviderKind(StrEnum):
-    OPENROUTER = "openrouter"
-    OPENAI = "openai"
-    GEMINI = "gemini"
-    ANTHROPIC = "anthropic"
+dr-providers requires Python 3.12 or newer.
 
-
-class Protocol(StrEnum):
-    CHAT_COMPLETIONS = "chat_completions"
-    RESPONSES = "responses"
-    ANTHROPIC_MESSAGES = "anthropic_messages"
-
-
-class ModelRoute(BaseModel):
-    provider: ProviderKind
-    protocol: Protocol
-    model: str
+```bash
+uv add dr-providers
 ```
 
-```python
-class ReasoningEffort(StrEnum):
-    NONE = "none"
-    MINIMAL = "minimal"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    XHIGH = "xhigh"
+For this repository, `uv sync --all-extras` intentionally resolves
+`dr-serialize` from the sibling `../dr-serialize` checkout through
+`[tool.uv.sources]`. Set `UV_NO_SOURCES=1` when validating only published
+dependency constraints.
 
+Unless an API key is injected directly, real HTTP calls read the credential
+selected by their transport policy:
 
-class GenerationControls(BaseModel):
-    temperature: float | None = None
-    top_p: float | None = None
-    token_limit: int | None = None
-    reasoning: ReasoningEffort | None = None
+| Provider | Environment variable |
+| --- | --- |
+| OpenRouter | `OPENROUTER_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Gemini | `GEMINI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
 
+## Python quickstart
 
-class Transcript(BaseModel):
-    messages: tuple[PromptMessage, ...]
-```
+This OpenAI example uses only names exported by `dr_providers`:
 
 ```python
-class ProviderCallDefinition(BaseModel):
-    route: ModelRoute
-    constraints: ControlConstraints
-
-    def materialize(
-        self,
-        *,
-        controls: GenerationControls | None = None,
-        extensions: ProviderBodyExtensions | None = None,
-    ) -> ProviderCallConfig: ...
-
-
-class ProviderCallConfig(BaseModel):
-    definition: ProviderCallDefinition
-    controls: GenerationControls
-    extensions: ProviderBodyExtensions
-
-    @property
-    def identity_hash(self) -> str: ...
-
-
-class ProviderCallRequest(BaseModel):
-    config: ProviderCallConfig
-    transcript: Transcript
-
-    @property
-    def identity_hash(self) -> str: ...
-```
-
-The Definition, Config, and Request payload models do not carry schema names
-or versions. Their `IdentityDocument` envelopes are the sole owners of
-`schema` and `schema_version`.
-
-## Translation
-
-Translation is the pure boundary between provider-independent call contracts
-and provider-specific wire bodies. Dispatch follows the protocol carried by
-the validated config rather than provider-specific branching in callers.
-
-```python
-def protocol_path(config: ProviderCallConfig) -> str: ...
-
-
-def build_payload(
-    request: ProviderCallRequest,
-) -> dict[str, Any]: ...
-```
-
-```python
-def parse_response(
-    body: Mapping[str, Any],
-    *,
-    config: ProviderCallConfig,
-) -> ProviderTransportOutcome: ...
-```
-
-## Transport
-
-Transport owns operational execution policy and the bounded wire call. It
-returns typed outcomes without deciding whether a successful generation is
-semantically acceptable to a downstream application.
-
-```python
-class ProviderTransportPolicy(BaseModel):
-    api_key_env: str
-    base_url: str | None = None
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
-    idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS
-    native_retry_count: int = 0
-```
-
-```python
-class Provider(typing.Protocol):
-    def complete(
-        self,
-        request: ProviderCallRequest,
-    ) -> ProviderTransportOutcome: ...
-
-
-class HttpProvider:
-    def complete(
-        self,
-        request: ProviderCallRequest,
-    ) -> ProviderTransportOutcome: ...
-
-    def invoke(
-        self,
-        request: ProviderCallRequest,
-    ) -> ProviderInvocationEvidence: ...
-```
-
-## Outcomes
-
-Outcomes form a closed no-throw union of successful transport responses and
-expected transport failures. Invocation evidence binds that outcome to the
-request, transport policy, and raw HTTP exchange; exactly one of its response
-or failure fields is populated. Standard `HttpProvider` invocation redacts
-known credential header names before binding the raw request to evidence.
-Direct `RawHttpRequest` construction and deserialization are trusted-data paths:
-they retain supplied headers without sanitizing them.
-
-```python
-class FailureClass(StrEnum):
-    PERMANENT = "permanent"
-    TRANSIENT = "transient"
-    RATE_LIMITED = "rate_limited"
-    RESOURCE_EXHAUSTION = "resource_exhaustion"
-    UNKNOWN = "unknown"
-
-
-class ProviderTransportResponse(BaseModel):
-    text: str
-    usage: TokenUsage | None = None
-    cost: CostInfo | None = None
-    warnings: tuple[ProviderTransportWarning, ...] = ()
-
-
-class ProviderTransportFailure(BaseModel):
-    failure_class: FailureClass
-    code: str | None = None
-    message: str
-    retryable: bool
-
-
-ProviderTransportOutcome = (
-    ProviderTransportResponse | ProviderTransportFailure
+from dr_providers import (
+    GenerationControls,
+    HttpProvider,
+    MessageRole,
+    PromptMessage,
+    ProviderCallRequest,
+    ProviderKind,
+    Transcript,
+    is_response,
+    openai_responses_config,
+    policy_for,
 )
+
+config = openai_responses_config(
+    model="gpt-5-mini",
+    controls=GenerationControls(token_limit=256),
+)
+request = ProviderCallRequest(
+    config=config,
+    transcript=Transcript(
+        messages=(
+            PromptMessage(
+                role=MessageRole.USER,
+                content="Say hello in one word.",
+            ),
+        )
+    ),
+)
+
+with HttpProvider(policy=policy_for(ProviderKind.OPENAI)) as provider:
+    outcome = provider.complete(request)
+
+if is_response(outcome):
+    print(outcome.text)
+else:
+    print(f"{outcome.code}: {outcome.message}")
 ```
 
-```python
-class ProviderInvocationEvidence(BaseModel):
-    request_identity: Mapping[str, Any]
-    policy_identity: Mapping[str, Any]
-    raw_request: RawHttpRequest
-    response: ProviderTransportResponse | None = None
-    failure: ProviderTransportFailure | None = None
+Expected transport failures are returned as
+`ProviderTransportFailure` values. Unexpected programming or infrastructure
+errors can still raise.
+
+## CLI and local server
+
+Install and run the one-shot CLI:
+
+```bash
+uv add 'dr-providers[cli]'
+uv run dr-providers --provider openai-responses \
+  --model gpt-5-mini \
+  --token-limit 256 \
+  -m 'Say hello in one word.'
 ```
 
-`ProviderInvocationEvidence` is likewise the bare payload model. Its stable
-persistence form is an `IdentityDocument` envelope carrying `schema`,
-`schema_version`, and that payload.
+Install the serving extra and bind the FastAPI facade to localhost:
 
-`base_url` is retained verbatim in policy identity and as the base of the raw
-request URL captured in invocation evidence. Callers must not embed credentials
-in it. Possible future hardening includes sanitizing at the `RawHttpRequest`
-model boundary and separating or restricting wire URLs from URLs retained in
-evidence.
+```bash
+uv add 'dr-providers[serve]'
+uv run python -m dr_providers.surfaces.serve serve --port 8322
+```
 
-```python
-def conformance_warnings(
-    request: ProviderCallRequest,
-    response: ProviderTransportResponse,
-) -> tuple[ProviderTransportWarning, ...]: ...
+## Outcome and evidence boundaries
+
+`HttpProvider.complete()` returns a closed
+`ProviderTransportResponse | ProviderTransportFailure` union for expected
+transport results. The timeout plus a fixed five-second operational margin
+bounds each native attempt's caller-visible wait; aggregate latency scales
+with `native_retry_count + 1`. When a caller injects its own synchronous HTTP
+client, a timed-out attempt can leave a daemon worker and socket lingering
+until the caller-owned operation eventually ends.
+
+`HttpProvider.invoke()` returns versioned serializable invocation evidence:
+request and policy identity payloads, structured request metadata, the
+constructed JSON request-body mapping, and the response body decoded as JSON
+when possible or retained as text otherwise. It does not retain original HTTP
+wire bytes. The standard `HttpProvider` path redacts known credential header
+names; direct `RawHttpRequest` construction and deserialization remain
+trusted-data paths. Evidence fields containing dictionaries remain mutable
+after construction, so callers should serialize the snapshot before sharing
+or persistence.
+
+## Repository validation
+
+The default suite is offline: pytest excludes tests marked `live`.
+
+```bash
+uv sync --all-extras
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
+uv build
+```
+
+Run the complete live matrix without changing the committed wire corpus:
+
+```bash
+uv run python scripts/run_live_matrix.py
+```
+
+Capturing and promoting replacement corpus data is a separate, deliberate
+operation. It stages outside the repository, validates and redacts the
+complete five-case capture, then updates `data/wire-corpus/`:
+
+```bash
+uv run python scripts/capture_live_corpus.py capture --promote
 ```

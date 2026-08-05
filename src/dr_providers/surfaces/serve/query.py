@@ -1,10 +1,3 @@
-"""Serve-side query machinery over the kernel.
-
-Pure library logic: declarative query specs resolve to kernel requests,
-run against any ``Provider`` (Scripted or Http), and return structured
-results with conformance warnings applied.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -39,15 +32,11 @@ from dr_providers.translation.request import build_payload, protocol_path
 class ServeProviderKind(StrEnum):
     OPENROUTER = "openrouter"
     OPENAI = "openai"
-    # Serve API spelling is snake_case; the CLI uses "openai-responses".
-    # Both map to the same shared preset registry.
     OPENAI_RESPONSES = "openai_responses"
     GEMINI = "gemini"
     ANTHROPIC = "anthropic"
 
 
-# The serve kind → the canonical shared factory kind. The serve spelling of
-# the OpenAI Responses member already matches the canonical snake_case value.
 _KIND_TO_FACTORY_KIND: dict[ServeProviderKind, ProviderFactoryKind] = {
     ServeProviderKind.OPENROUTER: ProviderFactoryKind.OPENROUTER,
     ServeProviderKind.OPENAI: ProviderFactoryKind.OPENAI,
@@ -56,8 +45,7 @@ _KIND_TO_FACTORY_KIND: dict[ServeProviderKind, ProviderFactoryKind] = {
     ServeProviderKind.ANTHROPIC: ProviderFactoryKind.ANTHROPIC,
 }
 
-# The anthropic preset requires a token limit; serve supplies this default when
-# a spec targeting anthropic omits one (see ``build_request``).
+# Anthropic requires max_tokens; serve defaults it when omitted.
 DEFAULT_ANTHROPIC_TOKEN_LIMIT = 4096
 
 
@@ -92,9 +80,6 @@ class QueryResult(BaseModel):
 
 
 def build_request(spec: QuerySpec) -> ProviderCallRequest:
-    # Anthropic's Messages preset REQUIRES a token limit; supply a sensible
-    # default when serving an anthropic spec that omits one so the call is
-    # well-formed rather than raising ControlValidationError.
     token_limit = spec.token_limit
     if (
         token_limit is None

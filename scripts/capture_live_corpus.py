@@ -1,5 +1,4 @@
 #!/usr/bin/env -S uv run python
-"""Capture, validate, redact, and deliberately promote live wire evidence."""
 
 from __future__ import annotations
 
@@ -59,11 +58,16 @@ SENSITIVE_KEY_NAMES = {
 
 
 class CaptureValidationError(ValueError):
-    """A staged capture is incomplete, malformed, or unsafe to promote."""
+    pass
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=(
+            "Capture, validate, redact, and deliberately promote "
+            "live wire evidence."
+        )
+    )
     subcommands = parser.add_subparsers(dest="command", required=True)
 
     capture = subcommands.add_parser(
@@ -123,7 +127,7 @@ def _redact_url(value: str) -> str:
 
 
 def redact_capture(value: Any, secrets: Sequence[str]) -> Any:
-    """Redact structured credential fields and configured secret values."""
+    """Redact credential fields and configured secret values."""
     if isinstance(value, Mapping):
         return {
             str(key): REDACTED
@@ -170,7 +174,6 @@ def _load_capture(path: Path) -> dict[str, Any]:
 
 
 def prepare_capture(staging_dir: Path, *, secrets: Sequence[str] = ()) -> Path:
-    """Validate one complete capture and write a redacted staging set."""
     staging_dir = require_external_capture_dir(staging_dir)
     expected = {case.corpus_file: case for case in LIVE_CASES}
     present = {path.name for path in staging_dir.glob("*.json")}
@@ -285,7 +288,6 @@ def promote_capture(
     *,
     secrets: Sequence[str] = (),
 ) -> Path:
-    """Revalidate raw staging, then deliberately update curated evidence."""
     validated_dir = prepare_capture(staging_dir, secrets=secrets)
     _install_validated_capture(validated_dir, corpus_dir)
     return validated_dir

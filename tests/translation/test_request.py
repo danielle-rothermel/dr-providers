@@ -1,5 +1,3 @@
-"""Provider request wire-translation tests."""
-
 from __future__ import annotations
 
 import json
@@ -126,8 +124,6 @@ class TestBuildPayload:
             )
         )
         payload = build_payload(request)
-        # Anthropic Messages takes {"output_config": {"effort": ...}}, not a
-        # top-level {"reasoning": ...}.
         assert payload["output_config"] == {"effort": "medium"}
         assert "reasoning" not in payload
 
@@ -186,8 +182,6 @@ class TestBuildPayload:
         assert build_payload(request)["seed"] == 7
 
     def test_nested_extra_body_payload_is_json_serializable(self) -> None:
-        # Frozen extension values must be thawed on the way into the wire
-        # payload, or httpx's json= encoding would reject the request.
         request = request_for(
             openai_chat_config(
                 model="m",

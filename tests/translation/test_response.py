@@ -1,5 +1,3 @@
-"""Response parser dispatch tests."""
-
 from collections.abc import Mapping
 from typing import Any
 

@@ -1,5 +1,3 @@
-"""Shared failure-vocabulary tests."""
-
 import pytest
 
 from dr_providers import (

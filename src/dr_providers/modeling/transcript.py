@@ -1,9 +1,3 @@
-"""Transcript: the ordered role-and-content provider-call input.
-
-A Transcript is the single input carried by a Provider Call Request
-alongside its Config reference — no controls, no transport policy.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -25,20 +19,14 @@ class PromptMessage(BaseModel):
     content: StrictStr
 
     def provider_dict(self) -> dict[str, str]:
-        # The wire shape sent in the request body.
         return {"role": self.role.value, "content": self.content}
 
     def identity_payload(self) -> dict[str, str]:
-        # The identity shape is byte-identical to the wire shape today, but the
-        # two names carry different intent (wire body vs Request identity) and
-        # may diverge; identity delegates to the wire shape to stay in lockstep
-        # until they must differ.
+        # Request identity intentionally reuses the exact wire shape.
         return self.provider_dict()
 
 
 class Transcript(BaseModel):
-    """Ordered sequence of role-and-content messages sent as input."""
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     messages: tuple[PromptMessage, ...]

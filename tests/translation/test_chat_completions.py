@@ -1,5 +1,3 @@
-"""Chat Completions response-translation tests."""
-
 import pytest
 
 from dr_providers import (

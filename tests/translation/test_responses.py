@@ -1,5 +1,3 @@
-"""OpenAI Responses response-translation tests."""
-
 import json
 
 import pytest

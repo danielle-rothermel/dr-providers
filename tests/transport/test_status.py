@@ -1,5 +1,3 @@
-"""HTTP status classification tests."""
-
 import pytest
 
 from dr_providers import FailureClass, classify_status_code

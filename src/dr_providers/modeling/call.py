@@ -1,21 +1,3 @@
-"""Provider Call Definition and Config: identity-bearing call models.
-
-A Provider Call Definition is the versioned, variable-bearing owner. It
-declares one Model Route, the output-affecting generation controls and
-provider body extensions it exposes as Variables, their constraints, and
-their identity effects. It materializes one or more Provider Call Configs
-by assigning every required Variable.
-
-A Provider Call Config is a complete validated assignment carrying its
-typed Definition reference and its full 64-char SHA-256 Identity Hash (via
-dr-serialize). Its identity embeds the owning Definition's identity plus
-the assigned controls and extensions. Transport policy is excluded from
-every Definition/Config identity and never appears here.
-
-Both models live in this module so materialization is a plain method with
-no circular import.
-"""
-
 from __future__ import annotations
 
 from functools import cached_property
@@ -71,20 +53,7 @@ _ANTHROPIC_REASONING_EFFORTS = frozenset(
 
 
 class ProviderCallDefinition(BaseModel):
-    """Versioned variable-bearing description of a provider call's shape.
-
-    ``route`` and ``constraints`` are fixed by the Definition. The
-    controls named in ``required_controls`` are Variables that every
-    materialized Config MUST assign; other supported controls are
-    optional Variables. ``extension_keys`` names the provider body
-    extension Variables the Definition exposes.
-
-    The Definition is itself identified: its identity payload fully
-    captures ``definition_id``, ``constraints``, ``required_controls`` and
-    ``extension_keys`` so that a Config which embeds the Definition Identity
-    Hash is bound to every declared variable and constraint. The surrounding
-    Identity Document owns the schema name and version.
-    """
+    """Identity includes all fixed fields and declared control variables."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -131,7 +100,6 @@ class ProviderCallDefinition(BaseModel):
         return self
 
     def identity_payload(self) -> dict[str, Any]:
-        """Identity effects the Definition declares (its own identity)."""
         return {
             "definition_id": self.definition_id,
             "route": self.route.identity_payload(),
@@ -151,7 +119,6 @@ class ProviderCallDefinition(BaseModel):
 
     @cached_property
     def identity_hash(self) -> str:
-        """Full 64-char lowercase SHA-256 Definition Identity Hash."""
         return identity_document_hash(self.identity_document())
 
     def materialize(
@@ -160,14 +127,6 @@ class ProviderCallDefinition(BaseModel):
         controls: GenerationControls | None = None,
         extensions: ProviderBodyExtensions | None = None,
     ) -> ProviderCallConfig:
-        """Assign Variables and return a complete validated Config.
-
-        Rejects an assignment that sets an unsupported control (unless
-        the Definition allows dropping it) or that leaves a required
-        control unset, or that sets an undeclared extension key. The
-        invariants are enforced by ``ProviderCallConfig`` validation, so
-        they hold however a Config is built.
-        """
         return ProviderCallConfig(
             definition=self,
             controls=controls or GenerationControls(),
@@ -176,13 +135,7 @@ class ProviderCallDefinition(BaseModel):
 
 
 class ProviderCallConfig(BaseModel):
-    """A Definition with every required Variable set, plus Identity Hash.
-
-    Construct via :meth:`ProviderCallDefinition.materialize` or a preset
-    builder; direct construction and deserialization are also validated,
-    since the control/extension invariants live in model validation rather
-    than only in ``materialize``.
-    """
+    """Validated assignment whose identity excludes transport policy."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -262,13 +215,7 @@ class ProviderCallConfig(BaseModel):
             )
 
     def _reserved_wire_keys(self) -> set[str]:
-        """Core wire-body keys an extension must never override.
-
-        Extensions merge into the wire payload after the validated core
-        fields; allowing them to overwrite ``model``/``messages``/a
-        transported control would silently defeat identity, so they are
-        rejected at validation time.
-        """
+        """Reserve extension keys whose override would defeat identity."""
         constraints = self.definition.constraints
         return {
             "model",
@@ -293,14 +240,7 @@ class ProviderCallConfig(BaseModel):
         return self.definition.route.quota_identity
 
     def identity_payload(self) -> dict[str, Any]:
-        """Owning Definition identity + assigned controls/extensions.
-
-        Embeds the Definition Identity Hash (which itself covers the Model
-        Route, constraints, required controls, and declared extension keys)
-        rather than a partial copy, so the Config identity fully determines
-        what the undeclared-extension and required-control checks enforce.
-        Transport policy is excluded.
-        """
+        """Include Definition hash and assignments; omit transport policy."""
         return {
             "definition_identity_hash": self.definition.identity_hash,
             "controls": self.controls.identity_payload(),
@@ -316,7 +256,6 @@ class ProviderCallConfig(BaseModel):
 
     @cached_property
     def identity_hash(self) -> str:
-        """Full 64-char lowercase SHA-256 Config Identity Hash."""
         return identity_document_hash(self.identity_document())
 
     def _raise_unsupported(self, control: RequestControl) -> None:

@@ -1,5 +1,3 @@
-"""Shared contract for live-matrix execution and corpus capture."""
-
 from __future__ import annotations
 
 import os
@@ -18,8 +16,6 @@ CAPTURE_DIR_ENV = "DR_PROVIDERS_LIVE_CAPTURE_DIR"
 
 @verify(UNIQUE)
 class LiveProvider(StrEnum):
-    """Provider selectors accepted by the canonical live runner."""
-
     OPENROUTER = "openrouter"
     OPENAI = "openai"
     GEMINI = "gemini"
@@ -80,7 +76,6 @@ CREDENTIAL_ALIASES = {
 def select_cases(
     *, providers: Sequence[str] = (), case_ids: Sequence[str] = ()
 ) -> tuple[LiveCase, ...]:
-    """Resolve an explicit provider or case selection."""
     if providers and case_ids:
         raise ValueError("provider and case selectors cannot be combined")
     if providers:
@@ -101,7 +96,7 @@ def select_cases(
 
 
 def mapped_provider_environment(source: Mapping[str, str]) -> dict[str, str]:
-    """Return a child environment with dotfiles credential aliases mapped."""
+    """Map dotfiles credential aliases without mutating the source."""
     environment = dict(source)
     for target, alias in CREDENTIAL_ALIASES.items():
         if value := source.get(alias):
@@ -124,13 +119,13 @@ def missing_credentials(
 
 
 def credential_values(environment: Mapping[str, str]) -> tuple[str, ...]:
-    """Return configured credential values for redaction, never display."""
+    """Collect secret values for redaction without emitting them."""
     names = set(CREDENTIAL_ALIASES) | set(CREDENTIAL_ALIASES.values())
     return tuple(value for name in names if (value := environment.get(name)))
 
 
 def require_external_capture_dir(path: Path) -> Path:
-    """Reject capture paths inside the repository, including curated data."""
+    """Reject capture destinations within the repository."""
     resolved = path.expanduser().resolve()
     if resolved == ROOT or ROOT in resolved.parents:
         raise ValueError("live capture staging must be outside the repository")

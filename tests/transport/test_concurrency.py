@@ -1,5 +1,3 @@
-"""State-synchronized transport concurrency and worker lifecycle tests."""
-
 from __future__ import annotations
 
 import threading
@@ -112,7 +110,7 @@ def test_owned_deadline_breach_does_not_disturb_healthy_call(
     )
     clients = iter((blocked_client, healthy_client))
     monkeypatch.setattr(
-        http_transport, "INVOCATION_DEADLINE_MARGIN_SECONDS", 0.05
+        http_transport, "ATTEMPT_DEADLINE_MARGIN_SECONDS", 0.05
     )
     monkeypatch.setattr(httpx, "Client", lambda: next(clients))
     provider = HttpProvider(policy=_policy(), api_key="test-key")
@@ -169,7 +167,7 @@ def test_injected_client_hard_deadline_preserves_caller_lifecycle(
     )
     monkeypatch.setattr(
         http_transport,
-        "INVOCATION_DEADLINE_MARGIN_SECONDS",
+        "ATTEMPT_DEADLINE_MARGIN_SECONDS",
         TEST_DEADLINE_MARGIN_SECONDS,
     )
     provider = HttpProvider(

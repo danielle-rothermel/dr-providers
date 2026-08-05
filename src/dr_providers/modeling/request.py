@@ -1,5 +1,3 @@
-"""Provider Call Request identity model."""
-
 from __future__ import annotations
 
 from functools import cached_property
@@ -22,7 +20,7 @@ PROVIDER_CALL_REQUEST_SCHEMA_VERSION = 1
 
 
 class ProviderCallRequest(BaseModel):
-    """Immutable identity-bearing request: one Config + one Transcript."""
+    """Identity contains only the Config reference and Transcript."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -30,8 +28,6 @@ class ProviderCallRequest(BaseModel):
     transcript: Transcript
 
     def identity_payload(self) -> dict[str, Any]:
-        """Config reference (by Identity Hash) plus Transcript. No copied
-        controls, no transport policy."""
         return {
             "config_identity_hash": self.config.identity_hash,
             "transcript": self.transcript.identity_payload(),
@@ -46,5 +42,4 @@ class ProviderCallRequest(BaseModel):
 
     @cached_property
     def identity_hash(self) -> str:
-        """Full 64-char lowercase SHA-256 Request Identity Hash."""
         return identity_document_hash(self.identity_document())

@@ -1,9 +1,3 @@
-"""Post-response conformance: check observed evidence, never predict.
-
-Violations are warnings with severity; the caller decides what is
-fatal. Library default severity is WARNING for every check.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

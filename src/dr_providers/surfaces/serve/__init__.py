@@ -1,5 +1,3 @@
-"""Serve-facade public API (FastAPI app lives behind the [serve] extra)."""
-
 from dr_providers.surfaces.serve.query import (
     QueryResult,
     QuerySpec,

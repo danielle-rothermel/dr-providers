@@ -164,9 +164,7 @@ def test_generated_artifacts_exactly_match_committed_outputs(
         tmp_path / "canonical_suggestions.json",
     )
 
-    # The generated artifact records its manifest/source paths. Run from the
-    # repository anchor with the canonical relative corpus argument so those
-    # recorded paths remain byte-identical regardless of pytest's launch CWD.
+    # Recorded source paths require the canonical repository-relative argument.
     monkeypatch.chdir(REPO_ROOT)
     audit_ground_truth.main(
         corpus_dir=Path("data/audit-corpus"), output_dir=tmp_path

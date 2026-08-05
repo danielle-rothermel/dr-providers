@@ -1,12 +1,3 @@
-"""Typed no-throw Provider Transport Outcome.
-
-The transport returns a closed union of exactly one Provider Transport
-Response or one Provider Transport Failure. Expected outcomes never
-raise; only unexpected programming/infrastructure errors raise. Neither
-value asserts Whetstone semantic acceptance — Whetstone projects a
-Generation or classifies a Provider Semantic Failure downstream.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -76,11 +67,9 @@ class ResponsesDiagnostics(BaseModel):
 
 
 class ProviderTransportResponse(BaseModel):
-    """Typed successful transport value.
+    """Transport success with the parsed JSON response mapping.
 
-    Carries the least-processed raw response body plus the provider
-    identifiers, usage, cost, warnings, and diagnostics available at the
-    transport boundary. It does not assert semantic acceptance.
+    It does not assert semantic acceptance.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -97,11 +86,9 @@ class ProviderTransportResponse(BaseModel):
 
 
 class ProviderTransportFailure(BaseModel):
-    """Typed expected transport failure value.
+    """Expected failure with the constructed request-body mapping.
 
-    Retains the complete least-processed raw request plus failure
-    response evidence and transport diagnostics, without semantic
-    classification or retry decisions.
+    Response evidence is decoded as JSON when possible or retained as text.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -122,9 +109,7 @@ ProviderTransportOutcome = ProviderTransportResponse | ProviderTransportFailure
 def is_response(
     outcome: ProviderTransportOutcome,
 ) -> TypeGuard[ProviderTransportResponse]:
-    # ``TypeGuard`` (not ``TypeIs``): the stdlib ``typing.TypeIs`` lands in
-    # 3.13, and this package targets 3.12 without a typing_extensions
-    # dependency, so ``TypeGuard`` is the portable choice here.
+    # Python 3.12 lacks TypeIs; avoid a typing_extensions dependency.
     return isinstance(outcome, ProviderTransportResponse)
 
 

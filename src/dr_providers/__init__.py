@@ -1,17 +1,3 @@
-"""dr-providers: typed LLM provider-call transport kernel.
-
-Owns the Provider Call Definition -> Config identity, the Provider Call
-Request identity, the Provider Transport Policy, the typed no-throw
-Provider Transport Outcome, complete least-processed success/failure
-evidence in a stable Provider Invocation Evidence artifact, native
-retry-zero support, and the ``(provider, protocol, model)`` Provider
-Quota Identity. Whetstone owns semantic acceptance, classification,
-retry/backoff, checkpoints, results, and concurrency.
-
-``HttpProvider`` loads lazily so importing this package's pure modules
-(identity, config, payloads) never pulls in httpx.
-"""
-
 from importlib.metadata import version
 from typing import Any
 

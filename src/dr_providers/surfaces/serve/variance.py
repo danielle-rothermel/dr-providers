@@ -1,9 +1,3 @@
-"""Serve-side variance reporting over repeated provider queries.
-
-The variance runner fans one prompt across models x samples and reports
-output dispersion in the same records the playground downloads as JSONL.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -25,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class VarianceRecord(BaseModel):
-    """One sampled call in a variance run (JSONL row)."""
+    """One sampled call in a variance run."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 

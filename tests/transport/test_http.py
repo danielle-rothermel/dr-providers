@@ -1,5 +1,3 @@
-"""Bounded HTTP transport and lifecycle tests."""
-
 from __future__ import annotations
 
 import json
@@ -220,8 +218,6 @@ class TestHttpProvider:
         assert outcome.status_code == status
 
     def test_transport_error_is_transient_no_throw(self) -> None:
-        # A non-timeout httpx.HTTPError (here ConnectError) exercises the
-        # generic transport_error branch, distinct from the timeout branch.
         def handler(_req: httpx.Request) -> httpx.Response:
             raise httpx.ConnectError("boom")
 
@@ -243,9 +239,6 @@ class TestHttpProvider:
     def test_httpx_error_classification(
         self, error: httpx.HTTPError, expected_code: str
     ) -> None:
-        # Unit-level classification: a ConnectError is a generic transport
-        # error; a ConnectTimeout is a plain timeout; a ReadTimeout is an idle
-        # stall (no bytes within the idle window) -> stalled_response.
         def handler(_req: httpx.Request) -> httpx.Response:
             raise error
 
@@ -321,7 +314,7 @@ class TestNativeRetry:
         provider = mock_provider(handler, policy=policy)
         outcome = provider.complete(openai_request())
         assert isinstance(outcome, ProviderTransportFailure)
-        assert len(calls) == 3  # one initial + two native retries
+        assert len(calls) == 3
 
     def test_native_retry_recovers_on_success(self) -> None:
         responses = [
@@ -363,8 +356,6 @@ class TestHttpProviderLifecycle:
     def test_owned_per_call_client_closed_after_complete(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # Owned wire calls build a per-call client; each must be closed as
-        # its call completes, leaving no shared client for close() to hold.
         real_client = httpx.Client
         created: list[httpx.Client] = []
 

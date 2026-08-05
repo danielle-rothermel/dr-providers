@@ -1,13 +1,3 @@
-"""Offline parser regression tests over live-captured wire bodies.
-
-``scripts/capture_live_corpus.py`` stages a complete live matrix outside the
-repository, validates and redacts every response, and deliberately promotes
-the curated files under ``data/wire-corpus``. This test re-parses every
-promoted body with :func:`parse_response` so a kernel parser regression is
-caught without touching the network. The test skips cleanly when no curated
-corpus is present.
-"""
-
 from __future__ import annotations
 
 import json
@@ -42,18 +32,13 @@ def wire_corpus_files() -> list[Path]:
 
 
 def _config_for_stem(stem: str) -> ProviderCallConfig:
-    """Reconstruct a minimal config from a ``<provider>_<protocol>`` stem.
-
-    The corpus filename is the ground truth for which parser branch to
-    exercise; the model name is irrelevant to parsing.
-    """
+    """Use the corpus filename as parser ground truth; ignore its model."""
     provider_kind, _, protocol = stem.partition("_")
     provider = ProviderKind(provider_kind)
     if protocol == Protocol.RESPONSES.value:
         return openai_responses_config(model="wire-corpus-replay")
     if protocol == Protocol.ANTHROPIC_MESSAGES.value:
-        # Anthropic requires a token limit to materialize; the value is
-        # irrelevant to parsing a captured response body.
+        # Anthropic materialization requires a token limit; parsing ignores it.
         return anthropic_messages_config(
             model="wire-corpus-replay",
             controls=GenerationControls(token_limit=1),

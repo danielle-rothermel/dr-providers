@@ -1,12 +1,3 @@
-"""Corpus-backed parser regression tests for the kernel.
-
-Every kernel parser change is checked against
-``data/kernel-corpus/responses.jsonl`` — real response shapes (grown
-from whetstone-ai's boundary fixtures) with expected parses. Add
-entries when new shapes are observed; never edit expected values to
-match a parser change without a recorded decision.
-"""
-
 from __future__ import annotations
 
 import json
@@ -37,12 +28,7 @@ CORPUS_PATH = (
 
 
 def _config_for(protocol: str, model: str) -> ProviderCallConfig:
-    """Explicit protocol -> config dispatch; unknown protocols raise.
-
-    Keying on ``protocol`` (a Model Route component) instead of an
-    if/else keeps a future protocol from silently misrouting to an
-    OpenAI parser branch.
-    """
+    """Reject unknown protocols instead of falling through to OpenAI."""
     if protocol == Protocol.CHAT_COMPLETIONS.value:
         return openai_chat_config(model=model)
     if protocol == Protocol.RESPONSES.value:

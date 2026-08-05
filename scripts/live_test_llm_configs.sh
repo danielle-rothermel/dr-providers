@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# Live-test OpenRouter configs used by nl_latents experiment profiles.
-#
-# Prerequisites:
-#   OPENROUTER_API_KEY must be set.
-#
-# Usage:
-#   scripts/live_test_llm_configs.sh
 
 set -euo pipefail
 

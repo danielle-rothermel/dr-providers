@@ -1,12 +1,3 @@
-"""CLI for one-shot provider calls over the kernel.
-
-Thin: build a ``ProviderCallRequest`` from flags, run it through
-``HttpProvider``, and print the transport outcome. Not wired into
-``dr_providers``'s pure import surface — this module (and its ``[cli]``
-extra) is only imported when running the CLI, so it is free to import
-``HttpProvider`` (and therefore httpx) at module level.
-"""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -28,24 +19,18 @@ from dr_providers.transport.policy import policy_for
 
 DEFAULT_RETRIES = 0
 
-# Anthropic's Messages preset REQUIRES a token limit; when the CLI targets
-# anthropic and no ``--token-limit`` is passed we supply this sensible default
-# so the call is well-formed. Documented in ``--token-limit``'s help below.
+# Anthropic requires max_tokens; the CLI defaults it when omitted.
 DEFAULT_ANTHROPIC_TOKEN_LIMIT = 4096
 
 
 class ProviderChoice(StrEnum):
     OPENROUTER = "openrouter"
     OPENAI = "openai"
-    # CLI spelling is hyphenated; the serve surface uses "openai_responses".
-    # Both map to the same shared preset registry.
     OPENAI_RESPONSES = "openai-responses"
     GEMINI = "gemini"
     ANTHROPIC = "anthropic"
 
 
-# The CLI choice → the canonical shared factory kind. Only the OpenAI Responses
-# spelling differs between surfaces; every other member is name-identical.
 _CHOICE_TO_FACTORY_KIND: dict[ProviderChoice, ProviderFactoryKind] = {
     ProviderChoice.OPENROUTER: ProviderFactoryKind.OPENROUTER,
     ProviderChoice.OPENAI: ProviderFactoryKind.OPENAI,

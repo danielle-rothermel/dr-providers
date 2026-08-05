@@ -1,5 +1,3 @@
-"""Transport timeout semantics against controlled local stall servers."""
-
 from __future__ import annotations
 
 import contextlib
@@ -34,11 +32,11 @@ from dr_providers import (
     openai_chat_config,
 )
 from dr_providers.transport.http import (
-    INVOCATION_DEADLINE_MARGIN_SECONDS,
+    ATTEMPT_DEADLINE_MARGIN_SECONDS,
     STALLED_RESPONSE_CODE,
     HttpProvider,
     _httpx_timeout,
-    _operational_invocation_deadline_seconds,
+    _operational_attempt_deadline_seconds,
 )
 
 POLICY_TIMEOUT_SECONDS = 0.3
@@ -95,7 +93,7 @@ def test_platform_unsafe_policy_timeouts_are_saturated_operationally() -> None:
     assert socket_timeout.write == threading.TIMEOUT_MAX
     assert socket_timeout.pool == threading.TIMEOUT_MAX
     assert (
-        _operational_invocation_deadline_seconds(policy.timeout_seconds)
+        _operational_attempt_deadline_seconds(policy.timeout_seconds)
         == threading.TIMEOUT_MAX
     )
     assert policy.timeout_seconds == requested_timeout_seconds
@@ -162,7 +160,6 @@ def _headers_then_stall(conn: socket.socket, stop: threading.Event) -> None:
 
 
 def _dribble_forever(conn: socket.socket, stop: threading.Event) -> None:
-    """Keep every inter-byte gap below the idle timeout."""
     conn.recv(65536)
     conn.sendall(
         b"HTTP/1.1 200 OK\r\n"
@@ -260,6 +257,6 @@ def test_dribble_is_bounded_by_exact_hard_deadline() -> None:
         "url": f"{server.base_url}/chat/completions",
         "timeout_seconds": POLICY_TIMEOUT_SECONDS,
         "deadline_seconds": (
-            POLICY_TIMEOUT_SECONDS + INVOCATION_DEADLINE_MARGIN_SECONDS
+            POLICY_TIMEOUT_SECONDS + ATTEMPT_DEADLINE_MARGIN_SECONDS
         ),
     }

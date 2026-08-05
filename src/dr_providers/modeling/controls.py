@@ -1,11 +1,3 @@
-"""Output-affecting generation controls and their wire mapping.
-
-Generation controls shape the produced generation, so they are
-identity-bearing fields of a Provider Call Config. How a control
-serializes on the wire (token-limit parameter name, reasoning shape)
-is declared by the Provider Call Definition, not by the request.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -27,17 +19,12 @@ from dr_providers.core.frozen import _deep_freeze, _thaw
 
 
 class RequestControl(StrEnum):
-    """Named output-affecting controls a Definition may declare."""
-
     TEMPERATURE = "temperature"
     TOP_P = "top_p"
     TOKEN_LIMIT = "token_limit"  # noqa: S105 -- knob name, not a secret
     REASONING = "reasoning"
 
 
-# The GenerationControls attribute name backing each control. Each control
-# maps to exactly ``member.value``; this dict is the single source of truth
-# for that correspondence and is asserted exhaustive over RequestControl.
 CONTROL_ATTR: dict[RequestControl, str] = {
     control: control.value for control in RequestControl
 }
@@ -51,8 +38,6 @@ class TokenLimitParameter(StrEnum):
 
 
 class ReasoningEffort(StrEnum):
-    """Typed cross-provider reasoning level (see ADR 0001)."""
-
     NONE = "none"
     MINIMAL = "minimal"
     LOW = "low"
@@ -62,19 +47,13 @@ class ReasoningEffort(StrEnum):
 
 
 class ReasoningRequestShape(StrEnum):
-    """How a config serializes reasoning effort on the wire."""
-
     NONE = "none"
     EFFORT_FIELD = "effort_field"
     REASONING_OBJECT = "reasoning_object"
 
 
 class GenerationControls(BaseModel):
-    """Assigned output-affecting generation controls (identity-bearing).
-
-    Every set control participates in Config identity. Unset controls
-    (``None``) are absent from both identity and the wire payload.
-    """
+    """Only set controls participate in Config identity and the wire body."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -84,8 +63,6 @@ class GenerationControls(BaseModel):
     reasoning: ReasoningEffort | None = None
 
     def identity_payload(self) -> dict[str, Any]:
-        """Only set controls appear, so identity never depends on an
-        absent knob."""
         payload: dict[str, Any] = {}
         if self.temperature is not None:
             payload["temperature"] = self.temperature
@@ -104,14 +81,7 @@ DEFAULT_SUPPORTED_CONTROLS: frozenset[RequestControl] = frozenset(
 
 
 class ControlConstraints(BaseModel):
-    """Definition-declared constraints and wire mapping for controls.
-
-    Declares which controls the route can transport, how the token
-    limit and reasoning effort serialize on the wire, and whether an
-    unsupported control set on a Config is dropped or rejected. These
-    mapping choices are output-affecting, so they are part of Config
-    identity.
-    """
+    """Definition-owned wire mappings that participate in Config identity."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -144,14 +114,7 @@ class ControlConstraints(BaseModel):
 
 
 class ProviderBodyExtensions(BaseModel):
-    """Output-affecting provider body extensions merged into the wire
-    payload.
-
-    ``extra_body`` is deeply immutable: nested mappings become read-only
-    proxies and lists become tuples, so an extension set cannot be mutated
-    after construction and thus can never drift from the cached identity
-    hash of the owning Config.
-    """
+    """Deeply frozen wire extensions that participate in Config identity."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -169,10 +132,7 @@ class ProviderBodyExtensions(BaseModel):
 
     @model_validator(mode="after")
     def _freeze_extra_body(self) -> ProviderBodyExtensions:
-        # Pydantic canonicalizes a ``Mapping`` field into a plain dict, so
-        # deep-freeze after validation and reassign the read-only proxy: the
-        # whole structure (including the top level) is then immutable and can
-        # never drift from the owning Config's cached identity hash.
+        # Pydantic converts Mapping fields to dicts; freeze after validation.
         object.__setattr__(self, "extra_body", _deep_freeze(self.extra_body))
         return self
 

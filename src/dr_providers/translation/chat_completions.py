@@ -1,5 +1,3 @@
-"""Translate Chat Completions wire bodies into typed outcomes."""
-
 from collections.abc import Mapping, Sequence
 from typing import Any
 

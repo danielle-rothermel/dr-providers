@@ -1,5 +1,3 @@
-"""Dispatch response translation by provider wire protocol."""
-
 from collections.abc import Mapping
 from typing import Any, assert_never
 

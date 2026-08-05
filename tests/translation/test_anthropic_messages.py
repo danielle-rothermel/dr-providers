@@ -1,5 +1,3 @@
-"""Anthropic Messages response-translation tests."""
-
 from dr_providers import (
     GenerationControls,
     ProviderTransportResponse,

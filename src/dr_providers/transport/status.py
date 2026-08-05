@@ -1,5 +1,3 @@
-"""Pure HTTP-status classification for provider transport failures."""
-
 from dr_providers.core.failures import FailureClass
 
 RATE_LIMIT_STATUS = 429

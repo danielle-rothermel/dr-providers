@@ -1,5 +1,3 @@
-"""Typed provider outcome model tests."""
-
 from dr_providers import (
     FailureClass,
     ProviderTransportFailure,

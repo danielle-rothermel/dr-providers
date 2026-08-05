@@ -1,5 +1,3 @@
-"""Shared semantic conformance tests for Provider implementations."""
-
 from __future__ import annotations
 
 from collections.abc import Callable

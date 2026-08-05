@@ -1,12 +1,3 @@
-"""Translate OpenAI Responses wire bodies into typed outcomes.
-
-Each parser takes the raw provider body and returns either a
-``ProviderTransportResponse`` (carrying the least-processed raw body and
-materialized parts) or a ``ProviderTransportFailure`` (an expected parse
-outcome, never raised). The transport wraps these in the no-throw
-Provider Transport Outcome.
-"""
-
 from __future__ import annotations
 
 from collections import Counter

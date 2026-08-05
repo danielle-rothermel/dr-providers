@@ -1,22 +1,3 @@
-"""Raw-httpx transport returning the no-throw Provider Transport Outcome.
-
-``complete`` returns a closed union of Provider Transport Response or
-Provider Transport Failure — expected outcomes never raise. Only
-unexpected programming/infrastructure errors raise. ``invoke`` returns a
-stable Provider Invocation Evidence artifact binding request + policy
-identities to the outcome and the complete least-processed raw request.
-
-Native retry count defaults to zero and is honored as literal retries of
-the same wire call; there is no backoff, sleep, or semantic
-classification here (Whetstone's Provider Execution Policy owns those).
-
-Two protocol families are first-class:
-  * OpenAI-compatible / OpenRouter ``chat_completions`` (and OpenAI
-    ``responses``) over a Bearer token, with a custom base URL.
-  * Anthropic ``anthropic_messages`` over ``x-api-key`` +
-    ``anthropic-version`` headers, with a custom base URL.
-"""
-
 from __future__ import annotations
 
 import contextlib
@@ -63,49 +44,27 @@ INVALID_JSON_CODE = "invalid_response_json"
 TIMEOUT_CODE = "timeout"
 STALLED_RESPONSE_CODE = "stalled_response"
 
-# A stalled TCP/TLS handshake must fail fast: a wedged connect should
-# never consume the full read budget. The read phase is bounded by the
-# IDLE timeout (per inter-byte gap), not the absolute cap, so a legitimate
-# long stream making steady progress is never killed for running long; the
-# per-invocation deadline (below) is the absolute wall-clock backstop.
+# Bound TCP/TLS setup independently of the response idle budget.
 MAX_CONNECT_TIMEOUT_SECONDS = 30.0
 
-# Small fixed margin added on top of ``timeout_seconds`` (the absolute cap)
-# for the overall per-invocation deadline. The idle-read timeout is the
-# primary stall detector and returns a typed failure first for a genuine
-# stall; the hard deadline (absolute cap) only fires when a response defeats
-# the idle timer entirely — e.g. a dribble sending one byte per idle window.
-INVOCATION_DEADLINE_MARGIN_SECONDS = 5.0
+# Give httpx idle failures time to win before the caller-visible watchdog.
+ATTEMPT_DEADLINE_MARGIN_SECONDS = 5.0
 
 
 def _operational_timeout_seconds(timeout_seconds: float) -> float:
-    """Clamp a valid policy timeout to the platform wait ceiling."""
     return min(timeout_seconds, threading.TIMEOUT_MAX)
 
 
-def _operational_invocation_deadline_seconds(
+def _operational_attempt_deadline_seconds(
     timeout_seconds: float,
 ) -> float:
-    """Return the platform-safe invocation watchdog deadline."""
     return _operational_timeout_seconds(
-        timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
+        timeout_seconds + ATTEMPT_DEADLINE_MARGIN_SECONDS
     )
 
 
 def _httpx_timeout(idle_timeout_seconds: float) -> httpx.Timeout:
-    """Progress-aware timeout discipline: idle-bounded read, capped connect.
-
-    The READ phase is bounded by ``idle_timeout_seconds`` -- httpx's read
-    timeout is per-read-operation (per inter-byte gap), which is exactly a
-    PROGRESS/IDLE bound: a stream that keeps delivering bytes resets it and
-    runs as long as it makes progress, while a stream that goes silent longer
-    than the idle window fails ``stalled_response`` promptly. This is why a
-    legitimate long streaming response (steady tokens for minutes) is no
-    longer killed by the flat ``timeout_seconds``. Connect is capped so a
-    wedged handshake fails fast; write/pool take the idle budget too. The
-    absolute ``timeout_seconds`` cap is enforced separately as the
-    per-invocation deadline (the dribble backstop).
-    """
+    """Use per-operation idle bounds, with a separately capped connect."""
     operational_timeout_seconds = _operational_timeout_seconds(
         idle_timeout_seconds
     )
@@ -118,35 +77,11 @@ def _httpx_timeout(idle_timeout_seconds: float) -> httpx.Timeout:
 
 
 class HttpProvider:
-    """Single-shot provider calls over raw httpx.
+    """Bound caller-visible waiting with one daemon worker per wire call.
 
-    The Provider Transport Policy supplies credentials env var, base URL,
-    timeout, and native retry count. An explicit ``api_key`` overrides
-    the env lookup (for tests). An injected client is left open on close.
-
-    Client lifecycle and deadline isolation
-    ---------------------------------------
-    Each wire call runs on its own short-lived daemon thread under a hard
-    per-invocation wall-clock deadline. On a deadline breach the transport
-    returns the typed timeout/stalled outcome immediately WITHOUT joining
-    the worker, so a wedged socket read can never make the call hang.
-
-    * OWNED client (``client is None``): every wire call gets its OWN
-      ``httpx.Client`` (its own connection pool). A deadline breach closes
-      only that call's client -- unblocking only that call's worker -- so a
-      timed-out request can never tear down the pool or fail a concurrent
-      healthy call on the same provider. Each per-call client is closed as
-      its call completes, so ``close()`` has no owned state to release.
-    * INJECTED (caller-owned) client: the transport must not close a client
-      it does not own, so a deadline breach cannot forcibly unblock the
-      wedged ``client.post`` -- that worker stays blocked until httpx's own
-      idle/read timeout fires (bounded, but not instant). RESIDUAL LIMITATION:
-      with a caller-owned SYNC httpx client there is no clean cancellation, so
-      one leaked worker thread + socket may linger for up to the idle timeout
-      per timed-out call. It is a DAEMON thread, so it never blocks interpreter
-      exit and never corrupts other calls; the deadline still returns the
-      typed outcome on schedule. Inject a per-call client, or accept the
-      idle-bounded lag, if this matters.
+    Owned clients are isolated per call and closed best-effort. Injected
+    clients remain caller-owned, so their worker and socket may linger after
+    a deadline result is returned.
     """
 
     def __init__(
@@ -162,9 +97,7 @@ class HttpProvider:
         self._api_key = api_key
 
     def close(self) -> None:
-        """Owned wire clients are per-call and already closed per call; an
-        injected client is caller-owned and left open. Kept for the
-        context-manager contract."""
+        """Leave injected clients open; owned clients are closed per call."""
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -175,14 +108,12 @@ class HttpProvider:
     def complete(
         self, request: ProviderCallRequest
     ) -> ProviderTransportOutcome:
-        """Return the typed no-throw outcome for one request."""
         payload = build_payload(request)
         return self._run_pipeline(request, payload)
 
     def invoke(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
-        """Complete the call and bind it into stable Invocation Evidence."""
         payload = build_payload(request)
         url = self._request_url(request.config)
         headers = self._headers(request.config)
@@ -204,7 +135,6 @@ class HttpProvider:
         request: ProviderCallRequest,
         payload: dict[str, Any],
     ) -> ProviderTransportOutcome:
-        """Shared complete/invoke pipeline: retries plus conformance."""
         outcome = self._complete_with_retries(request, payload)
         if isinstance(outcome, ProviderTransportResponse):
             return with_conformance_warnings(request, outcome)
@@ -239,44 +169,27 @@ class HttpProvider:
         headers = self._headers(config)
         if headers is None:
             return self._missing_api_key_failure(payload)
-        return self._wire_call_within_deadline(request, url, headers, payload)
+        return self._wire_attempt_within_deadline(
+            request, url, headers, payload
+        )
 
-    def _wire_call_within_deadline(
+    def _wire_attempt_within_deadline(
         self,
         request: ProviderCallRequest,
         url: str,
         headers: dict[str, str],
         payload: dict[str, Any],
     ) -> ProviderTransportOutcome:
-        """Run the blocking wire call under a hard wall-clock deadline.
-
-        httpx's own timeout discipline (``_httpx_timeout``) is the primary
-        bound and returns a typed failure for a normal stall. This
-        deadline is the belt-and-suspenders backstop: it bounds the entire
-        invocation — including response streaming/JSON decode — so a
-        stalled response that defeats the per-read timeout (a trickling
-        edge that keeps resetting the per-read timer) can never exceed the
-        budget. On breach the typed timeout failure is returned; nothing
-        hangs and nothing raises.
-
-        The call runs on its OWN short-lived daemon thread — never a shared
-        executor — so a timed-out worker can never block a concurrent call
-        or interpreter exit. For an owned client the worker gets a fresh
-        per-call client; a deadline breach closes ONLY that client, so only
-        the timed-out call is unblocked and no other in-flight call is
-        disturbed. For an injected client the worker cannot be forcibly
-        unblocked (see the class docstring's residual limitation).
-        """
+        """Bound caller-visible waiting without joining a timed-out worker."""
         deadline = (
-            self._policy.timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
+            self._policy.timeout_seconds + ATTEMPT_DEADLINE_MARGIN_SECONDS
         )
-        operational_deadline = _operational_invocation_deadline_seconds(
+        operational_deadline = _operational_attempt_deadline_seconds(
             self._policy.timeout_seconds
         )
         outcome_box: list[ProviderTransportOutcome] = []
         error_box: list[BaseException] = []
-        # A per-call client for the owned case so an interrupt tears down only
-        # this call's pool; the injected client is shared and left untouched.
+        # Isolate owned pools; never close an injected client.
         if self._owns_client or self._client is None:
             call_client = httpx.Client()
         else:
@@ -298,15 +211,11 @@ class HttpProvider:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
         if not done.wait(timeout=operational_deadline):
-            # The worker is wedged in a socket read past the deadline. Close
-            # this call's OWNED client to unblock it (best-effort), then return
-            # the typed failure WITHOUT joining the leaked daemon worker.
+            # Closing an owned client may unblock its worker; never join here.
             if self._owns_client:
                 with contextlib.suppress(Exception):
                     call_client.close()
             return self._deadline_timeout_failure(url, payload, deadline)
-        # Completed within the deadline: close the owned per-call client and
-        # surface the outcome (or re-raise an unexpected programming error).
         if self._owns_client:
             with contextlib.suppress(Exception):
                 call_client.close()
@@ -351,13 +260,7 @@ class HttpProvider:
         url: str,
         payload: dict[str, Any],
     ) -> ProviderTransportFailure:
-        """Typed failure for an httpx-enforced connect/read/write timeout.
-
-        A ReadTimeout is an IDLE stall: no bytes arrived within
-        ``idle_timeout_seconds`` (the progress/idle bound), so it is classified
-        ``stalled_response``. A connect/write/pool timeout keeps the generic
-        ``timeout`` code.
-        """
+        """Classify read timeouts as idle stalls; keep other timeout phases."""
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
         return ProviderTransportFailure(
             failure_class=FailureClass.TRANSIENT,
@@ -379,12 +282,11 @@ class HttpProvider:
         payload: dict[str, Any],
         deadline: float,
     ) -> ProviderTransportFailure:
-        """Typed failure for the hard per-invocation deadline breach."""
         return ProviderTransportFailure(
             failure_class=FailureClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE,
             message=(
-                "provider invocation exceeded the per-invocation deadline "
+                "provider attempt exceeded the per-attempt deadline "
                 f"of {deadline:.1f}s (policy timeout_seconds="
                 f"{self._policy.timeout_seconds:.1f}s); the response "
                 "stalled without completing"

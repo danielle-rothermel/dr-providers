@@ -1,5 +1,3 @@
-"""Translate Anthropic Messages wire bodies into typed outcomes."""
-
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -43,13 +41,7 @@ def parse_anthropic_messages_body(
 
 
 def _anthropic_text(content: Sequence[Any]) -> tuple[str | None, str | None]:
-    """Concatenate Anthropic text blocks, failing on malformed content.
-
-    Returns ``(text, None)`` on success or ``(None, parse_error)`` when a
-    text block is not a mapping or carries a non-string ``text`` value —
-    silently skipping such blocks would produce truncated text with no
-    signal.
-    """
+    """Reject malformed text blocks rather than silently truncating text."""
     parts: list[str] = []
     for part in content:
         if not isinstance(part, Mapping):

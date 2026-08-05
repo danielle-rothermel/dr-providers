@@ -1,5 +1,3 @@
-"""Preset Provider Call Config builders and their shared registry."""
-
 from __future__ import annotations
 
 from enum import StrEnum
@@ -44,12 +42,7 @@ def _config_from_route(  # noqa: PLR0913 -- explicit keyword-only builder
     required_controls: frozenset[RequestControl] = frozenset(),
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
-    # When ``extension_keys`` is given the caller declares the exact set of
-    # extensions the Definition exposes and passed extensions are validated
-    # strictly against it. When omitted, the declared set is derived from the
-    # extensions actually passed; either way the declared set is captured in
-    # the Definition identity, so the undeclared-extension check is never
-    # vacuous.
+    # Definition identity includes the explicit or derived extension-key set.
     if extension_keys is None:
         declared_keys = (
             frozenset(extensions.extra_body) if extensions else frozenset()
@@ -148,7 +141,7 @@ def gemini_chat_config(
     extensions: ProviderBodyExtensions | None = None,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
-    """Gemini via Google's OpenAI-compatible endpoint (AI Studio key)."""
+    """Use Google's OpenAI-compatible endpoint with an AI Studio key."""
     route = ModelRoute(
         provider=ProviderKind.GEMINI,
         protocol=Protocol.CHAT_COMPLETIONS,
@@ -157,9 +150,7 @@ def gemini_chat_config(
     return _config_from_route(
         definition_id="gemini.openai_compat",
         route=route,
-        # The compat endpoint takes a flat reasoning_effort field, not an
-        # OpenAI-style nested reasoning object; thinking budgets need the
-        # native API (deferred until compat gaps require it).
+        # The compatibility endpoint uses a flat reasoning_effort field.
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
@@ -177,11 +168,7 @@ def anthropic_messages_config(
     extensions: ProviderBodyExtensions | None = None,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
-    """Anthropic Messages protocol over a (custom-capable) base URL.
-
-    Anthropic requires ``max_tokens``, so ``TOKEN_LIMIT`` is a required
-    control: a Config without a token limit cannot materialize.
-    """
+    """Require ``TOKEN_LIMIT`` for Anthropic's ``max_tokens`` field."""
     route = ModelRoute(
         provider=ProviderKind.ANTHROPIC,
         protocol=Protocol.ANTHROPIC_MESSAGES,
@@ -190,8 +177,7 @@ def anthropic_messages_config(
     return _config_from_route(
         definition_id="anthropic.messages",
         route=route,
-        # Anthropic Messages requires max_tokens and serializes reasoning
-        # as a native effort object.
+        # Anthropic uses max_tokens and a native reasoning effort object.
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_TOKENS,
             reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
@@ -204,8 +190,6 @@ def anthropic_messages_config(
 
 
 class ProviderFactoryKind(StrEnum):
-    """Canonical identifier for each preset Config factory."""
-
     OPENROUTER = "openrouter"
     OPENAI = "openai"
     OPENAI_RESPONSES = "openai_responses"

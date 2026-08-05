@@ -1,24 +1,3 @@
-"""Provider Invocation Evidence: the stable serializable transport record.
-
-One completed transport invocation, binding the exact Provider Call
-Request and Provider Transport Policy identities to the typed Provider
-Transport Outcome and the complete least-processed raw request plus
-success or failure evidence.
-
-Two properties are load-bearing and tested:
-  * No silent truncation — the complete raw request and success/failure
-    bodies are retained verbatim (no preview limit).
-  * Standard-path header redaction — ``HttpProvider`` constructs raw requests
-    through ``RawHttpRequest.build()``, which redacts known credential header
-    names before binding evidence.
-
-Direct ``RawHttpRequest`` construction and deserialization are trusted-data
-paths and retain supplied headers without sanitizing them. The request URL is
-also retained as supplied; callers must not embed credentials in its base URL.
-Possible future hardening includes sanitizing at the model boundary and
-separating or restricting wire URLs from URLs retained in evidence.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping  # noqa: TC003 -- pydantic field type
@@ -62,7 +41,7 @@ SANITIZE_KEYS = frozenset(
 
 
 def sanitize_kwargs(kwargs: dict[str, Any] | None) -> dict[str, Any]:
-    """Strip credential-like keys before logging or persistence."""
+    """Remove credential-keyed fields before evidence persistence."""
     if not kwargs:
         return {}
     return {
@@ -72,7 +51,7 @@ def sanitize_kwargs(kwargs: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
-    """Redact credential-bearing header values before persistence."""
+    """Redact credential-bearing values before evidence persistence."""
     if not headers:
         return {}
     return {
@@ -88,12 +67,8 @@ PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 2
 
 
 class RawHttpRequest(BaseModel):
-    """The complete least-processed wire request.
-
-    ``build()`` redacts known credential header names. Direct construction and
-    deserialization are trusted-data paths and retain supplied headers without
-    sanitizing them. ``headers`` and ``body`` are deeply immutable after
-    construction; immutability does not establish that headers were redacted.
+    """``build()`` redacts known credential headers; direct construction and
+    deserialization do not sanitize. Immutability does not prove redaction.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -126,7 +101,6 @@ class RawHttpRequest(BaseModel):
         body: dict[str, Any],
         method: str = "POST",
     ) -> RawHttpRequest:
-        """Build a raw request with known credential headers redacted."""
         return cls(
             method=method,
             url=url,
@@ -136,12 +110,9 @@ class RawHttpRequest(BaseModel):
 
 
 class ProviderInvocationEvidence(BaseModel):
-    """Stable serializable artifact for one completed transport call.
+    """Freeze identities only; outcome dictionaries remain mutable.
 
-    Exactly one of ``response``/``failure`` is set (enforced), and the
-    identity payloads are deeply immutable so the persisted record can never
-    be tampered with after construction. Its Identity Document owns the schema
-    name and version; neither belongs to this bare payload model.
+    Schema metadata belongs to ``identity_document()``.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -211,16 +182,9 @@ class ProviderInvocationEvidence(BaseModel):
         )
 
     def stable_payload(self) -> dict[str, Any]:
-        """The bare JSON payload (no schema envelope)."""
         return self.model_dump(mode="json")
 
     def identity_document(self) -> IdentityDocument:
-        """The persisted ``{schema, schema_version, payload}`` document.
-
-        The exported schema/version constants govern this envelope,
-        consistent with how the provider-call models build identity documents
-        via ``dr_serialize.build_identity_document``.
-        """
         return build_identity_document(
             schema=PROVIDER_INVOCATION_EVIDENCE_SCHEMA,
             schema_version=PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
@@ -228,9 +192,5 @@ class ProviderInvocationEvidence(BaseModel):
         )
 
     def to_stable_dict(self) -> dict[str, Any]:
-        """Stable serialized form for persistence/checkpointing.
-
-        The schema-wrapped ``{schema, schema_version, payload}`` envelope so
-        the persisted artifact is self-describing and versioned.
-        """
+        """Return the schema-wrapped persistence document."""
         return self.identity_document().to_json_dict()

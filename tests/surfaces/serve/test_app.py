@@ -46,8 +46,6 @@ def client() -> TestClient:
 
 
 class RecordingHttpProvider:
-    """No-network live-provider peer with observable lifecycle events."""
-
     instances: ClassVar[list["RecordingHttpProvider"]] = []
 
     def __init__(

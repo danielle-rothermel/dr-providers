@@ -1,5 +1,3 @@
-"""Provider-call modeling and validation tests."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -64,8 +62,6 @@ class TestConfigPresets:
         assert param is TokenLimitParameter.MAX_TOKENS
 
     def test_anthropic_messages_requires_token_limit(self) -> None:
-        # Anthropic requires max_tokens, so TOKEN_LIMIT is a required
-        # control: materializing without one is rejected.
         with pytest.raises(ControlValidationError) as exc_info:
             anthropic_messages_config(model="claude")
         assert exc_info.value.failure.code == "missing_required_control"
@@ -150,8 +146,6 @@ class TestDefinitionValidation:
         assert exc_info.value.failure.code == "undeclared_extension"
 
     def test_required_control_not_supported_rejected(self) -> None:
-        # A Definition that requires a control its constraints do not
-        # support could never materialize; reject it at construction.
         with pytest.raises(ControlValidationError) as exc_info:
             ProviderCallDefinition(
                 definition_id="bad",
@@ -171,8 +165,6 @@ class TestDefinitionValidation:
         assert exc_info.value.failure.code == "required_control_unsupported"
 
     def test_reserved_extension_key_rejected(self) -> None:
-        # An extension declared with a reserved core wire key is rejected so
-        # it cannot silently overwrite a validated field at build time.
         with pytest.raises(ControlValidationError) as exc_info:
             openai_chat_config(
                 model="m",
@@ -182,8 +174,6 @@ class TestDefinitionValidation:
         assert exc_info.value.failure.code == "reserved_extension_key"
 
     def test_config_validates_on_direct_construction(self) -> None:
-        # The control/extension invariants live in model validation, so a
-        # directly-constructed Config (bypassing materialize) is validated.
         definition = self._constrained_definition(
             frozenset({RequestControl.TOKEN_LIMIT}),
             required=frozenset({RequestControl.TOKEN_LIMIT}),

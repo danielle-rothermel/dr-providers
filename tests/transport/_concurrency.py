@@ -1,5 +1,3 @@
-"""State-synchronized support for hang-sensitive transport tests."""
-
 from __future__ import annotations
 
 import contextlib
@@ -15,7 +13,7 @@ SocketHandler = Callable[[socket.socket, threading.Event], None]
 
 @dataclass(frozen=True, slots=True)
 class DaemonCall[ResultT]:
-    """Run one call without making watchdog failure join the call."""
+    """Avoid joining a call while asserting watchdog behavior."""
 
     _entered: threading.Event
     _done: threading.Event
@@ -63,8 +61,6 @@ class DaemonCall[ResultT]:
 
 
 class LocalSocketServer:
-    """Serve one localhost socket handler on a daemon thread."""
-
     def __init__(self, handler: SocketHandler) -> None:
         self._handler = handler
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

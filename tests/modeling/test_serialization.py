@@ -1,5 +1,3 @@
-"""Deterministic JSON serialization for unordered definition fields."""
-
 from __future__ import annotations
 
 import json

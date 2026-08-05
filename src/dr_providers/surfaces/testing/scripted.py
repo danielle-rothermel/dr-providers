@@ -1,12 +1,3 @@
-"""ScriptedProvider: a testing peer implementing the real interface.
-
-Public API — consumers exercise full request/outcome flows with no
-network by scripting outcomes (text, usage, cost, warnings, or a
-transport failure) per call. Outcomes are consumed in order; the last
-outcome repeats for subsequent calls. ``complete`` returns the closed
-no-throw Provider Transport Outcome.
-"""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -37,8 +28,6 @@ SCRIPTED_RESPONSE_ID_PREFIX = "scripted-response"
 
 
 class ScriptedOutcome(BaseModel):
-    """One scripted call result: either text parts or a transport failure."""
-
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     text: StrictStr = ""
@@ -51,7 +40,10 @@ class ScriptedOutcome(BaseModel):
 
 
 class ScriptedProvider:
-    """Scripted provider; records every request it serves."""
+    """Consume outcomes in order, then repeat the last.
+
+    Every request is recorded.
+    """
 
     def __init__(self, outcomes: list[ScriptedOutcome] | None = None) -> None:
         self._outcomes = list(

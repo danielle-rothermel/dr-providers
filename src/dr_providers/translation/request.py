@@ -1,5 +1,3 @@
-"""Translate a validated Provider Call Request into its wire request."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -34,13 +32,6 @@ def protocol_path(config: ProviderCallConfig) -> str:
 
 
 def build_payload(request: ProviderCallRequest) -> dict[str, Any]:
-    """Pure least-processed wire-payload construction.
-
-    Chat completions: ``model`` + ``messages`` + controls.
-    Responses: ``model`` + ``instructions``/``input`` + controls, with a
-    leading system message lifted into ``instructions``.
-    Anthropic messages: ``model`` + ``system`` + ``messages`` + controls.
-    """
     config = request.config
     protocol = config.route.protocol
     messages = request.transcript.messages
@@ -64,8 +55,6 @@ def build_payload(request: ProviderCallRequest) -> dict[str, Any]:
 
 
 def _set_controls(payload: dict[str, Any], config: ProviderCallConfig) -> None:
-    # The Config was validated against its Definition at materialization,
-    # so every set control is transportable; build_payload never raises.
     constraints = config.definition.constraints
     controls = config.controls
     if controls.temperature is not None and constraints.supports(
@@ -81,9 +70,7 @@ def _set_controls(payload: dict[str, Any], config: ProviderCallConfig) -> None:
     ):
         payload[constraints.token_limit_parameter.value] = controls.token_limit
     _set_reasoning(payload, config, controls)
-    # Reserved core keys are rejected when the Config is validated, so an
-    # extension can never overwrite a validated core wire field here. Thaw
-    # so nested frozen mappings stay JSON-serializable on the wire.
+    # Thaw for JSON encoding; Config validation prevents core-field overrides.
     payload.update(_thaw(config.extensions.extra_body))
 
 
@@ -97,9 +84,7 @@ def _set_reasoning(
     if effort is None or not constraints.supports(RequestControl.REASONING):
         return
     if config.route.protocol is Protocol.ANTHROPIC_MESSAGES:
-        # The Anthropic Messages API rejects a top-level {"reasoning": ...};
-        # it takes {"output_config": {"effort": ...}} with a restricted set
-        # of effort levels, already validated on the Config.
+        # Anthropic nests effort under output_config, not reasoning.
         payload["output_config"] = {"effort": effort.value}
         return
     shape = constraints.reasoning_shape
@@ -112,12 +97,7 @@ def _set_reasoning(
 def _input_messages(
     messages: tuple[PromptMessage, ...],
 ) -> tuple[str | None, list[dict[str, Any]]]:
-    """Lift a leading system message into a separate top-level field.
-
-    Both the Responses (``instructions``) and Anthropic Messages
-    (``system``) protocols carry a leading system message separately from
-    the conversational array, so the split is identical for both.
-    """
+    """Responses and Anthropic carry a leading system message separately."""
     dicts = [message.provider_dict() for message in messages]
     if dicts and dicts[0].get("role") == MessageRole.SYSTEM.value:
         return dicts[0].get("content"), dicts[1:]
