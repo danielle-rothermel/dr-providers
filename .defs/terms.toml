@@ -1,0 +1,277 @@
+#:schema ./terms.schema.json
+
+[[terms]]
+name = "definition"
+definition = """
+A versioned declaration of fixed structure, variable slots, constraints, and \
+identity effects."""
+
+[[terms]]
+name = "variable"
+definition = """
+A named slot whose accepted values and identity effect are declared by one \
+definition."""
+part_of = ["definition"]
+
+[[terms]]
+name = "config"
+definition = """
+A complete validated assignment of the variables belonging to one \
+definition."""
+
+[[terms]]
+name = "hash"
+definition = """
+A deterministic fixed-length value computed by a declared algorithm over \
+exact input bytes."""
+
+[[terms]]
+name = "identity payload"
+definition = """
+Strict finite-JSON domain facts deliberately selected to determine identity, \
+excluding incidental runtime and transport state."""
+part_of = ["identity document"]
+
+[[terms]]
+name = "identity document"
+definition = """
+A self-describing versioned document containing a schema name, schema \
+version, and identity payload."""
+
+[[terms]]
+name = "canonical identity JSON text"
+definition = """
+The deterministic UTF-8 JSON rendering of a validated identity document, \
+produced without lossy normalization."""
+
+[[terms]]
+name = "identity hash"
+definition = """
+The full 64-character lowercase SHA-256 hash of canonical identity JSON \
+text."""
+is_a = ["hash"]
+
+[[terms]]
+name = "provider model"
+definition = """
+A requested model identifier scoped to one provider service."""
+part_of = ["model route"]
+
+[[terms]]
+name = "provider service"
+definition = """
+An external service family exposing one or more model-serving protocols."""
+part_of = ["model route"]
+
+[[terms]]
+name = "provider transcript"
+definition = """
+An ordered sequence of role-and-content messages supplied as provider-call \
+input."""
+exported_symbols = ["Transcript", "PromptMessage", "MessageRole"]
+part_of = ["provider call request"]
+
+[[terms]]
+name = "provider"
+definition = """
+An executor that accepts a provider call request and returns a provider \
+transport outcome."""
+exported_symbols = ["Provider"]
+
+[[terms]]
+name = "HTTP provider"
+definition = """
+A provider that translates and executes real HTTP calls under a transport \
+policy."""
+exported_symbols = ["HttpProvider"]
+is_a = ["provider"]
+
+[[terms]]
+name = "scripted provider"
+definition = """
+A deterministic network-free provider that consumes scripted outcomes in \
+order and repeats the last available outcome."""
+exported_symbols = ["ScriptedProvider", "ScriptedOutcome"]
+is_a = ["provider"]
+
+[[terms]]
+name = "model route"
+definition = """
+The executable provider-service, protocol, and model tuple for a provider \
+call."""
+exported_symbols = ["ModelRoute", "ProviderKind", "Protocol"]
+part_of = ["provider call definition"]
+
+[[terms]]
+name = "provider quota identity"
+definition = """
+A route-granularity quota identity equal to the exact provider, protocol, \
+and model tuple."""
+exported_symbols = ["ProviderQuotaIdentity"]
+
+[[terms]]
+name = "provider call definition"
+definition = """
+A variable-bearing definition declaring a model route, supported and \
+required controls, wire mappings, extension keys, and identity effects."""
+exported_symbols = [
+  "ProviderCallDefinition",
+  "PROVIDER_CALL_DEFINITION_SCHEMA",
+  "PROVIDER_CALL_DEFINITION_SCHEMA_VERSION",
+  "ControlConstraints",
+  "RequestControl",
+  "TokenLimitParameter",
+  "ReasoningRequestShape",
+]
+is_a = ["definition"]
+part_of = ["provider call config"]
+
+[[terms]]
+name = "provider call config"
+definition = """
+A complete validated assignment of one provider call definition's controls \
+and provider body extensions."""
+exported_symbols = [
+  "ProviderCallConfig",
+  "PROVIDER_CALL_CONFIG_SCHEMA",
+  "PROVIDER_CALL_CONFIG_SCHEMA_VERSION",
+  "GenerationControls",
+  "ReasoningEffort",
+  "ProviderBodyExtensions",
+  "anthropic_messages_config",
+  "gemini_chat_config",
+  "openai_chat_config",
+  "openai_responses_config",
+  "openrouter_chat_config",
+]
+is_a = ["config"]
+part_of = ["provider call request"]
+
+[[terms]]
+name = "provider call request"
+definition = """
+An identity-bearing transport request containing one provider call config \
+and one ordered provider transcript."""
+exported_symbols = [
+  "ProviderCallRequest",
+  "PROVIDER_CALL_REQUEST_SCHEMA",
+  "PROVIDER_CALL_REQUEST_SCHEMA_VERSION",
+  "build_payload",
+  "protocol_path",
+]
+
+[[terms]]
+name = "provider transport policy"
+definition = """
+Operational credential-location, endpoint, timeout, idle-bound, and native-\
+retry policy that is excluded from provider-call identity."""
+exported_symbols = [
+  "ProviderTransportPolicy",
+  "ApiKeyEnv",
+  "ProviderBaseUrl",
+  "DEFAULT_API_KEY_ENVS",
+  "DEFAULT_BASE_URLS",
+  "DEFAULT_IDLE_TIMEOUT_SECONDS",
+  "DEFAULT_TIMEOUT_SECONDS",
+  "policy_for",
+]
+
+[[terms]]
+name = "provider transport response"
+definition = """
+A typed transport success containing extracted text, a decoded response \
+mapping, usage, cost, warnings, and diagnostics without asserting semantic \
+acceptance or byte fidelity."""
+exported_symbols = [
+  "ProviderTransportResponse",
+  "TokenUsage",
+  "CostInfo",
+  "ResponsesDiagnostics",
+  "parse_response",
+  "parse_anthropic_messages_body",
+  "parse_chat_completions_body",
+  "parse_responses_body",
+  "token_usage_from_body",
+  "cost_from_body",
+]
+is_a = ["provider transport outcome"]
+part_of = ["provider invocation evidence"]
+
+[[terms]]
+name = "provider transport failure"
+definition = """
+A typed expected transport or parse failure containing classification, the \
+constructed request body, optional decoded-or-text response evidence, status, \
+and diagnostics. It is not a full HTTP request record."""
+exported_symbols = [
+  "ProviderTransportFailure",
+  "FailureClass",
+  "RECOVERABLE_FAILURE_CLASSES",
+  "RETRYABLE_FAILURE_CLASSES",
+  "classify_status_code",
+]
+is_a = ["provider transport outcome"]
+part_of = ["provider invocation evidence"]
+
+[[terms]]
+name = "provider transport outcome"
+definition = """
+The closed response-or-failure result for expected provider-call \
+outcomes."""
+exported_symbols = ["ProviderTransportOutcome", "is_response", "is_failure"]
+
+[[terms]]
+name = "provider failure record"
+definition = """
+A compact classification record carried by raised provider errors, distinct \
+from the flat returned provider transport failure."""
+exported_symbols = [
+  "ProviderFailure",
+  "ControlValidationError",
+  "PermanentProviderError",
+  "ProviderFailureError",
+  "RateLimitedProviderError",
+  "ResourceExhaustionProviderError",
+  "TransientProviderError",
+  "UnknownProviderError",
+  "FAILURE_ERROR_TYPES",
+  "failure_record",
+  "raise_failure",
+]
+
+[[terms]]
+name = "provider transport warning"
+definition = """
+An advisory post-response observation whose fatality belongs to the caller."""
+exported_symbols = [
+  "ProviderTransportWarning",
+  "WarningSeverity",
+  "conformance_warnings",
+  "with_conformance_warnings",
+]
+part_of = ["provider transport response"]
+
+[[terms]]
+name = "provider HTTP request evidence"
+definition = """
+The retained method, URL, headers, and constructed body for one provider \
+invocation."""
+exported_symbols = [
+  "ProviderHttpRequestEvidence",
+  "SANITIZE_KEYS",
+  "sanitize_headers",
+  "sanitize_kwargs",
+]
+part_of = ["provider invocation evidence"]
+
+[[terms]]
+name = "provider invocation evidence"
+definition = """
+A versioned serializable record binding request and policy identity payloads, \
+provider HTTP request evidence, and exactly one provider transport response \
+or failure."""
+exported_symbols = [
+  "ProviderInvocationEvidence",
+  "PROVIDER_INVOCATION_EVIDENCE_SCHEMA",
+  "PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION",
+]

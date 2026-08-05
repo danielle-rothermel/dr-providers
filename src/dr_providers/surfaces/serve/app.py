@@ -40,7 +40,7 @@ from dr_providers.transport.policy import (
 )
 
 SERVE_TITLE = "dr-providers serve"
-SERVE_VERSION = "0.2.1"
+SERVE_VERSION = "0.2.2"
 LOCALHOST_ORIGIN_REGEX = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 MAX_VARIANCE_SAMPLES = 25
 MAX_VARIANCE_MODELS = 8

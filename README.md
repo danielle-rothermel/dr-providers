@@ -3,7 +3,7 @@
 [![CI](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml/badge.svg)](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/dr-providers.svg)](https://pypi.org/project/dr-providers/)
 
-| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) | [dr-serialize (local checkout)](https://github.com/danielle-rothermel/dr-serialize) |
+| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) ([terms](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/terms.toml), [contracts](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/contracts.toml)) | [dr-serialize](https://github.com/danielle-rothermel/dr-serialize) |
 | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**
@@ -34,11 +34,6 @@ dr-providers requires Python 3.12 or newer.
 ```bash
 uv add dr-providers
 ```
-
-For this repository, `uv sync --all-extras` intentionally resolves
-`dr-serialize` from the sibling `../dr-serialize` checkout through
-`[tool.uv.sources]`. Set `UV_NO_SOURCES=1` when validating only published
-dependency constraints.
 
 Unless an API key is injected directly, real HTTP calls read the credential
 selected by their transport policy:
@@ -141,11 +136,9 @@ sharing or persistence.
 The default suite is offline: pytest excludes tests marked `live`.
 
 ```bash
-uv sync --all-extras
-uv run ruff check .
-uv run ruff format --check .
-uv run ty check
-uv run pytest
+uv sync --locked --all-extras
+uv run pre-commit install
+scripts/pre-check.sh
 uv build
 ```
 

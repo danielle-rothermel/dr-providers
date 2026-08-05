@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-05
+
+### Added
+
+- Publish the repository's authoritative terms and contracts as a
+  client-rendered GitHub Pages reference.
+- Run the same locked repository pre-check from local commits and CI, and
+  verify built distributions before release publication.
+
 ### Fixed
 
 - Keep ordinary live pytest verification read-only; live corpus replacement is
@@ -15,6 +24,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from raising `OverflowError` during provider invocation.
 - Reject non-finite generation controls and extension mappings outside strict
   finite JSON during model construction, before identity or HTTP encoding.
+- Disable redirects and classify every non-2xx HTTP response as a typed
+  transport failure.
+- Exercise the FastAPI test client through its current `httpx2` path without
+  the deprecated compatibility fallback.
 
 ### Changed
 
@@ -35,6 +48,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Provider Invocation Evidence v2 names retained HTTP request evidence and
   constructed request and decoded response bodies directly, without
   `raw_*`/`stable_*` terminology or compatibility aliases.
+- Require `dr-serialize>=0.1.2,<0.2` for the current identity-envelope
+  contracts.
+- Qualify and declare Python 3.14 alongside Python 3.12 and 3.13.
+- Constrain releases to version-matching tags on merged `main` commits, pin
+  release tooling, and isolate trusted PyPI publishing on a protected
+  GitHub-hosted job.
 
 ### Removed
 

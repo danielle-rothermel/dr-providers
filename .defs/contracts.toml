@@ -1,0 +1,178 @@
+[[contracts]]
+title = "Provider-call identity is layered by reference"
+statement = """
+Definition identity covers its identifier, route, constraints, required \
+controls, and extension keys; config identity references the full definition \
+hash and adds assigned controls and extensions; request identity references \
+the full config hash and adds the ordered transcript. Transport policy is \
+absent from all three identities."""
+rationale = """
+Layered references keep each identity boundary explicit without duplicating \
+upstream state. Full hashes make every dependency visible while transport-\
+only choices remain free to vary without changing call meaning."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/modeling/test_identity.py tests/modeling/test_serialization.py"
+
+[[contracts]]
+title = "Call assignments are validated before identity and wire encoding"
+statement = """
+Controls reject coercive and non-finite values; provider body extensions are \
+strict finite JSON, deeply isolated, declared by the definition, and unable \
+to replace core wire fields. Missing required and unmappable controls always \
+fail; unsupported controls fail unless unsupported-control dropping is \
+explicitly enabled."""
+rationale = """
+Identity and wire encoding must consume the same validated meaning. Allowing \
+coercion, mutable aliases, undeclared extensions, or core-field replacement \
+would let an apparently identical config produce a different request."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/modeling/test_call.py tests/translation/test_request.py"
+
+[[contracts]]
+title = "Quota identity is route-only"
+statement = """
+Provider quota identity is exactly the provider, protocol, and model tuple; \
+credentials, accounts, endpoint overrides, controls, and transport policy \
+never participate."""
+rationale = """
+Quota accounting groups calls by executable route. Credential- or policy-\
+specific identity would fragment one route into pools the package cannot \
+prove correspond to distinct provider quotas."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/modeling/test_call.py::TestConfigPresets::test_openrouter_chat"
+
+[[contracts]]
+title = "Expected transport results are values"
+statement = """
+Provider HTTP statuses, credential lookup failures, supported network and \
+timeout failures, decoding failures, and response-parse outcomes return the \
+closed provider transport response-or-failure union. Invalid caller-supplied \
+transport configuration and unexpected programming or infrastructure errors \
+may raise."""
+rationale = """
+Callers need stable data for ordinary provider outcomes and explicit \
+exceptions for defects and invalid inputs outside that result vocabulary. \
+Treating every failure as an exception would erase this boundary; swallowing \
+configuration errors or unexpected defects into returned values would hide \
+bugs."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/core/test_provider.py tests/transport/test_http.py"
+
+[[contracts]]
+title = "Native retry is bounded and transport-only"
+statement = """
+Native retry defaults to zero, performs at most native_retry_count plus one \
+attempts, continues only for retryable failures, and stops on success or \
+permanent failure. It supplies no semantic retry, backoff, durability, or \
+checkpointing."""
+rationale = """
+The transport can repeat a bounded native attempt but cannot decide whether a \
+provider result is semantically acceptable or whether an effect is safe to \
+repeat. Those decisions require caller-owned policy and persistence."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/transport/test_http.py -k retry"
+
+[[contracts]]
+title = "Attempt deadlines bound waiting, not containment"
+statement = """
+Timeout values are strict positive finite policy values, and idle timeout is \
+clamped to the watchdog timeout. Each attempt applies per-operation idle \
+bounds and a caller-visible watchdog of timeout plus five seconds, capped at \
+the platform timeout ceiling. Expiry returns a typed transient failure but \
+does not prove worker or socket termination. Owned clients close best-effort, \
+and injected clients remain caller-owned."""
+rationale = """
+A synchronous client running in a daemon worker cannot be forcibly cancelled \
+by this package. The truthful guarantee bounds caller-visible waiting while \
+leaving process containment and caller-owned client lifecycle outside the \
+contract."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_timeout.py tests/transport/test_concurrency.py"
+
+[[contracts]]
+title = "Invocation evidence has explicit retention and redaction limits"
+statement = """
+Invocation evidence binds frozen request and policy identity payloads, deeply \
+frozen HTTP request evidence, and exactly one response or failure in a \
+versioned identity document. The standard HTTP path redacts known credential \
+headers and retains complete decoded JSON-or-text bodies without silent \
+truncation, but not original wire bytes. Direct construction, deserialization, \
+and base URLs are trusted inputs; outcome dictionaries remain mutable."""
+rationale = """
+Evidence must say exactly what is retained and where sanitization occurs. \
+Claiming byte fidelity, universal secret detection, or deep immutability would \
+exceed the observable implementation and encourage unsafe downstream use."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/outcomes/test_evidence.py"
+
+[[contracts]]
+title = "Conformance warnings are advisory"
+statement = """
+Reasoning-not-observed, token-limit-exceeded, and model-substitution checks \
+add warnings without reclassifying a successful transport response; callers \
+decide fatality."""
+rationale = """
+The transport can report a mismatch against requested controls but does not \
+own application acceptance policy. Reclassifying transport success would \
+collapse those separate decisions."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/outcomes/test_conformance.py"
+
+[[contracts]]
+title = "Only protocol-declared generation text is accepted"
+statement = """
+Translation reads text only from each protocol's declared message and content \
+locations. The Responses path never treats function calls, reasoning items, \
+future item content, or refusal text as generation text; failed, malformed, \
+refusal-only, and no-text bodies become typed failures, while diagnostic \
+categories are allowlisted or coalesced."""
+rationale = """
+Provider payloads mix generation with metadata and tool activity. Broad text \
+scraping would silently turn non-generation fields into model output and make \
+future schema additions change established behavior."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/translation"
+
+[[contracts]]
+title = "The top-level package owns the stable API"
+statement = """
+dr_providers.__all__ is the supported import surface. Functional-area paths \
+communicate ownership but are not a second compatibility surface; non-surface \
+areas do not depend on surfaces, and importing the root or pure modules does \
+not eagerly load HTTP transport dependencies."""
+rationale = """
+One explicit surface makes compatibility review mechanically checkable while \
+the internal layout remains free to express responsibility boundaries. \
+Treating every module path as public would freeze implementation structure."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/core/test_public_api.py tests/core/test_package_structure.py"
+
+[[contracts]]
+title = "Live verification is read-only and corpus promotion is explicit"
+statement = """
+Ordinary live verification covers the fixed five-case matrix without writing \
+the committed wire corpus. Capture stages outside the repository; promotion \
+requires a complete valid capture, redacts configured credentials and known \
+sensitive locations, and attempts to restore the prior complete generation \
+from staged backups after an in-process installation failure. Process \
+interruption or a rollback failure can leave a mixed generation."""
+rationale = """
+Verification must not rewrite reviewable fixtures as a side effect. Separate \
+capture, validation, redaction, and promotion make corpus replacement a \
+deliberate operation; the explicit restoration limit avoids presenting an \
+in-process best-effort rollback as crash-atomic publication."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/transport/live/test_workflow.py"
+
+[[contracts]]
+title = "Audit-corpus curation and generated outputs have separate owners"
+statement = """
+Raw audits, the manifest, and the canonical suggestion mapping are curated \
+inputs. The generator validates but never overwrites the canonical mapping \
+and deterministically owns only parsed audits and analysis outputs."""
+rationale = """
+Human judgment owns canonical suggestions, while deterministic transformation \
+owns reproducible derived data. Mixing those owners would let regeneration \
+silently replace curated ground truth."""
+date = "2026-06-23"
+check = "uv run pytest -q tests/data/test_audit_ground_truth.py"
