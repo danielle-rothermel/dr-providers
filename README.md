@@ -3,7 +3,7 @@
 [![CI](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml/badge.svg)](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/dr-providers.svg)](https://pypi.org/project/dr-providers/)
 
-| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) | [dr-serialize v0.1.1](https://github.com/danielle-rothermel/dr-serialize) |
+| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) | [dr-serialize v0.1.1 (local checkout)](https://github.com/danielle-rothermel/dr-serialize) |
 | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**

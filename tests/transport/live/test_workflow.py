@@ -4,7 +4,6 @@ import json
 import os
 import subprocess
 import sys
-import sysconfig
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -374,11 +373,9 @@ def test_capture_executable_help_works_from_external_cwd(
 ) -> None:
     environment = os.environ.copy()
     environment.pop("VIRTUAL_ENV", None)
-    environment["PYTHONPATH"] = sysconfig.get_path("purelib")
     result = subprocess.run(  # noqa: S603
         [
             sys.executable,
-            "-S",
             str(ROOT / "scripts" / "capture_live_corpus.py"),
             "--help",
         ],
