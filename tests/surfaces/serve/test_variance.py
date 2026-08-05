@@ -1,11 +1,16 @@
 import pytest
 
 from dr_providers.core.failures import FailureClass
-from dr_providers.outcomes.models import ProviderTransportFailure
-from dr_providers.surfaces.serve.query import (
-    ServeProviderKind,
+from dr_providers.outcomes.models import (
+    CostInfo,
+    ProviderTransportFailure,
+    ProviderTransportWarning,
+    TokenUsage,
 )
+from dr_providers.surfaces.serve.query import ServeProviderKind
 from dr_providers.surfaces.serve.variance import (
+    ModelVariance,
+    VarianceRecord,
     run_variance,
 )
 from dr_providers.surfaces.testing.scripted import (
@@ -16,70 +21,129 @@ from dr_providers.surfaces.testing.scripted import (
 PROMPT = "Say hello."
 
 
-def test_run_variance_reports_dispersion_per_model() -> None:
-    provider = ScriptedProvider(
-        [
-            ScriptedOutcome(text="alpha"),
-            ScriptedOutcome(text="beta"),
-            ScriptedOutcome(text="beta"),
-        ]
-    )
-    report = run_variance(
-        PROMPT,
-        models=["model-a"],
-        samples=3,
-        provider_kind=ServeProviderKind.OPENROUTER,
-        provider=provider,
-    )
-
-    assert report.samples_per_model == 3
-    assert len(report.records) == 3
-    model_report = report.per_model[0]
-    assert model_report.samples == 3
-    assert model_report.failures == 0
-    assert model_report.distinct_outputs == 2
-    assert model_report.min_length == 4
-    assert model_report.max_length == 5
-
-
-def test_run_variance_counts_failures() -> None:
+def test_run_variance_preserves_exact_records_and_summaries() -> None:
     failure = ProviderTransportFailure(
         failure_class=FailureClass.TRANSIENT,
         code="rate_limited",
         message="scripted",
         retryable=True,
     )
-    provider = ScriptedProvider(
-        [ScriptedOutcome(text="fine"), ScriptedOutcome(failure=failure)]
+    warning = ProviderTransportWarning(
+        code="provider_notice",
+        message="first sample warning",
     )
+    provider = ScriptedProvider(
+        [
+            ScriptedOutcome(
+                text="alpha",
+                finish_reason="stop",
+                usage=TokenUsage(completion_tokens=3),
+                cost=CostInfo(total_cost=0.01),
+                warnings=(warning,),
+            ),
+            ScriptedOutcome(
+                text="longer",
+                finish_reason="length",
+                usage=TokenUsage(completion_tokens=7),
+                cost=CostInfo(total_cost=0.02),
+            ),
+            ScriptedOutcome(failure=failure),
+        ]
+    )
+
     report = run_variance(
         PROMPT,
-        models=["model-a"],
+        models=["model-a", "model-b"],
         samples=2,
         provider_kind=ServeProviderKind.OPENROUTER,
         provider=provider,
     )
 
-    assert report.per_model[0].failures == 1
-    failed = [record for record in report.records if not record.ok]
-    assert failed[0].failure_code == "rate_limited"
+    assert report.prompt == PROMPT
+    assert report.samples_per_model == 2
+    assert report.models == ("model-a", "model-b")
+    assert [request.config.route.model for request in provider.requests] == [
+        "model-a",
+        "model-a",
+        "model-b",
+        "model-b",
+    ]
+    assert [payload["model"] for payload in provider.payloads] == [
+        "model-a",
+        "model-a",
+        "model-b",
+        "model-b",
+    ]
+    assert report.records == (
+        VarianceRecord(
+            model="model-a",
+            sample_index=0,
+            ok=True,
+            text="alpha",
+            finish_reason="stop",
+            completion_tokens=3,
+            total_cost=0.01,
+            warning_codes=("provider_notice",),
+        ),
+        VarianceRecord(
+            model="model-a",
+            sample_index=1,
+            ok=True,
+            text="longer",
+            finish_reason="length",
+            completion_tokens=7,
+            total_cost=0.02,
+        ),
+        VarianceRecord(
+            model="model-b",
+            sample_index=0,
+            ok=False,
+            failure_code="rate_limited",
+        ),
+        VarianceRecord(
+            model="model-b",
+            sample_index=1,
+            ok=False,
+            failure_code="rate_limited",
+        ),
+    )
+    assert report.per_model == (
+        ModelVariance(
+            model="model-a",
+            samples=2,
+            failures=0,
+            distinct_outputs=2,
+            mean_length=5.5,
+            min_length=5,
+            max_length=6,
+        ),
+        ModelVariance(
+            model="model-b",
+            samples=2,
+            failures=2,
+            distinct_outputs=0,
+            mean_length=None,
+            min_length=None,
+            max_length=None,
+        ),
+    )
 
 
-def test_run_variance_validates_inputs() -> None:
-    provider = ScriptedProvider()
-    with pytest.raises(ValueError, match="samples"):
+@pytest.mark.parametrize(
+    ("models", "samples", "message"),
+    [
+        pytest.param(["model"], 0, "samples must be >= 1", id="samples"),
+        pytest.param([], 1, "at least one model", id="models"),
+    ],
+)
+def test_run_variance_validates_inputs(
+    models: list[str], samples: int, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
         run_variance(
             PROMPT,
-            models=["m"],
-            samples=0,
+            models=models,
+            samples=samples,
             provider_kind=ServeProviderKind.OPENROUTER,
-            provider=provider,
-        )
-    with pytest.raises(ValueError, match="model"):
-        run_variance(
-            PROMPT,
-            models=[],
-            samples=1,
-            provider_kind=ServeProviderKind.OPENROUTER,
-            provider=provider,
+            provider=ScriptedProvider(),
         )

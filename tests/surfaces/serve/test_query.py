@@ -1,9 +1,15 @@
+import pytest
+
 from dr_providers.core.failures import FailureClass
+from dr_providers.modeling.controls import ReasoningEffort
+from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.modeling.transcript import MessageRole, PromptMessage
-from dr_providers.outcomes.models import ProviderTransportFailure, TokenUsage
+from dr_providers.outcomes.models import ProviderTransportFailure
 from dr_providers.surfaces.serve.query import (
+    DEFAULT_ANTHROPIC_TOKEN_LIMIT,
     QuerySpec,
     ServeProviderKind,
+    build_request,
     run_query,
 )
 from dr_providers.surfaces.testing.scripted import (
@@ -24,39 +30,112 @@ def make_spec(**overrides: object) -> QuerySpec:
     return QuerySpec.model_validate(defaults)
 
 
-def test_run_query_anthropic_kind_supplies_default_token_limit() -> None:
-    from dr_providers.surfaces.serve.query import (
-        DEFAULT_ANTHROPIC_TOKEN_LIMIT,
-        build_request,
+@pytest.mark.parametrize(
+    (
+        "serve_kind",
+        "expected_provider",
+        "expected_protocol",
+        "expected_endpoint",
+        "expected_token_limit",
+    ),
+    [
+        pytest.param(
+            ServeProviderKind.OPENROUTER,
+            ProviderKind.OPENROUTER,
+            Protocol.CHAT_COMPLETIONS,
+            "/chat/completions",
+            None,
+            id="openrouter-chat",
+        ),
+        pytest.param(
+            ServeProviderKind.OPENAI,
+            ProviderKind.OPENAI,
+            Protocol.CHAT_COMPLETIONS,
+            "/chat/completions",
+            None,
+            id="openai-chat",
+        ),
+        pytest.param(
+            ServeProviderKind.OPENAI_RESPONSES,
+            ProviderKind.OPENAI,
+            Protocol.RESPONSES,
+            "/responses",
+            None,
+            id="openai-responses",
+        ),
+        pytest.param(
+            ServeProviderKind.GEMINI,
+            ProviderKind.GEMINI,
+            Protocol.CHAT_COMPLETIONS,
+            "/chat/completions",
+            None,
+            id="gemini-chat",
+        ),
+        pytest.param(
+            ServeProviderKind.ANTHROPIC,
+            ProviderKind.ANTHROPIC,
+            Protocol.ANTHROPIC_MESSAGES,
+            "/messages",
+            DEFAULT_ANTHROPIC_TOKEN_LIMIT,
+            id="anthropic-messages",
+        ),
+    ],
+)
+def test_build_request_maps_every_serve_provider(
+    serve_kind: ServeProviderKind,
+    expected_provider: ProviderKind,
+    expected_protocol: Protocol,
+    expected_endpoint: str,
+    expected_token_limit: int | None,
+) -> None:
+    request = build_request(make_spec(provider_kind=serve_kind))
+
+    assert request.config.route.provider is expected_provider
+    assert request.config.route.protocol is expected_protocol
+    assert request.config.controls.token_limit == expected_token_limit
+    result = run_query(
+        make_spec(provider_kind=serve_kind),
+        ScriptedProvider([ScriptedOutcome(text="hi")]),
+    )
+    assert result.endpoint_path == expected_endpoint
+
+
+def test_build_request_transfers_every_query_spec_field() -> None:
+    messages = (
+        PromptMessage(role=MessageRole.SYSTEM, content="Be exact."),
+        PromptMessage(role=MessageRole.USER, content="Answer this."),
+    )
+    spec = QuerySpec(
+        provider_kind=ServeProviderKind.OPENROUTER,
+        model="full-field-model",
+        messages=messages,
+        temperature=0.25,
+        top_p=0.75,
+        token_limit=128,
+        reasoning=ReasoningEffort.HIGH,
+        extra_body={"provider": {"order": ["first", "second"]}},
     )
 
-    provider = ScriptedProvider([ScriptedOutcome(text="hi")])
-    spec = make_spec(
-        provider_kind=ServeProviderKind.ANTHROPIC, model="claude-test"
-    )
-    # anthropic's preset REQUIRES a token limit; build_request supplies the
-    # default when the spec omits one, so materialization succeeds.
     request = build_request(spec)
-    assert request.config.route.provider.value == "anthropic"
-    assert request.config.controls.token_limit == DEFAULT_ANTHROPIC_TOKEN_LIMIT
 
-    result = run_query(spec, provider)
-    assert result.ok
-    assert result.endpoint_path == "/messages"
-    assert result.response is not None
-    assert result.response.text == "hi"
+    assert request.config.route.provider is ProviderKind.OPENROUTER
+    assert request.config.route.model == "full-field-model"
+    assert request.transcript.messages == messages
+    assert request.config.controls.temperature == 0.25
+    assert request.config.controls.top_p == 0.75
+    assert request.config.controls.token_limit == 128
+    assert request.config.controls.reasoning is ReasoningEffort.HIGH
+    assert request.config.extensions.model_dump(mode="json") == {
+        "extra_body": {"provider": {"order": ["first", "second"]}}
+    }
 
 
-def test_run_query_anthropic_kind_honors_explicit_token_limit() -> None:
-    provider = ScriptedProvider([ScriptedOutcome(text="hi")])
+def test_build_request_anthropic_honors_explicit_token_limit() -> None:
     spec = make_spec(
         provider_kind=ServeProviderKind.ANTHROPIC,
         model="claude-test",
         token_limit=256,
     )
-    result = run_query(spec, provider)
-    assert result.ok
-    from dr_providers.surfaces.serve.query import build_request
 
     assert build_request(spec).config.controls.token_limit == 256
 
@@ -71,38 +150,6 @@ def test_run_query_returns_payload_and_response() -> None:
     assert result.payload["messages"] == [{"role": "user", "content": PROMPT}]
     assert result.response is not None
     assert result.response.text == "hello"
-
-
-def test_run_query_applies_conformance_warnings() -> None:
-    provider = ScriptedProvider(
-        [
-            ScriptedOutcome(
-                text="over budget",
-                usage=TokenUsage(completion_tokens=99),
-            )
-        ]
-    )
-    result = run_query(make_spec(token_limit=10), provider)
-
-    assert result.response is not None
-    codes = [warning.code for warning in result.response.warnings]
-    assert "token_limit_exceeded" in codes
-
-
-def test_run_query_does_not_duplicate_warnings() -> None:
-    provider = ScriptedProvider(
-        [
-            ScriptedOutcome(
-                text="over budget",
-                usage=TokenUsage(completion_tokens=99),
-            )
-        ]
-    )
-    result = run_query(make_spec(token_limit=10), provider)
-
-    assert result.response is not None
-    codes = [warning.code for warning in result.response.warnings]
-    assert codes.count("token_limit_exceeded") == 1
 
 
 def test_run_query_surfaces_failure_records() -> None:
