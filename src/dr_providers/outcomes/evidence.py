@@ -5,11 +5,18 @@ Request and Provider Transport Policy identities to the typed Provider
 Transport Outcome and the complete least-processed raw request plus
 success or failure evidence.
 
-Two invariants are load-bearing and tested:
+Two properties are load-bearing and tested:
   * No silent truncation — the complete raw request and success/failure
     bodies are retained verbatim (no preview limit).
-  * No credential material — authorization headers and credentials are
-    never persisted; request headers are redacted before binding.
+  * Standard-path header redaction — ``HttpProvider`` constructs raw requests
+    through ``RawHttpRequest.build()``, which redacts known credential header
+    names before binding evidence.
+
+Direct ``RawHttpRequest`` construction and deserialization are trusted-data
+paths and retain supplied headers without sanitizing them. The request URL is
+also retained as supplied; callers must not embed credentials in its base URL.
+Possible future hardening includes sanitizing at the model boundary and
+separating or restricting wire URLs from URLs retained in evidence.
 """
 
 from __future__ import annotations
@@ -81,12 +88,12 @@ PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 1
 
 
 class RawHttpRequest(BaseModel):
-    """The complete least-processed wire request, with headers redacted.
+    """The complete least-processed wire request.
 
-    ``headers`` never contains authorization or credential material.
-    ``headers`` and ``body`` are deeply immutable so a persisted evidence
-    record can never be mutated after construction — e.g. an ``Authorization``
-    header cannot be re-added after redaction.
+    ``build()`` redacts known credential header names. Direct construction and
+    deserialization are trusted-data paths and retain supplied headers without
+    sanitizing them. ``headers`` and ``body`` are deeply immutable after
+    construction; immutability does not establish that headers were redacted.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -119,6 +126,7 @@ class RawHttpRequest(BaseModel):
         body: dict[str, Any],
         method: str = "POST",
     ) -> RawHttpRequest:
+        """Build a raw request with known credential headers redacted."""
         return cls(
             method=method,
             url=url,

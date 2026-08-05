@@ -74,6 +74,11 @@ class ProviderTransportPolicy(BaseModel):
 
     api_key_env: StrictStr
     base_url: StrictStr | None = None
+    """Transport base URL retained in invocation evidence.
+
+    The supplied value is retained verbatim in policy identity and as the base
+    of the raw request URL. Callers must not embed credentials in it.
+    """
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     """Absolute wall-clock CAP for any single wire call (the hard backstop).
 
@@ -137,9 +142,10 @@ class ProviderTransportPolicy(BaseModel):
     def identity_payload(self) -> dict[str, Any]:
         """Policy identity for Invocation Evidence binding.
 
-        Never includes credential material: only the *name* of the env
-        var, the base URL, timeout, idle timeout, and native retry count.
-        This binds the policy to evidence without persisting any secret.
+        Includes only the *name* of the credential env var, the base URL,
+        timeout, idle timeout, and native retry count; it never resolves or
+        reads the credential value. The base URL is retained verbatim, so
+        callers must not embed credentials in it.
         """
         return {
             "api_key_env": self.api_key_env,

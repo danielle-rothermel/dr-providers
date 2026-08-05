@@ -20,7 +20,8 @@ these functional areas:
   execution.
 - **[Outcomes](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/outcomes)**
   represents expected successes and failures as typed data and preserves
-  sanitized raw HTTP evidence in versioned invocation records.
+  raw HTTP evidence in versioned invocation records, with known credential
+  header names redacted on the standard `HttpProvider` invocation path.
 - **Infrastructure**
   - **[Core](https://github.com/danielle-rothermel/dr-providers/tree/main/src/dr_providers/core)**
     holds the shared provider protocol, failure vocabulary, and immutable-value
@@ -177,8 +178,11 @@ class HttpProvider:
 
 Outcomes form a closed no-throw union of successful transport responses and
 expected transport failures. Invocation evidence binds that outcome to the
-request, transport policy, and sanitized raw HTTP exchange; exactly one of its
-response or failure fields is populated.
+request, transport policy, and raw HTTP exchange; exactly one of its response
+or failure fields is populated. Standard `HttpProvider` invocation redacts
+known credential header names before binding the raw request to evidence.
+Direct `RawHttpRequest` construction and deserialization are trusted-data paths:
+they retain supplied headers without sanitizing them.
 
 ```python
 class FailureClass(StrEnum):
@@ -216,6 +220,12 @@ class ProviderInvocationEvidence(BaseModel):
     response: ProviderTransportResponse | None = None
     failure: ProviderTransportFailure | None = None
 ```
+
+`base_url` is retained verbatim in policy identity and as the base of the raw
+request URL captured in invocation evidence. Callers must not embed credentials
+in it. Possible future hardening includes sanitizing at the `RawHttpRequest`
+model boundary and separating or restricting wire URLs from URLs retained in
+evidence.
 
 ```python
 def conformance_warnings(
