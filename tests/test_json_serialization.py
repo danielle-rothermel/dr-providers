@@ -18,7 +18,7 @@ from dr_providers import (
 )
 
 SUBPROCESS_WATCHDOG_SECONDS = 60
-HASH_SEEDS = ("0", "1", "4242")
+HASH_SEEDS = ("0", "1", "4", "4242")
 SOURCE_ROOT = Path(__file__).parent.parent / "src"
 
 EXPECTED_JSON_DUMP = {
@@ -113,14 +113,24 @@ def test_definition_json_dump_orders_unordered_fields_exactly() -> None:
 
 def test_definition_python_dump_preserves_frozensets() -> None:
     dumped = _definition().model_dump()
+    supported_controls = dumped["constraints"]["supported_controls"]
+    required_controls = dumped["required_controls"]
+    extension_keys = dumped["extension_keys"]
 
-    assert dumped["constraints"]["supported_controls"] == frozenset(
-        RequestControl
+    assert isinstance(supported_controls, frozenset)
+    assert supported_controls == frozenset(RequestControl)
+    assert all(
+        isinstance(control, RequestControl) for control in supported_controls
     )
-    assert dumped["required_controls"] == frozenset(
+    assert isinstance(required_controls, frozenset)
+    assert required_controls == frozenset(
         {RequestControl.TOP_P, RequestControl.TEMPERATURE}
     )
-    assert dumped["extension_keys"] == frozenset({"zeta", "alpha", "middle"})
+    assert all(
+        isinstance(control, RequestControl) for control in required_controls
+    )
+    assert isinstance(extension_keys, frozenset)
+    assert extension_keys == frozenset({"zeta", "alpha", "middle"})
 
 
 def _model_dump_json_with_seed(seed: str) -> bytes:
