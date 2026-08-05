@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
+import sysconfig
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -24,7 +29,6 @@ from scripts.live_matrix_support import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
 
 class _SuccessfulProvider:
@@ -216,8 +220,66 @@ def test_complete_capture_is_redacted_validated_and_promoted(
     }
 
 
-def test_documented_promotion_revalidates_raw_capture(
+def test_promote_cli_reexecs_under_mise_and_redacts_mapped_secret(
     tmp_path: Path,
+) -> None:
+    staging_dir = tmp_path / "staging"
+    corpus_dir = tmp_path / "curated"
+    _write_synthetic_capture(staging_dir)
+    configured_credential = "configured-mise-value"
+    openrouter_path = staging_dir / "openrouter_chat_completions.json"
+    openrouter_body = json.loads(openrouter_path.read_text())
+    openrouter_body["metadata"]["echo"] = configured_credential
+    openrouter_path.write_text(json.dumps(openrouter_body))
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_mise = fake_bin / "mise"
+    fake_mise.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os\n"
+        "import sys\n"
+        "os.environ['MARIMO_OPENAI_API_KEY'] = "
+        "os.environ.pop('FAKE_MISE_SECRET')\n"
+        "os.execvp(sys.argv[3], sys.argv[3:])\n"
+    )
+    fake_mise.chmod(0o755)
+
+    environment = os.environ.copy()
+    credential_names = {case.credential_env for case in LIVE_CASES} | {
+        "MARIMO_OPENAI_API_KEY",
+        "OPENCODE_ANTHROPIC_API_KEY",
+    }
+    for name in credential_names:
+        environment.pop(name, None)
+    environment.pop("DR_PROVIDERS_LIVE_UNDER_MISE", None)
+    environment["PATH"] = f"{fake_bin}{os.pathsep}{environment['PATH']}"
+    environment["FAKE_MISE_SECRET"] = configured_credential
+
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "capture_live_corpus.py"),
+            "promote",
+            str(staging_dir),
+            "--corpus-dir",
+            str(corpus_dir),
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    promoted = (corpus_dir / "openrouter_chat_completions.json").read_text()
+    assert configured_credential not in promoted
+    assert json.loads(promoted)["metadata"]["echo"] == "[REDACTED]"
+
+
+def test_documented_promotion_revalidates_raw_capture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     staging_dir = tmp_path / "staging"
     corpus_dir = tmp_path / "curated"
@@ -226,6 +288,7 @@ def test_documented_promotion_revalidates_raw_capture(
     (first_validated / "openai_chat_completions.json").write_text(
         '{"tampered": true}\n'
     )
+    monkeypatch.setenv("DR_PROVIDERS_LIVE_UNDER_MISE", "1")
 
     result = capture_live_corpus.main(
         [
@@ -263,6 +326,71 @@ def test_incomplete_capture_cannot_change_curated_corpus(
         capture_live_corpus.prepare_capture(staging_dir)
 
     assert existing.read_text() == '{"existing": true}\n'
+
+
+def test_failed_install_restores_complete_prior_corpus(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    staging_dir = tmp_path / "staging"
+    corpus_dir = tmp_path / "curated"
+    _write_synthetic_capture(staging_dir)
+    validated_dir = capture_live_corpus.prepare_capture(staging_dir)
+    corpus_dir.mkdir()
+    prior_generation = {
+        case.corpus_file: (
+            f'{{"generation": "prior", "file": "{case.corpus_file}"}}\n'
+        ).encode()
+        for case in LIVE_CASES
+    }
+    for file_name, contents in prior_generation.items():
+        (corpus_dir / file_name).write_bytes(contents)
+
+    original_replace = Path.replace
+    promotion_count = 0
+
+    def fail_third_promotion(source: Path, target: Path) -> Path:
+        nonlocal promotion_count
+        if source.name.endswith(".promotion"):
+            promotion_count += 1
+            if promotion_count == 3:
+                raise OSError("injected promotion failure")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", fail_third_promotion)
+
+    with pytest.raises(OSError, match="injected promotion failure"):
+        capture_live_corpus._install_validated_capture(
+            validated_dir, corpus_dir
+        )
+
+    assert promotion_count == 3
+    assert {
+        path.name: path.read_bytes() for path in corpus_dir.iterdir()
+    } == prior_generation
+
+
+def test_capture_executable_help_works_from_external_cwd(
+    tmp_path: Path,
+) -> None:
+    environment = os.environ.copy()
+    environment.pop("VIRTUAL_ENV", None)
+    environment["PYTHONPATH"] = sysconfig.get_path("purelib")
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-S",
+            str(ROOT / "scripts" / "capture_live_corpus.py"),
+            "--help",
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Capture, validate, redact" in result.stdout
 
 
 def test_both_dotfiles_credential_aliases_are_mapped() -> None:

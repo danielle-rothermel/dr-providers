@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from dr_providers import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
+
+from dr_providers import (  # noqa: E402
     GenerationControls,
     ProviderTransportResponse,
     anthropic_messages_config,
@@ -27,9 +30,6 @@ from dr_providers import (
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
 
 from scripts.live_matrix_support import (  # noqa: E402
     CAPTURE_DIR_ENV,
@@ -233,14 +233,50 @@ def _install_validated_capture(validated_dir: Path, corpus_dir: Path) -> None:
         msg = f"curated corpus has unexpected files: {', '.join(unknown)}"
         raise CaptureValidationError(msg)
 
-    temporary_paths: list[tuple[Path, Path]] = []
-    for file_name in sorted(expected_names):
-        destination = corpus_dir / file_name
-        temporary = corpus_dir / f".{file_name}.promotion"
-        temporary.write_bytes((validated_dir / file_name).read_bytes())
-        temporary_paths.append((temporary, destination))
-    for temporary, destination in temporary_paths:
-        temporary.replace(destination)
+    installations = [
+        (
+            corpus_dir / f".{file_name}.promotion",
+            corpus_dir / file_name,
+            corpus_dir / f".{file_name}.rollback",
+            (corpus_dir / file_name).exists(),
+        )
+        for file_name in sorted(expected_names)
+    ]
+    installation_complete = False
+    replacements_started = False
+    rollback_complete = False
+    replaced: list[tuple[Path, Path, bool]] = []
+    try:
+        for temporary, destination, backup, existed in installations:
+            temporary.write_bytes(
+                (validated_dir / destination.name).read_bytes()
+            )
+            if existed:
+                backup.write_bytes(destination.read_bytes())
+
+        replacements_started = True
+        try:
+            for temporary, destination, backup, existed in installations:
+                temporary.replace(destination)
+                replaced.append((destination, backup, existed))
+        except BaseException:
+            for destination, backup, existed in reversed(replaced):
+                if existed:
+                    backup.replace(destination)
+                else:
+                    destination.unlink(missing_ok=True)
+            rollback_complete = True
+            raise
+        installation_complete = True
+    finally:
+        for temporary, _, backup, _ in installations:
+            temporary.unlink(missing_ok=True)
+            if (
+                installation_complete
+                or rollback_complete
+                or not replacements_started
+            ):
+                backup.unlink(missing_ok=True)
 
 
 def promote_capture(
@@ -339,9 +375,9 @@ def _capture(staging_dir: Path | None, *, promote: bool) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = tuple(sys.argv[1:] if argv is None else argv)
     args = _parser().parse_args(arguments)
+    if not under_mise():
+        return _reexec_capture_under_mise(arguments)
     if args.command == "capture":
-        if not under_mise():
-            return _reexec_capture_under_mise(arguments)
         return _capture(args.staging_dir, promote=args.promote)
 
     environment = mapped_provider_environment(os.environ)
