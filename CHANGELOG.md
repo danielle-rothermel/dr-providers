@@ -50,7 +50,8 @@ provider-call transport kernel. Code written against 0.1.x will not import.
   protocol, token-limit parameter, and reasoning wire shape.
 - Provider Invocation Evidence records binding request + policy identities to
   the outcome and the complete least-processed raw request/response bodies
-  (credentials and authorization headers are never persisted).
+  (the standard `HttpProvider` path redacts known credential header names
+  before binding request evidence; direct raw-request inputs remain trusted).
 - `ScriptedProvider` for network-free testing against the same `Provider`
   interface.
 - `dr-providers` console script and a typer CLI in the optional `[cli]` extra;
