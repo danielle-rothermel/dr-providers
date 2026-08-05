@@ -366,6 +366,56 @@ class TestPolicyFor:
         # after the absolute cap; it is clamped down rather than rejected.
         assert policy.idle_timeout_seconds == 10.0
 
+    @pytest.mark.parametrize(
+        "timeout_seconds",
+        [0.0, -1.0, float("nan"), float("inf"), float("-inf")],
+        ids=("zero", "negative", "nan", "positive-inf", "negative-inf"),
+    )
+    def test_invalid_timeout_rejected(self, timeout_seconds: float) -> None:
+        with pytest.raises(ValidationError):
+            policy_for(
+                ProviderKind.OPENAI,
+                timeout_seconds=timeout_seconds,
+            )
+
+    @pytest.mark.parametrize(
+        "idle_timeout_seconds",
+        [0.0, -1.0, float("nan"), float("inf"), float("-inf")],
+        ids=("zero", "negative", "nan", "positive-inf", "negative-inf"),
+    )
+    def test_invalid_idle_timeout_rejected(
+        self, idle_timeout_seconds: float
+    ) -> None:
+        with pytest.raises(ValidationError):
+            policy_for(
+                ProviderKind.OPENAI,
+                idle_timeout_seconds=idle_timeout_seconds,
+            )
+
+    @pytest.mark.parametrize(
+        "native_retry_count", [-1, True], ids=("negative", "bool")
+    )
+    def test_invalid_native_retry_count_rejected(
+        self, native_retry_count: int
+    ) -> None:
+        with pytest.raises(ValidationError):
+            policy_for(
+                ProviderKind.OPENAI,
+                native_retry_count=native_retry_count,
+            )
+
+    @pytest.mark.parametrize("timeout_seconds", [1.0, 1e300])
+    def test_positive_finite_timeouts_accepted(
+        self, timeout_seconds: float
+    ) -> None:
+        policy = policy_for(
+            ProviderKind.OPENAI,
+            timeout_seconds=timeout_seconds,
+            idle_timeout_seconds=timeout_seconds,
+        )
+        assert policy.timeout_seconds == timeout_seconds
+        assert policy.idle_timeout_seconds == timeout_seconds
+
 
 class TestRequiredVariableCompletion:
     def test_missing_required_control_rejected(self) -> None:

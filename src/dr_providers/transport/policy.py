@@ -19,6 +19,7 @@ from typing import Any
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     StrictInt,
     StrictStr,
     model_validator,
@@ -79,7 +80,9 @@ class ProviderTransportPolicy(BaseModel):
     The supplied value is retained verbatim in policy identity and as the base
     of the raw request URL. Callers must not embed credentials in it.
     """
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    timeout_seconds: float = Field(
+        default=DEFAULT_TIMEOUT_SECONDS, gt=0, allow_inf_nan=False
+    )
     """Absolute wall-clock CAP for any single wire call (the hard backstop).
 
     ``timeout_seconds`` is the maximum total wall-clock a single invocation
@@ -108,7 +111,9 @@ class ProviderTransportPolicy(BaseModel):
         Provider Transport Failure
         (``code='timeout'``/``'stalled_response'``), never hangs.
     """
-    idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS
+    idle_timeout_seconds: float = Field(
+        default=DEFAULT_IDLE_TIMEOUT_SECONDS, gt=0, allow_inf_nan=False
+    )
     """Progress/idle timeout: fail ``stalled_response`` if no bytes arrive
     for this many seconds (default 90s).
 
@@ -126,7 +131,7 @@ class ProviderTransportPolicy(BaseModel):
     interrupts the call, so it is silently narrowed to ``timeout_seconds`` at
     construction.
     """
-    native_retry_count: StrictInt = 0
+    native_retry_count: StrictInt = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _clamp_idle_to_timeout(self) -> ProviderTransportPolicy:
