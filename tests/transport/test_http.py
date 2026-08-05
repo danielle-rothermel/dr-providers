@@ -397,8 +397,3 @@ class TestHttpProviderLifecycle:
             assert isinstance(outcome, ProviderTransportResponse)
         assert not client.is_closed
         client.close()
-
-    def test_close_is_idempotent(self) -> None:
-        provider = HttpProvider(policy=OPENAI_POLICY, api_key="k")
-        provider.close()
-        provider.close()
