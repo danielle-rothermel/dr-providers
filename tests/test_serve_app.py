@@ -4,6 +4,7 @@ fastapi = pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+import dr_providers  # noqa: E402
 from dr_providers.serve.app import create_app  # noqa: E402
 
 SPEC = {
@@ -21,7 +22,10 @@ def client() -> TestClient:
 def test_health_reports_ok(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    assert response.json() == {
+        "status": "ok",
+        "version": dr_providers.__version__,
+    }
 
 
 def test_build_payload_previews_the_wire_format(client: TestClient) -> None:

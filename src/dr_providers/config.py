@@ -27,10 +27,18 @@ from typing import Any
 
 from dr_serialize import (
     IdentityDocument,
+    Jsonable,
     build_identity_document,
+    canonical_sorted_values,
     identity_document_hash,
 )
-from pydantic import BaseModel, ConfigDict, StrictStr, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    StrictStr,
+    field_serializer,
+    model_validator,
+)
 
 from dr_providers.controls import (
     CONTROL_ATTR,
@@ -84,6 +92,20 @@ class ProviderCallDefinition(BaseModel):
     constraints: ControlConstraints
     required_controls: frozenset[RequestControl] = frozenset()
     extension_keys: frozenset[StrictStr] = frozenset()
+
+    @field_serializer("required_controls", when_used="json")
+    def _serialize_required_controls(
+        self,
+        value: frozenset[RequestControl],
+    ) -> list[Jsonable]:
+        return canonical_sorted_values(control.value for control in value)
+
+    @field_serializer("extension_keys", when_used="json")
+    def _serialize_extension_keys(
+        self,
+        value: frozenset[StrictStr],
+    ) -> list[Jsonable]:
+        return canonical_sorted_values(value)
 
     @model_validator(mode="after")
     def _required_subset_of_supported(self) -> ProviderCallDefinition:
