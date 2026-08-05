@@ -78,6 +78,20 @@ MAX_CONNECT_TIMEOUT_SECONDS = 30.0
 INVOCATION_DEADLINE_MARGIN_SECONDS = 5.0
 
 
+def _operational_timeout_seconds(timeout_seconds: float) -> float:
+    """Clamp a valid policy timeout to the platform wait ceiling."""
+    return min(timeout_seconds, threading.TIMEOUT_MAX)
+
+
+def _operational_invocation_deadline_seconds(
+    timeout_seconds: float,
+) -> float:
+    """Return the platform-safe invocation watchdog deadline."""
+    return _operational_timeout_seconds(
+        timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
+    )
+
+
 def _httpx_timeout(idle_timeout_seconds: float) -> httpx.Timeout:
     """Progress-aware timeout discipline: idle-bounded read, capped connect.
 
@@ -92,11 +106,14 @@ def _httpx_timeout(idle_timeout_seconds: float) -> httpx.Timeout:
     absolute ``timeout_seconds`` cap is enforced separately as the
     per-invocation deadline (the dribble backstop).
     """
+    operational_timeout_seconds = _operational_timeout_seconds(
+        idle_timeout_seconds
+    )
     return httpx.Timeout(
-        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, idle_timeout_seconds),
-        read=idle_timeout_seconds,
-        write=idle_timeout_seconds,
-        pool=idle_timeout_seconds,
+        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, operational_timeout_seconds),
+        read=operational_timeout_seconds,
+        write=operational_timeout_seconds,
+        pool=operational_timeout_seconds,
     )
 
 
@@ -253,6 +270,9 @@ class HttpProvider:
         deadline = (
             self._policy.timeout_seconds + INVOCATION_DEADLINE_MARGIN_SECONDS
         )
+        operational_deadline = _operational_invocation_deadline_seconds(
+            self._policy.timeout_seconds
+        )
         outcome_box: list[ProviderTransportOutcome] = []
         error_box: list[BaseException] = []
         # A per-call client for the owned case so an interrupt tears down only
@@ -277,7 +297,7 @@ class HttpProvider:
 
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
-        if not done.wait(timeout=deadline):
+        if not done.wait(timeout=operational_deadline):
             # The worker is wedged in a socket read past the deadline. Close
             # this call's OWNED client to unblock it (best-effort), then return
             # the typed failure WITHOUT joining the leaked daemon worker.

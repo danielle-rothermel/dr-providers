@@ -49,6 +49,8 @@ from dr_providers.transport.http import (
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
     HttpProvider,
+    _httpx_timeout,
+    _operational_invocation_deadline_seconds,
 )
 
 # Tiny budgets so the suite stays fast. Two distinct timers are exercised:
@@ -65,6 +67,28 @@ POLICY_TIMEOUT_SECONDS = 0.3
 POLICY_IDLE_SECONDS = 0.2
 EXTERNAL_WATCHDOG_SECONDS = 20.0
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="hi"),)
+
+
+def test_platform_unsafe_policy_timeouts_are_saturated_operationally() -> None:
+    requested_timeout_seconds = 1e300
+    policy = ProviderTransportPolicy(
+        api_key_env=str(ApiKeyEnv.OPENAI),
+        base_url="http://placeholder",
+        timeout_seconds=requested_timeout_seconds,
+        idle_timeout_seconds=requested_timeout_seconds,
+    )
+
+    socket_timeout = _httpx_timeout(policy.idle_timeout_seconds)
+
+    assert socket_timeout.read == threading.TIMEOUT_MAX
+    assert socket_timeout.write == threading.TIMEOUT_MAX
+    assert socket_timeout.pool == threading.TIMEOUT_MAX
+    assert (
+        _operational_invocation_deadline_seconds(policy.timeout_seconds)
+        == threading.TIMEOUT_MAX
+    )
+    assert policy.timeout_seconds == requested_timeout_seconds
+    assert policy.idle_timeout_seconds == requested_timeout_seconds
 
 
 def _stall_policy() -> ProviderTransportPolicy:

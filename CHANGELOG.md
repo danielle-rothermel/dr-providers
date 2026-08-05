@@ -6,6 +6,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Saturate socket and watchdog waits at the platform timeout ceiling while
+  preserving requested finite timeout policy values, preventing large values
+  from raising `OverflowError` during provider invocation.
+
 ### Changed
 
 - Provider Call Definition and Provider Invocation Evidence are bare payload
