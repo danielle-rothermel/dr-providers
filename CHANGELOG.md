@@ -14,8 +14,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hard cutover with no compatibility reader: supplying `schema_version` to
   either payload model is rejected, and Definition, Config, and Request
   identity hashes change.
-- Provider transport policies require finite positive timeout values and a
-  strict nonnegative native retry count at model construction.
+- Provider transport policies require strict finite positive timeout values
+  and a strict nonnegative native retry count at model construction.
 
 ## [0.2.1] - 2026-08-05
 

@@ -81,7 +81,10 @@ class ProviderTransportPolicy(BaseModel):
     of the raw request URL. Callers must not embed credentials in it.
     """
     timeout_seconds: float = Field(
-        default=DEFAULT_TIMEOUT_SECONDS, gt=0, allow_inf_nan=False
+        default=DEFAULT_TIMEOUT_SECONDS,
+        gt=0,
+        allow_inf_nan=False,
+        strict=True,
     )
     """Absolute wall-clock CAP for any single wire call (the hard backstop).
 
@@ -112,7 +115,10 @@ class ProviderTransportPolicy(BaseModel):
         (``code='timeout'``/``'stalled_response'``), never hangs.
     """
     idle_timeout_seconds: float = Field(
-        default=DEFAULT_IDLE_TIMEOUT_SECONDS, gt=0, allow_inf_nan=False
+        default=DEFAULT_IDLE_TIMEOUT_SECONDS,
+        gt=0,
+        allow_inf_nan=False,
+        strict=True,
     )
     """Progress/idle timeout: fail ``stalled_response`` if no bytes arrive
     for this many seconds (default 90s).
