@@ -24,6 +24,7 @@ import contextlib
 import socket
 import threading
 import time
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -107,6 +108,54 @@ def _request() -> ProviderCallRequest:
         config=openai_chat_config(model="m", controls=GenerationControls()),
         transcript=Transcript(messages=MESSAGES),
     )
+
+
+def test_provider_uses_saturated_watchdog_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wait_timeouts: list[float | None] = []
+
+    class RecordingEvent:
+        def __init__(self) -> None:
+            self._event = threading.Event()
+
+        def set(self) -> None:
+            self._event.set()
+
+        def wait(self, timeout: float | None = None) -> bool:
+            wait_timeouts.append(timeout)
+            return self._event.wait(timeout=EXTERNAL_WATCHDOG_SECONDS)
+
+    monkeypatch.setattr(
+        "dr_providers.transport.http.threading",
+        SimpleNamespace(
+            Event=RecordingEvent,
+            Thread=threading.Thread,
+            TIMEOUT_MAX=threading.TIMEOUT_MAX,
+        ),
+    )
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "ok"}}]},
+            )
+        )
+    )
+    policy = ProviderTransportPolicy(
+        api_key_env=str(ApiKeyEnv.OPENAI),
+        base_url="https://example.test",
+        timeout_seconds=1e300,
+        idle_timeout_seconds=1e300,
+    )
+
+    with HttpProvider(
+        policy=policy, client=client, api_key="test-key"
+    ) as provider:
+        outcome = provider.complete(_request())
+
+    assert isinstance(outcome, ProviderTransportResponse)
+    assert wait_timeouts == [threading.TIMEOUT_MAX]
 
 
 class _StallServer:
