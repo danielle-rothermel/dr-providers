@@ -158,7 +158,7 @@
     <tr>
       <td><a class="term-ref" href="#term-provider-call-request">Provider Call Request</a></td>
       <td><code>ProviderCallRequest</code>, <code>PROVIDER_CALL_REQUEST_SCHEMA</code>, <code>PROVIDER_CALL_REQUEST_SCHEMA_VERSION</code>, <code>build_payload</code>, <code>protocol_path</code></td>
-      <td>The request references exactly one <a class="term-ref" href="#term-provider-call-config">provider call config</a> (by its <a class="term-ref" href="#term-identity-hash">identity hash</a> on the identity path) and one <a class="term-ref" href="#term-transcript">transcript</a>, and is itself an <a class="term-ref" href="#term-identity-document">identity document</a> named by its schema constants and carrying its own full <a class="term-ref" href="#term-identity-hash">identity hash</a>; <code>build_payload</code> renders the HTTP request body and <code>protocol_path</code> the endpoint path for its config's protocol.</td>
+      <td>The request payload references exactly one <a class="term-ref" href="#term-provider-call-config">provider call config</a> (by its <a class="term-ref" href="#term-identity-hash">identity hash</a> on the identity path) and one <a class="term-ref" href="#term-transcript">transcript</a>. Its schema constants name the surrounding <a class="term-ref" href="#term-identity-document">identity document</a> from which its own full <a class="term-ref" href="#term-identity-hash">identity hash</a> is derived; <code>build_payload</code> renders the HTTP request body and <code>protocol_path</code> the endpoint path for its config's protocol.</td>
     </tr>
     <tr>
       <td><a class="term-ref" href="#term-provider-transport-policy">Provider Transport Policy</a></td>
