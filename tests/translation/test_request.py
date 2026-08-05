@@ -5,12 +5,19 @@ from __future__ import annotations
 import json
 
 from dr_providers import (
+    ControlConstraints,
     GenerationControls,
     MessageRole,
+    ModelRoute,
     PromptMessage,
+    Protocol,
     ProviderBodyExtensions,
+    ProviderCallDefinition,
     ProviderCallRequest,
+    ProviderKind,
     ReasoningEffort,
+    RequestControl,
+    TokenLimitParameter,
     Transcript,
     anthropic_messages_config,
     build_payload,
@@ -140,6 +147,34 @@ class TestBuildPayload:
             )
         )
         assert build_payload(request)["top_p"] == 0.9
+
+    def test_opted_in_unsupported_control_is_omitted_from_wire(self) -> None:
+        definition = ProviderCallDefinition(
+            definition_id="test.chat",
+            route=ModelRoute(
+                provider=ProviderKind.OPENAI,
+                protocol=Protocol.CHAT_COMPLETIONS,
+                model="m",
+            ),
+            constraints=ControlConstraints(
+                supported_controls=frozenset({RequestControl.TOKEN_LIMIT}),
+                token_limit_parameter=(
+                    TokenLimitParameter.MAX_COMPLETION_TOKENS
+                ),
+                allow_unsupported_control_drop=True,
+            ),
+        )
+        config = definition.materialize(
+            controls=GenerationControls(temperature=0.5)
+        )
+
+        assert build_payload(request_for(config)) == {
+            "model": "m",
+            "messages": [
+                {"role": "system", "content": "be brief"},
+                {"role": "user", "content": "write add"},
+            ],
+        }
 
     def test_extra_body_merged_into_payload(self) -> None:
         request = request_for(
