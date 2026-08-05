@@ -5,22 +5,29 @@ Anthropic: one Provider Call Config, Request, Transport Policy, and
 no-throw Transport Outcome vocabulary across providers. Requires
 Python 3.12+.
 
-## Ecosystem
+## At a Glance
 
-dr-providers is the typed LLM-provider HTTP transport kernel, with an
-optional `[serve]` FastAPI facade for localhost HTTP callers. It builds
-Provider Call Definition, Config, and Request Identity Documents — each
-carrying its own full 64-char SHA-256 Identity Hash — through
-`dr-serialize`. Its neighboring repos are dr-serialize, dr-graph,
-dr-platform, dr-code, whetstone-ai, and unitbench. Whetstone-ai /
-dr-platform, dr-graph's graph runner, and unitbench playgrounds are
-consumers.
+- Contract reference: [Provider Vocabulary](https://danielle-rothermel.github.io/dr-providers/)
+- Danielle-owned dependencies:
+  - [dr-serialize](https://github.com/danielle-rothermel/dr-serialize) `0.1.1`
 
-The [vocabulary sheet](https://danielle-rothermel.github.io/dr-providers/)
-(source: `.defs/vocab.html`) is the authoritative statement of the
-provider-call transport contract this repo implements: the terms, the
-guarantees, what is in and out of scope, and the mapping from each term
-to the exported names.
+## High-Level Design
+
+- **Call modeling:** validated provider routes, generation controls,
+  transcripts, definitions, configs, and requests form deterministic,
+  identity-hashed descriptions of provider calls.
+- **Protocol translation:** shared inputs are translated into the wire shapes
+  expected by OpenAI Chat Completions, OpenAI Responses, OpenRouter, Gemini's
+  OpenAI-compatible endpoint, and Anthropic Messages.
+- **Transport and outcomes:** credentials, endpoints, timeouts, and retry
+  policy stay separate from call identity. HTTP calls return typed success or
+  failure outcomes instead of raising for expected provider failures.
+- **Invocation evidence:** each invocation can produce a versioned record that
+  binds request and policy identities to sanitized raw HTTP evidence and the
+  normalized outcome.
+- **Testing and access:** a scripted provider supports deterministic offline
+  tests, while the Python API, command-line interface, and optional localhost
+  HTTP facade expose the same provider-call vocabulary to different callers.
 
 ## Install
 
@@ -204,10 +211,8 @@ over HTTP for non-Python callers:
 uv run python -m dr_providers.serve serve
 ```
 
-Release notes live in the
-[changelog](https://github.com/danielle-rothermel/dr-providers/blob/main/CHANGELOG.md);
-note that 0.2.0 is a complete rewrite with no API compatibility with the
-0.1.x query client.
+Release history lives in the
+[changelog](https://github.com/danielle-rothermel/dr-providers/blob/main/CHANGELOG.md).
 
 ## Development
 
