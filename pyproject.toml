@@ -70,7 +70,7 @@ only-include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not live'"
+addopts = "--strict-markers -m 'not live'"
 markers = [
     "live: hits real provider endpoints; requires API keys",
 ]
