@@ -56,7 +56,7 @@ from dr_providers.modeling.route import (
 )
 
 PROVIDER_CALL_DEFINITION_SCHEMA = "dr_providers.provider_call_definition"
-PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 1
+PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 2
 
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 1

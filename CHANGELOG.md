@@ -10,8 +10,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Provider Call Definition and Provider Invocation Evidence are bare payload
   models; their `IdentityDocument` envelopes are the sole owners of `schema`
-  and `schema_version`. Supplying `schema_version` to either payload model is
-  rejected, and Definition, Config, and Request identity hashes change.
+  and `schema_version`, and both envelopes now use schema version 2. This is a
+  hard cutover with no compatibility reader: supplying `schema_version` to
+  either payload model is rejected, and Definition, Config, and Request
+  identity hashes change.
 - Provider transport policies require finite positive timeout values and a
   strict nonnegative native retry count at model construction.
 

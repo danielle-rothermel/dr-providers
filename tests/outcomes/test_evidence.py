@@ -91,6 +91,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 2
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"

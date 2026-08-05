@@ -84,7 +84,7 @@ def sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 1
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 2
 
 
 class RawHttpRequest(BaseModel):
