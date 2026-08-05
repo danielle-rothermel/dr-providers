@@ -8,6 +8,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Keep ordinary live pytest verification read-only; live corpus replacement is
+  now an explicit complete-capture validation, redaction, and promotion step.
 - Saturate socket and watchdog waits at the platform timeout ceiling while
   preserving requested finite timeout policy values, preventing large values
   from raising `OverflowError` during provider invocation.

@@ -1,12 +1,11 @@
 """Offline parser regression tests over live-captured wire bodies.
 
-``tests/transport/live/test_matrix.py`` writes each successful live call's
-raw response body to
-``data/wire-corpus/<provider>_<protocol>.json``. This test re-parses
-every captured body with :func:`parse_response` so a kernel parser
-regression is caught without touching the network. The corpus starts
-empty (no live run has happened yet on this machine) and the test skips
-cleanly in that case so the offline suite stays green.
+``scripts/capture_live_corpus.py`` stages a complete live matrix outside the
+repository, validates and redacts every response, and deliberately promotes
+the curated files under ``data/wire-corpus``. This test re-parses every
+promoted body with :func:`parse_response` so a kernel parser regression is
+caught without touching the network. The test skips cleanly when no curated
+corpus is present.
 """
 
 from __future__ import annotations
@@ -69,7 +68,7 @@ def _config_for_stem(stem: str) -> ProviderCallConfig:
 
 @pytest.mark.skipif(
     not wire_corpus_files(),
-    reason="data/wire-corpus/ is empty; run `uv run pytest -m live` first",
+    reason=("data/wire-corpus/ is empty; use scripts/capture_live_corpus.py"),
 )
 @pytest.mark.parametrize(
     "corpus_file",

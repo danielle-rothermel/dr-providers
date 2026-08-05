@@ -1,15 +1,12 @@
 """Live provider verification matrix.
 
 Marked ``live``; excluded from the default run via ``addopts = "-m
-'not live'"``. Each case skips (not fails) when its API key env var
-is unset, so ``uv run pytest -m live`` is safe to run without every
-provider's key configured.
+'not live'"``. A selected case fails when its API key env var is unset,
+preventing a credential-free run from reporting vacuous success. Select
+cases explicitly with ``scripts/run_live_matrix.py``.
 
-Every successful call writes its raw response body to
-``data/wire-corpus/<provider>_<protocol>.json`` (pretty JSON,
-overwritten each run). ``tests/translation/test_wire_corpus.py`` re-parses
-those bodies offline so a kernel parser regression is caught without
-touching the network.
+Verification is read-only. Refreshing curated wire evidence is a separate,
+explicit operation owned by ``scripts/capture_live_corpus.py``.
 
 Temperature is set to 0.0 only for the openrouter and gemini cases.
 All five presets declare ``temperature`` in ``supported_controls``,
@@ -26,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -48,10 +46,19 @@ from dr_providers import (
     openai_responses_config,
     openrouter_chat_config,
 )
+from scripts.live_matrix_support import (
+    CAPTURE_DIR_ENV,
+    LIVE_CASES,
+    LiveCase,
+    require_external_capture_dir,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    ConfigFactory = Callable[[GenerationControls], ProviderCallConfig]
 
 pytestmark = pytest.mark.live
-
-WIRE_CORPUS_DIR = Path(__file__).resolve().parents[3] / "data" / "wire-corpus"
 
 PROMPT = "Say hello in one word."
 TOKEN_LIMIT = 2048
@@ -72,52 +79,43 @@ def _model(env_var: str, default: str) -> str:
     return os.environ.get(env_var, default)
 
 
-LIVE_CASES = [
-    pytest.param(
-        "OPENROUTER_API_KEY",
-        lambda controls: openrouter_chat_config(
-            model=_model(OPENROUTER_MODEL_ENV, OPENROUTER_MODEL_DEFAULT),
-            controls=controls,
-        ),
-        True,
-        id="openrouter_chat_completions",
+CONFIG_FACTORIES: dict[str, ConfigFactory] = {
+    "openrouter_chat_completions": lambda controls: openrouter_chat_config(
+        model=_model(OPENROUTER_MODEL_ENV, OPENROUTER_MODEL_DEFAULT),
+        controls=controls,
     ),
-    pytest.param(
-        "OPENAI_API_KEY",
-        lambda controls: openai_chat_config(
-            model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT),
-            controls=controls,
-        ),
-        False,
-        id="openai_chat_completions",
+    "openai_chat_completions": lambda controls: openai_chat_config(
+        model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT),
+        controls=controls,
     ),
-    pytest.param(
-        "OPENAI_API_KEY",
-        lambda controls: openai_responses_config(
-            model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT),
-            controls=controls,
-        ),
-        False,
-        id="openai_responses",
+    "openai_responses": lambda controls: openai_responses_config(
+        model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT),
+        controls=controls,
     ),
-    pytest.param(
-        "GEMINI_API_KEY",
-        lambda controls: gemini_chat_config(
-            model=_model(GEMINI_MODEL_ENV, GEMINI_MODEL_DEFAULT),
-            controls=controls,
-        ),
-        True,
-        id="gemini_chat_completions",
+    "gemini_chat_completions": lambda controls: gemini_chat_config(
+        model=_model(GEMINI_MODEL_ENV, GEMINI_MODEL_DEFAULT),
+        controls=controls,
     ),
-    pytest.param(
-        "ANTHROPIC_API_KEY",
-        lambda controls: anthropic_messages_config(
-            model=_model(ANTHROPIC_MODEL_ENV, ANTHROPIC_MODEL_DEFAULT),
-            controls=controls,
-        ),
-        True,
-        id="anthropic_messages",
+    "anthropic_messages": lambda controls: anthropic_messages_config(
+        model=_model(ANTHROPIC_MODEL_ENV, ANTHROPIC_MODEL_DEFAULT),
+        controls=controls,
     ),
+}
+
+TEMPERATURE_CASES = {
+    "openrouter_chat_completions",
+    "gemini_chat_completions",
+    "anthropic_messages",
+}
+
+LIVE_PARAMETERS = [
+    pytest.param(
+        case,
+        CONFIG_FACTORIES[case.case_id],
+        case.case_id in TEMPERATURE_CASES,
+        id=case.case_id,
+    )
+    for case in LIVE_CASES
 ]
 
 
@@ -133,15 +131,15 @@ def _config_with_controls(
 
 
 @pytest.mark.parametrize(
-    ("api_key_env", "config_factory", "set_temperature"), LIVE_CASES
+    ("case", "config_factory", "set_temperature"), LIVE_PARAMETERS
 )
 def test_live_matrix(
-    api_key_env: str,
+    case: LiveCase,
     config_factory,
     set_temperature: bool,  # noqa: FBT001
 ) -> None:
-    if not os.environ.get(api_key_env):
-        pytest.skip(f"{api_key_env} is not set")
+    if not os.environ.get(case.credential_env):
+        pytest.fail(f"{case.credential_env} is not set")
 
     config = _config_with_controls(
         config_factory, set_temperature=set_temperature
@@ -165,16 +163,16 @@ def test_live_matrix(
     assert outcome.text.strip()
     assert outcome.usage is not None
 
-    _write_corpus_entry(config, outcome.raw_body)
+    _stage_capture(case, outcome.raw_body)
 
 
-def _write_corpus_entry(
-    config: ProviderCallConfig, body: dict[str, object]
-) -> None:
-    WIRE_CORPUS_DIR.mkdir(parents=True, exist_ok=True)
-    provider = config.route.provider.value
-    protocol = config.route.protocol.value
-    file_name = f"{provider}_{protocol}.json"
-    (WIRE_CORPUS_DIR / file_name).write_text(
-        json.dumps(body, indent=2, sort_keys=True) + "\n"
-    )
+def _stage_capture(case: LiveCase, body: dict[str, object]) -> None:
+    capture_dir_value = os.environ.get(CAPTURE_DIR_ENV)
+    if capture_dir_value is None:
+        return
+    capture_dir = require_external_capture_dir(Path(capture_dir_value))
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    destination = capture_dir / case.corpus_file
+    temporary = destination.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(body, indent=2, sort_keys=True) + "\n")
+    temporary.replace(destination)
