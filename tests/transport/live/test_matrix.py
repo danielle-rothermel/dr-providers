@@ -65,7 +65,7 @@ ANTHROPIC_MODEL_ENV = "DR_LIVE_ANTHROPIC_MODEL"
 OPENROUTER_MODEL_DEFAULT = "openai/gpt-5-mini"
 OPENAI_MODEL_DEFAULT = "gpt-5-mini"
 GEMINI_MODEL_DEFAULT = "gemini-2.5-flash"
-ANTHROPIC_MODEL_DEFAULT = "claude-haiku-4-5"
+ANTHROPIC_MODEL_DEFAULT = "claude-sonnet-4-6"
 
 
 def _model(env_var: str, default: str) -> str:
@@ -75,40 +75,45 @@ def _model(env_var: str, default: str) -> str:
 LIVE_CASES = [
     pytest.param(
         "OPENROUTER_API_KEY",
-        lambda: openrouter_chat_config(
-            model=_model(OPENROUTER_MODEL_ENV, OPENROUTER_MODEL_DEFAULT)
+        lambda controls: openrouter_chat_config(
+            model=_model(OPENROUTER_MODEL_ENV, OPENROUTER_MODEL_DEFAULT),
+            controls=controls,
         ),
         True,
         id="openrouter_chat_completions",
     ),
     pytest.param(
         "OPENAI_API_KEY",
-        lambda: openai_chat_config(
-            model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT)
+        lambda controls: openai_chat_config(
+            model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT),
+            controls=controls,
         ),
         False,
         id="openai_chat_completions",
     ),
     pytest.param(
         "OPENAI_API_KEY",
-        lambda: openai_responses_config(
-            model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT)
+        lambda controls: openai_responses_config(
+            model=_model(OPENAI_MODEL_ENV, OPENAI_MODEL_DEFAULT),
+            controls=controls,
         ),
         False,
         id="openai_responses",
     ),
     pytest.param(
         "GEMINI_API_KEY",
-        lambda: gemini_chat_config(
-            model=_model(GEMINI_MODEL_ENV, GEMINI_MODEL_DEFAULT)
+        lambda controls: gemini_chat_config(
+            model=_model(GEMINI_MODEL_ENV, GEMINI_MODEL_DEFAULT),
+            controls=controls,
         ),
         True,
         id="gemini_chat_completions",
     ),
     pytest.param(
         "ANTHROPIC_API_KEY",
-        lambda: anthropic_messages_config(
-            model=_model(ANTHROPIC_MODEL_ENV, ANTHROPIC_MODEL_DEFAULT)
+        lambda controls: anthropic_messages_config(
+            model=_model(ANTHROPIC_MODEL_ENV, ANTHROPIC_MODEL_DEFAULT),
+            controls=controls,
         ),
         True,
         id="anthropic_messages",
@@ -119,14 +124,12 @@ LIVE_CASES = [
 def _config_with_controls(
     config_factory, *, set_temperature: bool
 ) -> ProviderCallConfig:
-    base = config_factory()
-    return base.definition.materialize(
-        controls=GenerationControls(
-            temperature=0.0 if set_temperature else None,
-            token_limit=TOKEN_LIMIT,
-            reasoning=ReasoningEffort.LOW,
-        )
+    controls = GenerationControls(
+        temperature=0.0 if set_temperature else None,
+        token_limit=TOKEN_LIMIT,
+        reasoning=ReasoningEffort.LOW,
     )
+    return config_factory(controls)
 
 
 @pytest.mark.parametrize(
