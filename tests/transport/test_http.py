@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -96,6 +97,85 @@ class TestHttpProvider:
         assert seen["url"] == "https://api.openai.com/v1/chat/completions"
         assert seen["auth"] == "Bearer test-key"
         assert outcome.model == "m"
+
+    @pytest.mark.parametrize("status", [200, 202, 299])
+    def test_every_2xx_status_dispatches_provider_body(
+        self, status: int
+    ) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(status, json=CHAT_BODY_OK)
+        )
+
+        outcome = provider.complete(openai_request())
+
+        assert isinstance(outcome, ProviderTransportResponse)
+        assert outcome.text == "hello"
+
+    @pytest.mark.parametrize("status", [199, 300, 399, 400])
+    def test_every_non_2xx_status_retains_http_failure_evidence(
+        self, status: int
+    ) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(status, json=CHAT_BODY_OK)
+        )
+
+        outcome = provider.complete(openai_request())
+
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.code == f"http_status_{status}"
+        assert outcome.status_code == status
+        assert outcome.raw_response_body == CHAT_BODY_OK
+        assert outcome.raw_request
+
+    def test_redirect_is_not_followed_even_when_client_default_follows(
+        self,
+    ) -> None:
+        calls: list[str] = []
+
+        def handler(http_request: httpx.Request) -> httpx.Response:
+            calls.append(str(http_request.url))
+            if len(calls) == 1:
+                return httpx.Response(
+                    302,
+                    headers={"location": "https://example.test/redirected"},
+                    json=CHAT_BODY_OK,
+                )
+            return httpx.Response(200, json=CHAT_BODY_OK)
+
+        client = httpx.Client(
+            transport=httpx.MockTransport(handler), follow_redirects=True
+        )
+        provider = HttpProvider(
+            policy=OPENAI_POLICY, client=client, api_key="test-key"
+        )
+
+        outcome = provider.complete(openai_request())
+
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.code == "http_status_302"
+        assert calls == ["https://api.openai.com/v1/chat/completions"]
+
+    @pytest.mark.parametrize(
+        "body",
+        [None, False, 0, "provider body", ["provider", "body"]],
+        ids=["null", "boolean", "number", "string", "list"],
+    )
+    def test_valid_json_non_mapping_is_typed_parse_failure(
+        self, body: Any
+    ) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(200, text=json.dumps(body))
+        )
+
+        outcome = provider.complete(openai_request())
+
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.failure_class is FailureClass.PERMANENT
+        assert outcome.code == "response_parse_error"
+        assert outcome.retryable is False
+        assert outcome.raw_response_body == body
+        assert outcome.status_code == 200
+        assert outcome.raw_request
 
     def test_anthropic_uses_x_api_key_and_version_headers(self) -> None:
         seen: dict[str, Any] = {}

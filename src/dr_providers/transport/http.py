@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import os
 import threading
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -40,6 +41,7 @@ from dr_providers.outcomes.models import (
     ProviderTransportOutcome,
     ProviderTransportResponse,
 )
+from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
 from dr_providers.transport.status import classify_status_code
@@ -306,6 +308,7 @@ class HttpProvider:
                 json=payload,
                 headers=headers,
                 timeout=_httpx_timeout(self._policy.idle_timeout_seconds),
+                follow_redirects=False,
             )
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url, payload)
@@ -382,7 +385,7 @@ class HttpProvider:
         url: str,
         payload: dict[str, Any],
     ) -> ProviderTransportOutcome:
-        if http_response.status_code >= 400:  # noqa: PLR2004
+        if not http_response.is_success:
             return self._http_status_failure(http_response, url, payload)
         try:
             body = http_response.json()
@@ -394,6 +397,17 @@ class HttpProvider:
                 retryable=False,
                 raw_request=dict(payload),
                 raw_response_body=http_response.text,
+                metadata={"url": url},
+            )
+        if not isinstance(body, Mapping):
+            return ProviderTransportFailure(
+                failure_class=FailureClass.PERMANENT,
+                code=PARSE_ERROR_CODE,
+                message="provider response JSON must be an object",
+                retryable=False,
+                raw_request=dict(payload),
+                raw_response_body=body,
+                status_code=http_response.status_code,
                 metadata={"url": url},
             )
         outcome = parse_response(body, config=request.config)
