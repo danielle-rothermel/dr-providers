@@ -20,5 +20,5 @@ these functional areas:
 - **Outcomes and evidence** represent expected successes and failures as typed
   data and preserve sanitized raw HTTP evidence in versioned invocation
   records.
-- **Testing and access** provide a deterministic scripted provider, a Python
-  API, a command-line interface, and an optional localhost HTTP facade.
+- **Surfaces** provide a deterministic scripted provider, a Python API, a
+  command-line interface, and an optional localhost HTTP facade.

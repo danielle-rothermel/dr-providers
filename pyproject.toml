@@ -43,7 +43,7 @@ serve = [
 ]
 
 [project.scripts]
-dr-providers = "dr_providers._entry:main"
+dr-providers = "dr_providers.surfaces.cli.entry:main"
 
 [project.urls]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
