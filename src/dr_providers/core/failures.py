@@ -3,7 +3,14 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    model_validator,
+)
 
 
 class FailureClass(StrEnum):
@@ -40,6 +47,17 @@ class ProviderFailure(BaseModel):
     retryable: StrictBool
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @model_validator(mode="after")
+    def _validate_retryability(self) -> ProviderFailure:
+        expected = self.failure_class in RETRYABLE_FAILURE_CLASSES
+        if self.retryable is not expected:
+            msg = (
+                f"failure class {self.failure_class.value!r} requires "
+                f"retryable={expected!r}"
+            )
+            raise ValueError(msg)
+        return self
+
 
 def failure_record(
     *,
@@ -68,6 +86,13 @@ class ProviderFailureError(Exception):
         *,
         underlying: BaseException | None = None,
     ) -> None:
+        if failure.failure_class is not self.failure_class:
+            msg = (
+                f"{type(self).__name__} requires failure class "
+                f"{self.failure_class.value!r}, got "
+                f"{failure.failure_class.value!r}"
+            )
+            raise ValueError(msg)
         super().__init__(failure.message)
         self.failure = failure
         self.underlying = underlying

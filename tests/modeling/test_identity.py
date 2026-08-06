@@ -66,13 +66,13 @@ def _fixed_request() -> ProviderCallRequest:
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "0b6088fd506e6c9e50a030783ae90a135b37cf54de5160f305e865a7cce6e74e"
+    "00e72ae621c1e526567e89bb0b1dec4e11ef5a847e18b8732e2c4b173c2cd7ae"
 )
 GOLDEN_CONFIG_HASH = (
-    "f38e85f9d599ee30468418b31d4a3ddc8337aa77d03e2adf5ad562e3c54d81f7"
+    "dfac8821edc52cdf9c60339d03f5714744f6051624c2aedfd9c674d2e148be0d"
 )
 GOLDEN_REQUEST_HASH = (
-    "d10ea5a27db8b402b021fbb2b9c6e03c842e7c3c2fb9914455674315b493fd7d"
+    "abc1fbbf03d898550e500fc8d29e46353a7ebfd88c90f48aed4d0535440ece2a"
 )
 
 
@@ -171,7 +171,9 @@ def _changed_payload_paths(
         (("route", "model"), "other"),
         (
             ("constraints", "supported_controls"),
-            frozenset(RequestControl) - {RequestControl.TOP_P},
+            frozenset(
+                {RequestControl.TEMPERATURE, RequestControl.TOKEN_LIMIT}
+            ),
         ),
         (
             ("constraints", "token_limit_parameter"),

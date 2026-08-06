@@ -164,6 +164,7 @@ class ProviderCallConfig(BaseModel):
         if (
             self.route.protocol is Protocol.ANTHROPIC_MESSAGES
             and effort is not None
+            and constraints.supports(RequestControl.REASONING)
             and effort not in _ANTHROPIC_REASONING_EFFORTS
         ):
             allowed_efforts = sorted(

@@ -17,6 +17,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Collect every live-provider credential name during corpus promotion and
+  redact sensitive URL fragment parameters as well as query parameters.
+- Reject credential-bearing URL userinfo before transport policy identity or
+  invocation evidence can retain it.
+- Honor explicit unsupported-control dropping for Anthropic reasoning while
+  continuing to reject unmappable values for supported reasoning controls.
+- Reject provider call definitions that advertise reasoning without a usable
+  wire mapping.
+- Reject contradictory raised-error and carried-record failure
+  classifications.
+- Preserve internal CLI import failures instead of misreporting them as a
+  missing optional dependency.
+- Restore the complete BSD-3-Clause disclaimer on the vendored TOML parser
+  published by the definitions site.
 - Keep ordinary live pytest verification read-only; live corpus replacement is
   now an explicit complete-capture validation, redaction, and promotion step.
 - Saturate socket and watchdog waits at the platform timeout ceiling while

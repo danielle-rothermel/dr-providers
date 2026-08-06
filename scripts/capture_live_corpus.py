@@ -5,13 +5,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import (
+    parse_qsl,
+    unquote_plus,
+    urlencode,
+    urlsplit,
+    urlunsplit,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
@@ -121,9 +128,18 @@ def _redact_url(value: str) -> str:
             for key, item in parse_qsl(parsed.query, keep_blank_values=True)
         ]
     )
-    return urlunsplit(
-        (parsed.scheme, netloc, parsed.path, query, parsed.fragment)
+    fragment_keys = (
+        part.partition("=")[0] for part in re.split(r"[?&]", parsed.fragment)
     )
+    fragment = (
+        REDACTED
+        if any(
+            _normal_key(unquote_plus(key)) in SENSITIVE_KEY_NAMES
+            for key in fragment_keys
+        )
+        else parsed.fragment
+    )
+    return urlunsplit((parsed.scheme, netloc, parsed.path, query, fragment))
 
 
 def redact_capture(value: Any, secrets: Sequence[str]) -> Any:

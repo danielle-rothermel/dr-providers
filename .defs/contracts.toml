@@ -18,9 +18,10 @@ title = "Call assignments are validated before identity and wire encoding"
 statement = """
 Controls reject coercive and non-finite values; provider body extensions are \
 strict finite JSON, deeply isolated, declared by the definition, and unable \
-to replace core wire fields. Missing required and unmappable controls always \
-fail; unsupported controls fail unless unsupported-control dropping is \
-explicitly enabled."""
+to replace core wire fields. Every advertised control has a usable wire \
+mapping. Missing required controls and unmappable values for supported \
+controls always fail; unsupported controls fail unless unsupported-control \
+dropping is explicitly enabled."""
 rationale = """
 Identity and wire encoding must consume the same validated meaning. Allowing \
 coercion, mutable aliases, undeclared extensions, or core-field replacement \
@@ -57,6 +58,19 @@ configuration errors or unexpected defects into returned values would hide \
 bugs."""
 date = "2026-08-05"
 check = "uv run pytest -q tests/core/test_provider.py tests/transport/test_http.py"
+
+[[contracts]]
+title = "Raised provider failures have one classification"
+statement = """
+A raised provider error's nominal class, carried failure-record class, and \
+derived retryability cannot disagree. Direct construction with a mismatched \
+record is rejected."""
+rationale = """
+Callers may branch on either the exception type or its structured record. A \
+contradiction between those public signals would make recovery decisions \
+depend on which representation a caller happened to inspect."""
+date = "2026-08-05"
+check = "uv run pytest -q tests/core/test_failures.py"
 
 [[contracts]]
 title = "Native retry is bounded and transport-only"
@@ -97,13 +111,15 @@ frozen HTTP request evidence, and exactly one response or failure in a \
 versioned identity document. The standard HTTP path redacts known credential \
 headers and retains complete decoded JSON-or-text bodies without silent \
 truncation, but not original wire bytes. Direct construction, deserialization, \
-and base URLs are trusted inputs; outcome dictionaries remain mutable."""
+and outcome dictionaries are trusted inputs and remain mutable. Validated \
+transport-policy construction and deserialization reject URL userinfo before \
+the base URL can be retained in evidence."""
 rationale = """
 Evidence must say exactly what is retained and where sanitization occurs. \
 Claiming byte fidelity, universal secret detection, or deep immutability would \
 exceed the observable implementation and encourage unsafe downstream use."""
 date = "2026-08-05"
-check = "uv run pytest -q tests/outcomes/test_evidence.py"
+check = "uv run pytest -q tests/outcomes/test_evidence.py tests/transport/test_policy.py"
 
 [[contracts]]
 title = "Conformance warnings are advisory"

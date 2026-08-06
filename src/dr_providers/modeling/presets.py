@@ -27,6 +27,7 @@ def _chat_constraints(
     reasoning_shape: ReasoningRequestShape,
 ) -> ControlConstraints:
     return ControlConstraints(
+        supported_controls=frozenset(RequestControl),
         token_limit_parameter=token_limit_parameter,
         reasoning_shape=reasoning_shape,
     )

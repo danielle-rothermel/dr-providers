@@ -149,3 +149,27 @@ class TestPolicyFor:
 
         assert payload["api_key_env"] == "OPENAI_API_KEY"
         assert "api_key" not in payload
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "https://user@example.test/v1",
+            "https://user:secret@example.test/v1",
+        ],
+        ids=("username", "username-password"),
+    )
+    def test_base_url_userinfo_rejected(self, base_url: str) -> None:
+        with pytest.raises(
+            ValidationError, match="must not contain URL userinfo"
+        ):
+            ProviderTransportPolicy(
+                api_key_env="OPENAI_API_KEY",
+                base_url=base_url,
+            )
+
+        with pytest.raises(
+            ValidationError, match="must not contain URL userinfo"
+        ):
+            ProviderTransportPolicy.model_validate_json(
+                f'{{"api_key_env":"OPENAI_API_KEY","base_url":"{base_url}"}}'
+            )

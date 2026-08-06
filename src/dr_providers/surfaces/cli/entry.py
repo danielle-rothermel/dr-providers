@@ -13,7 +13,9 @@ def main() -> None:
         from dr_providers.surfaces.cli.app import (  # noqa: PLC0415
             app,
         )
-    except ImportError:
+    except ModuleNotFoundError as exc:
+        if exc.name != "typer":
+            raise
         print(_MISSING_CLI_HINT, file=sys.stderr)
         raise SystemExit(1) from None
     app()

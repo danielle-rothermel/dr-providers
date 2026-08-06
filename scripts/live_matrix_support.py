@@ -120,8 +120,13 @@ def missing_credentials(
 
 def credential_values(environment: Mapping[str, str]) -> tuple[str, ...]:
     """Collect secret values for redaction without emitting them."""
-    names = set(CREDENTIAL_ALIASES) | set(CREDENTIAL_ALIASES.values())
-    return tuple(value for name in names if (value := environment.get(name)))
+    names = (
+        {case.credential_env for case in LIVE_CASES}
+        | set(CREDENTIAL_ALIASES)
+        | set(CREDENTIAL_ALIASES.values())
+    )
+    values = {value for name in names if (value := environment.get(name))}
+    return tuple(sorted(values, key=lambda value: (-len(value), value)))
 
 
 def require_external_capture_dir(path: Path) -> Path:

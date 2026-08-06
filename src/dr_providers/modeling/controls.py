@@ -94,7 +94,11 @@ class GenerationControls(BaseModel):
 
 
 DEFAULT_SUPPORTED_CONTROLS: frozenset[RequestControl] = frozenset(
-    RequestControl
+    {
+        RequestControl.TEMPERATURE,
+        RequestControl.TOP_P,
+        RequestControl.TOKEN_LIMIT,
+    }
 )
 
 
@@ -107,6 +111,24 @@ class ControlConstraints(BaseModel):
     token_limit_parameter: TokenLimitParameter
     reasoning_shape: ReasoningRequestShape = ReasoningRequestShape.NONE
     allow_unsupported_control_drop: bool = False
+
+    @model_validator(mode="after")
+    def _require_mapping_for_supported_reasoning(self) -> ControlConstraints:
+        if (
+            self.supports(RequestControl.REASONING)
+            and self.reasoning_shape is ReasoningRequestShape.NONE
+        ):
+            raise ControlValidationError(
+                failure_record(
+                    failure_class=FailureClass.PERMANENT,
+                    code="reasoning_mapping_missing",
+                    message=(
+                        "reasoning cannot be advertised as supported without "
+                        "a wire mapping"
+                    ),
+                )
+            )
+        return self
 
     @field_serializer("supported_controls", when_used="json")
     def _serialize_supported_controls(

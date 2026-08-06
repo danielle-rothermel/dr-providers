@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -9,6 +10,7 @@ from pydantic import (
     Field,
     StrictInt,
     StrictStr,
+    field_validator,
     model_validator,
 )
 
@@ -54,7 +56,7 @@ class ProviderTransportPolicy(BaseModel):
 
     api_key_env: StrictStr
     base_url: StrictStr | None = None
-    """Retained verbatim in evidence; must not contain credentials."""
+    """Retained verbatim in evidence after URL userinfo is rejected."""
     timeout_seconds: float = Field(
         default=DEFAULT_TIMEOUT_SECONDS,
         gt=0,
@@ -75,6 +77,17 @@ class ProviderTransportPolicy(BaseModel):
     """Per-operation httpx idle bound, clamped to ``timeout_seconds``."""
     native_retry_count: StrictInt = Field(default=0, ge=0)
 
+    @field_validator("base_url")
+    @classmethod
+    def _reject_url_userinfo(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value)
+        if parsed.username is not None or parsed.password is not None:
+            msg = "base_url must not contain URL userinfo"
+            raise ValueError(msg)
+        return value
+
     @model_validator(mode="after")
     def _clamp_idle_to_timeout(self) -> ProviderTransportPolicy:
         if self.idle_timeout_seconds > self.timeout_seconds:
@@ -86,7 +99,7 @@ class ProviderTransportPolicy(BaseModel):
     def identity_payload(self) -> dict[str, Any]:
         """Include the credential variable name, never its value.
 
-        ``base_url`` is retained verbatim and must not contain credentials.
+        ``base_url`` is retained verbatim after URL userinfo is rejected.
         """
         return {
             "api_key_env": self.api_key_env,

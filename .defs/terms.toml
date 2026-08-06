@@ -113,7 +113,8 @@ exported_symbols = ["ProviderQuotaIdentity"]
 name = "provider call definition"
 definition = """
 A variable-bearing definition declaring a model route, supported and \
-required controls, wire mappings, extension keys, and identity effects."""
+required controls, usable wire mappings for advertised controls, extension \
+keys, and identity effects."""
 exported_symbols = [
   "ProviderCallDefinition",
   "PROVIDER_CALL_DEFINITION_SCHEMA",
@@ -223,8 +224,8 @@ exported_symbols = ["ProviderTransportOutcome", "is_response", "is_failure"]
 [[terms]]
 name = "provider failure record"
 definition = """
-A compact classification record carried by raised provider errors, distinct \
-from the flat returned provider transport failure."""
+A compact classification record carried consistently by its raised provider \
+error, distinct from the flat returned provider transport failure."""
 exported_symbols = [
   "ProviderFailure",
   "ControlValidationError",

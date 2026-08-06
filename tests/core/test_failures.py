@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from dr_providers import (
     FAILURE_ERROR_TYPES,
@@ -6,6 +7,7 @@ from dr_providers import (
     RETRYABLE_FAILURE_CLASSES,
     FailureClass,
     PermanentProviderError,
+    ProviderFailure,
     ProviderFailureError,
     RateLimitedProviderError,
     ResourceExhaustionProviderError,
@@ -68,3 +70,44 @@ def test_failure_taxonomy_and_carrier_mapping(
     assert str(error) == failure.message
     assert error.failure is failure
     assert error.underlying is underlying
+
+
+@pytest.mark.parametrize(
+    ("failure_class", "error_type"),
+    [(case[0], case[2]) for case in FAILURE_CASES],
+)
+def test_failure_carrier_rejects_mismatched_classification(
+    failure_class: FailureClass,
+    error_type: type[ProviderFailureError],
+) -> None:
+    mismatched_class = next(
+        candidate
+        for candidate in FailureClass
+        if candidate is not failure_class
+    )
+    failure = failure_record(
+        failure_class=mismatched_class,
+        message="contradictory classification",
+    )
+
+    with pytest.raises(ValueError, match="requires failure class"):
+        error_type(failure)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (FailureClass.PERMANENT, True),
+        (FailureClass.TRANSIENT, False),
+    ],
+)
+def test_failure_record_rejects_inconsistent_retryability(
+    case: tuple[FailureClass, bool],
+) -> None:
+    failure_class, retryable = case
+    with pytest.raises(ValidationError, match="requires retryable"):
+        ProviderFailure(
+            failure_class=failure_class,
+            message="contradictory retryability",
+            retryable=retryable,
+        )

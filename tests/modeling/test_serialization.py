@@ -12,6 +12,7 @@ from dr_providers import (
     Protocol,
     ProviderCallDefinition,
     ProviderKind,
+    ReasoningRequestShape,
     RequestControl,
     TokenLimitParameter,
 )
@@ -35,7 +36,7 @@ EXPECTED_JSON_DUMP = {
             "top_p",
         ],
         "token_limit_parameter": "max_completion_tokens",
-        "reasoning_shape": "none",
+        "reasoning_shape": "effort_field",
         "allow_unsupported_control_drop": False,
     },
     "required_controls": ["temperature", "top_p"],
@@ -52,6 +53,7 @@ from dr_providers import (
     ProviderCallDefinition,
     ProviderKind,
     RequestControl,
+    ReasoningRequestShape,
     TokenLimitParameter,
 )
 
@@ -65,6 +67,7 @@ definition = ProviderCallDefinition(
     constraints=ControlConstraints(
         supported_controls=frozenset(RequestControl),
         token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+        reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
     ),
     required_controls=frozenset(
         {RequestControl.TOP_P, RequestControl.TEMPERATURE}
@@ -86,6 +89,7 @@ def _definition() -> ProviderCallDefinition:
         constraints=ControlConstraints(
             supported_controls=frozenset(RequestControl),
             token_limit_parameter=(TokenLimitParameter.MAX_COMPLETION_TOKENS),
+            reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
         ),
         required_controls=frozenset(
             {RequestControl.TOP_P, RequestControl.TEMPERATURE}

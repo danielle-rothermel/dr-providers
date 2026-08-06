@@ -21,6 +21,7 @@ from scripts.live_matrix_support import (
     CAPTURE_DIR_ENV,
     LIVE_CASES,
     ROOT,
+    credential_values,
     mapped_provider_environment,
     require_external_capture_dir,
     select_cases,
@@ -163,6 +164,7 @@ def _synthetic_capture_bodies() -> dict[str, dict[str, object]]:
                 "url": (
                     "https://user:password@example.test/v1"
                     "?api_key=unlisted-token"
+                    "#access_token=fragment-secret&state=public"
                 ),
             },
         },
@@ -215,8 +217,61 @@ def test_complete_capture_is_redacted_validated_and_promoted(
     assert metadata == {
         "authorization": "[REDACTED]",
         "echo": "[REDACTED]",
-        "url": "https://redacted@example.test/v1?api_key=%5BREDACTED%5D",
+        "url": (
+            "https://redacted@example.test/v1?api_key=%5BREDACTED%5D"
+            "#[REDACTED]"
+        ),
     }
+
+
+def test_all_live_credentials_are_collected_and_redacted() -> None:
+    environment = {
+        "OPENROUTER_API_KEY": "secret-openrouter",
+        "GEMINI_API_KEY": "secret-gemini",
+        "MARIMO_OPENAI_API_KEY": "secret-openai",
+        "OPENCODE_ANTHROPIC_API_KEY": "secret-anthropic",
+    }
+
+    mapped = mapped_provider_environment(environment)
+    secrets = credential_values(mapped)
+
+    assert set(secrets) == set(environment.values())
+    assert capture_live_corpus.redact_capture(
+        {"echoes": list(secrets)}, secrets
+    ) == {"echoes": ["[REDACTED]"] * len(secrets)}
+
+
+def test_overlapping_live_credentials_redact_longest_first() -> None:
+    environment = {
+        "OPENROUTER_API_KEY": "shared-prefix",
+        "GEMINI_API_KEY": "shared-prefix-suffix",
+    }
+
+    secrets = credential_values(environment)
+
+    assert (
+        capture_live_corpus.redact_capture(
+            "echo: shared-prefix-suffix", secrets
+        )
+        == "echo: [REDACTED]"
+    )
+
+
+def test_url_redaction_preserves_opaque_fragment() -> None:
+    url = "https://example.test/v1#section-2"
+
+    assert capture_live_corpus.redact_capture(url, ()) == url
+
+
+def test_url_redaction_replaces_sensitive_routed_fragment() -> None:
+    url = (
+        "https://example.test/v1#/callback/unchanged"
+        "?route=/foo/bar&access_token=fragment-secret&state=public"
+    )
+
+    assert capture_live_corpus.redact_capture(url, ()) == (
+        "https://example.test/v1#[REDACTED]"
+    )
 
 
 def test_promote_cli_reexecs_under_mise_and_redacts_mapped_secret(

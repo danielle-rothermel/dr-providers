@@ -15,6 +15,7 @@ from dr_providers import (
     ProviderCallDefinition,
     ProviderKind,
     ReasoningEffort,
+    ReasoningRequestShape,
     RequestControl,
     TokenLimitParameter,
     anthropic_messages_config,
@@ -150,6 +151,44 @@ class TestDefinitionValidation:
             controls=GenerationControls(temperature=0.5)
         )
         assert config.controls.temperature == 0.5
+
+    def test_unsupported_anthropic_reasoning_can_be_dropped(self) -> None:
+        definition = ProviderCallDefinition(
+            definition_id="test.anthropic",
+            route=ModelRoute(
+                provider=ProviderKind.ANTHROPIC,
+                protocol=Protocol.ANTHROPIC_MESSAGES,
+                model="m",
+            ),
+            constraints=ControlConstraints(
+                supported_controls=frozenset({RequestControl.TOKEN_LIMIT}),
+                token_limit_parameter=TokenLimitParameter.MAX_TOKENS,
+                allow_unsupported_control_drop=True,
+            ),
+        )
+
+        config = definition.materialize(
+            controls=GenerationControls(reasoning=ReasoningEffort.NONE)
+        )
+
+        assert config.controls.reasoning is ReasoningEffort.NONE
+
+    def test_default_constraints_do_not_advertise_reasoning(self) -> None:
+        constraints = ControlConstraints(
+            token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS
+        )
+
+        assert not constraints.supports(RequestControl.REASONING)
+
+    def test_supported_reasoning_requires_wire_mapping(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            ControlConstraints(
+                supported_controls=frozenset({RequestControl.REASONING}),
+                token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
+                reasoning_shape=ReasoningRequestShape.NONE,
+            )
+
+        assert exc_info.value.failure.code == "reasoning_mapping_missing"
 
     def test_required_control_must_be_assigned(self) -> None:
         definition = self._constrained_definition(
