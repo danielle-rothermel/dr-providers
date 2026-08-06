@@ -5,30 +5,61 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: depot-ubuntu-24.04
+    env:
+      UV_NO_SOURCES: "1"
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.25"
           python-version: ${{ matrix.python-version }}
-      - run: uv sync --all-extras
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run ty check
-      - run: uv run pytest
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: scripts/pre-check.sh
 
   package:
+    needs: test
     runs-on: depot-ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.25"
           python-version: "3.12"
+          enable-cache: false
       - run: uv build
-      - run: uvx twine check dist/*
+      - run: uvx --from twine==7.0.0 twine check --strict dist/*
+      - name: Verify the built wheel
+        run: |
+          wheel_count="$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')"
+          if [ "${wheel_count}" != "1" ]; then
+            echo "::error::Expected one wheel, found ${wheel_count}"
+            exit 1
+          fi
+          wheel="$(find dist -maxdepth 1 -type f -name '*.whl')"
+          expected_version="$(uv version --short)"
+          wheel_environment="$(mktemp -d)"
+          uv venv --python 3.12 "${wheel_environment}"
+          uv pip install --python "${wheel_environment}/bin/python" "${wheel}[cli,serve]"
+          "${wheel_environment}/bin/python" -I scripts/check_built_install.py "${expected_version}"
+          "${wheel_environment}/bin/dr-providers" --help >/dev/null

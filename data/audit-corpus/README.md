@@ -1,15 +1,13 @@
 # Audit Corpus
 
-A small, committed corpus of ponytail audit outputs used as a stable input
-fixture for demo and benchmark workflows in this repo. It was captured by
-running pi agent with `gpt-5.5` against `dr-providers` (prompt: "please run a
-ponytail audit of this repo"), three runs at each thinking level. It was
-originally designed as a shared fixture for demos in the now-archived
-`dr-queues` and `dr-bottleneck` repos as well.
+A small, committed corpus of ponytail audit outputs used as the stable input
+fixture for this repository's deterministic ground-truth generator and tests.
+It contains three `gpt-5.5` audit runs at each thinking level for the prompt
+recorded in `manifest.json`.
 
-Treat these files as stable inputs. Generated model outputs, parsed results,
-and benchmark reports should be written elsewhere unless they become curated
-snapshots.
+Treat the raw audit files and curated canonical mapping as stable inputs. The
+parsed results and analysis are committed generator outputs verified by the
+test suite.
 
 ## Layout
 

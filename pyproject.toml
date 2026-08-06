@@ -1,7 +1,7 @@
 [project]
 name = "dr-providers"
-version = "0.2.1"
-description = "Typed LLM provider-call kernel for OpenAI, Anthropic, OpenRouter, and Gemini: identity-hashed configs, one request/response/failure vocabulary, no-throw transport."
+version = "0.2.2"
+description = "Typed LLM provider-call kernel for OpenAI, Anthropic, OpenRouter, and Gemini with identity-bearing configs and expected failures as values."
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -26,10 +26,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 dependencies = [
-    "dr-serialize>=0.1.1,<0.2",
+    "dr-serialize>=0.1.2,<0.2",
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
 ]
@@ -43,7 +44,7 @@ serve = [
 ]
 
 [project.scripts]
-dr-providers = "dr_providers._entry:main"
+dr-providers = "dr_providers.surfaces.cli.entry:main"
 
 [project.urls]
 Repository = "https://github.com/danielle-rothermel/dr-providers"
@@ -58,6 +59,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "httpx2>=2.9.1",
     "pre-commit>=4.6.0",
     "pytest>=9.1.1",
     "ruff>=0.15.18",
@@ -70,7 +72,7 @@ only-include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not live'"
+addopts = "--strict-markers -m 'not live'"
 markers = [
     "live: hits real provider endpoints; requires API keys",
 ]

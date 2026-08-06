@@ -2,52 +2,122 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
+  validate:
+    name: Validate (Python ${{ matrix.python-version }})
     runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      UV_NO_SOURCES: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v8.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          python-version: "3.12"
-      - run: uv sync --all-extras
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run ty check
-      - run: uv run pytest
-      - run: uv build
-      - run: uvx twine check dist/*
-      - name: Verify tag matches pyproject version
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.25"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+      - run: scripts/pre-check.sh
+
+  build:
+    name: Build distributions
+    needs: validate
+    runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release tag
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          project="$(uv version --short)"
-          echo "tag=${tag} pyproject=${project}"
-          if [ "${tag}" != "${project}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} != pyproject version ${project}"
+          version="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          expected="v${version}"
+          if [ "${GITHUB_REF_NAME}" != "${expected}" ]; then
+            echo "Pushed tag '${GITHUB_REF_NAME}' does not match pyproject version (expected '${expected}')" >&2
             exit 1
           fi
-      - uses: actions/upload-artifact@v4
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "Tagged commit '${GITHUB_SHA}' is not reachable from main" >&2
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          name: dist
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      - run: uv build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: distributions
           path: dist/
+          if-no-files-found: error
 
-  publish:
+  verify:
+    name: Verify distributions
     needs: build
     runs-on: depot-ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.25"
+          python-version: "3.12"
+          enable-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: distributions
+          path: dist/
+      - run: uvx --from twine==7.0.0 twine check --strict dist/*
+      - name: Verify the built wheel
+        run: |
+          wheel_count="$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')"
+          if [ "${wheel_count}" != "1" ]; then
+            echo "::error::Expected one wheel, found ${wheel_count}"
+            exit 1
+          fi
+          wheel="$(find dist -maxdepth 1 -type f -name '*.whl')"
+          expected_version="$(uv version --short)"
+          wheel_environment="$(mktemp -d)"
+          uv venv --python 3.12 "${wheel_environment}"
+          uv pip install --python "${wheel_environment}/bin/python" "${wheel}[cli,serve]"
+          "${wheel_environment}/bin/python" -I scripts/check_built_install.py "${expected_version}"
+          "${wheel_environment}/bin/dr-providers" --help >/dev/null
+
+  publish:
+    name: Publish to PyPI
+    needs: [build, verify]
+    runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/p/dr-providers
     permissions:
-      contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: dist
+          name: distributions
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/
