@@ -13,7 +13,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instructions, deterministic retry and cancellation transitions, and a thin
   cancellation-aware local lifecycle driver.
 - Export the provider-call lifecycle models, policies, classifiers, transitions,
-  identities, and local driver from the lifecycle package surface.
+  identities, and local driver from the stable top-level package surface.
+- Publish the provider-call lifecycle vocabulary and standing contracts in the
+  repository definitions.
 
 ### Changed
 

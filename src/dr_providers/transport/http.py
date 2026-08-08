@@ -71,7 +71,7 @@ def _operational_timeout_seconds(timeout_seconds: float) -> float:
 
 
 def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
-    """Use only native phase timeouts; no caller-return watchdog worker."""
+    """Use direct native phase timeouts for the synchronous HTTP operation."""
     operation_timeout = _operational_timeout_seconds(policy.timeout_seconds)
     read_timeout = _operational_timeout_seconds(policy.idle_timeout_seconds)
     return httpx.Timeout(

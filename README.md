@@ -25,8 +25,8 @@ identity, provider translation, transport policy, and outcomes separate.
 | `dr_providers.surfaces.serve` | Optional localhost FastAPI facade |
 
 The top-level `dr_providers` exports are the stable general import surface.
-Lifecycle-specific contracts are exported by `dr_providers.lifecycle`; the
-remaining functional-area module paths primarily make ownership discoverable.
+Functional-area module paths primarily make ownership discoverable; they are
+not a second compatibility surface.
 
 ## Install
 
@@ -48,27 +48,25 @@ selected by their transport policy:
 
 ## Python quickstart
 
-This OpenAI example uses the stable general and lifecycle import surfaces:
+This OpenAI example uses the stable package import surface:
 
 ```python
 from threading import Event
 
 from dr_providers import (
+    AcceptAllSemanticResponseClassifier,
     GenerationControls,
     HttpProvider,
     MessageRole,
     PromptMessage,
+    ProviderCallOutcomeKind,
     ProviderCallRequest,
+    ProviderCallState,
     ProviderKind,
+    StandardProviderCallRetryPolicy,
     Transcript,
     openai_responses_config,
     policy_for,
-)
-from dr_providers.lifecycle import (
-    AcceptAllSemanticResponseClassifier,
-    ProviderCallOutcomeKind,
-    ProviderCallState,
-    StandardProviderCallRetryPolicy,
     run_local_provider_call,
 )
 
@@ -145,19 +143,26 @@ evidence is the sole owner of the constructed request-body mapping.
 serializable retry policy through the deterministic lifecycle transition, and
 returns the complete ordered `ProviderCallResult`. The standard policy permits
 at most two invocations with one one-second retry, only for contained transient
-network/provider failures and contained transport timeouts. Uncontained
-deadline expiration remains terminal in the lifecycle schema. The standard
-HTTP provider uses direct synchronous native phase timeouts, so its timeout
-failures are contained after the HTTP operation returns. It owns and reuses one
-bounded client; closing stops admission, drains active invocations, and closes
-that client once.
+network/provider failures and contained transport timeouts. The standard HTTP
+provider uses direct synchronous native phase timeouts, so it observes a timeout
+only after the local HTTP operation has ended. It owns and reuses one bounded
+client; closing stops admission, drains active invocations, and closes that
+client once.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared
 next state and schedule the instruction's delay before invoking again; restoring
 at that boundary produces the same terminal result as the uninterrupted local
-driver. Storage, scheduling, and exactly-once provider effects remain outside
-this package.
+driver. The local driver follows transition outputs and performs only its
+declared cancellation-aware wait; the deterministic transition owns retry and
+terminal decisions.
+
+Cancellation is draining: it starts no successor and retains an active
+invocation observation if that invocation completes. It does not promise remote
+provider cancellation or prompt release of provider capacity. Lifecycle values
+are neutral to storage and workflow runtimes. This package does not provide
+durable persistence, workflow scheduling, global admission, or exactly-once
+provider effects.
 
 The exact encoded request body and decompressed response body are bounded by
 identity-bearing transport policy limits. Complete in-limit response bodies are

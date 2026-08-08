@@ -74,8 +74,7 @@ part_of = ["provider call request"]
 [[terms]]
 name = "provider"
 definition = """
-An executor that accepts a provider call request and returns a provider \
-transport outcome."""
+An executor of provider invocations for provider call requests."""
 exported_symbols = ["Provider"]
 
 [[terms]]
@@ -164,8 +163,9 @@ exported_symbols = [
 [[terms]]
 name = "provider transport policy"
 definition = """
-Operational credential-location, endpoint, timeout, idle-bound, and native-\
-retry policy that is excluded from provider-call identity."""
+An identity-bearing declaration of provider credentials location, endpoint, \
+native phase timeouts, connection-pool limits, and request and response byte \
+limits. It is excluded from provider-call request identity."""
 exported_symbols = [
   "ProviderTransportPolicy",
   "ApiKeyEnv",
@@ -173,6 +173,10 @@ exported_symbols = [
   "DEFAULT_API_KEY_ENVS",
   "DEFAULT_BASE_URLS",
   "DEFAULT_IDLE_TIMEOUT_SECONDS",
+  "DEFAULT_MAX_CONNECTIONS",
+  "DEFAULT_MAX_KEEPALIVE_CONNECTIONS",
+  "DEFAULT_MAX_REQUEST_BYTES",
+  "DEFAULT_MAX_RESPONSE_BYTES",
   "DEFAULT_TIMEOUT_SECONDS",
   "policy_for",
 ]
@@ -201,9 +205,9 @@ part_of = ["provider invocation evidence"]
 [[terms]]
 name = "provider transport failure"
 definition = """
-A typed expected transport or parse failure containing classification, the \
-constructed request body, optional decoded-or-text response evidence, status, \
-and diagnostics. It is not a full HTTP request record."""
+A typed expected transport or protocol failure containing classification, a \
+bounded summary, optional decoded response evidence, status, and diagnostics. \
+It does not own provider HTTP request evidence."""
 exported_symbols = [
   "ProviderTransportFailure",
   "FailureClass",
@@ -217,15 +221,15 @@ part_of = ["provider invocation evidence"]
 [[terms]]
 name = "provider transport outcome"
 definition = """
-The closed response-or-failure result for expected provider-call \
-outcomes."""
+The closed response-or-failure observation retained by one provider \
+invocation, before invocation and call classification."""
 exported_symbols = ["ProviderTransportOutcome", "is_response", "is_failure"]
 
 [[terms]]
 name = "provider failure record"
 definition = """
 A compact classification record carried consistently by its raised provider \
-error, distinct from the flat returned provider transport failure."""
+error."""
 exported_symbols = [
   "ProviderFailure",
   "ControlValidationError",
@@ -255,8 +259,8 @@ part_of = ["provider transport response"]
 [[terms]]
 name = "provider HTTP request evidence"
 definition = """
-The retained method, URL, headers, and constructed body for one provider \
-invocation."""
+The retained method, URL, redacted headers, constructed body, and exact encoded \
+body size for one provider wire request."""
 exported_symbols = [
   "ProviderHttpRequestEvidence",
   "SANITIZE_KEYS",
@@ -268,11 +272,200 @@ part_of = ["provider invocation evidence"]
 [[terms]]
 name = "provider invocation evidence"
 definition = """
-A versioned serializable record binding request and policy identity payloads, \
-provider HTTP request evidence, and exactly one provider transport response \
-or failure."""
+A versioned serializable record binding request identity, optional transport-\
+policy identity and provider HTTP request evidence, optional byte accounting \
+and normalized rate-limit hint, and exactly one provider transport response or \
+failure. HTTP evidence is bounded by its declared transport policy."""
 exported_symbols = [
   "ProviderInvocationEvidence",
+  "ProviderRetryAfterHint",
   "PROVIDER_INVOCATION_EVIDENCE_SCHEMA",
   "PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION",
 ]
+
+[[terms]]
+name = "provider wire request"
+definition = """
+An outbound protocol request to a provider service."""
+part_of = ["provider invocation"]
+
+[[terms]]
+name = "provider invocation"
+definition = """
+One execution of a provider call request that makes at most one provider wire \
+request and produces one provider invocation evidence record."""
+part_of = ["provider call"]
+
+[[terms]]
+name = "provider call"
+definition = """
+Application of one provider call retry policy and semantic response classifier \
+to an ordered sequence of provider invocations for one provider call request, \
+producing one provider call result."""
+
+[[terms]]
+name = "provider call identity"
+definition = """
+The stable identity of a provider call's declared semantics, binding its \
+request, retry policy, classifier identifier, and schema version."""
+exported_symbols = [
+  "PROVIDER_CALL_SCHEMA",
+  "PROVIDER_CALL_SCHEMA_VERSION",
+  "provider_call_identity_document",
+  "provider_call_identity_hash",
+]
+part_of = ["provider call result"]
+
+[[terms]]
+name = "provider call retry policy"
+definition = """
+A frozen identity-bearing declaration of a finite invocation limit, eligible \
+provider invocation outcomes, and finite nonnegative delay rules."""
+exported_symbols = [
+  "PROVIDER_CALL_RETRY_POLICY_SCHEMA",
+  "PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION",
+  "STANDARD_RETRY_DELAYS_SECONDS",
+  "STANDARD_RETRY_ELIGIBLE_OUTCOMES",
+  "CustomProviderCallRetryPolicy",
+  "ProviderCallRetryPolicy",
+  "StandardProviderCallRetryPolicy",
+]
+part_of = ["provider call"]
+
+[[terms]]
+name = "semantic response classifier"
+definition = """
+A caller-supplied mapping from a valid provider transport response to success \
+or semantic rejection, identified by an opaque stable identifier whose meaning \
+the caller owns. It assigns no evaluation meaning."""
+exported_symbols = [
+  "ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER",
+  "AcceptAllSemanticResponseClassifier",
+  "SemanticResponseClassifier",
+  "SemanticResponseClassifierIdentifier",
+  "classify_semantic_response",
+]
+part_of = ["provider call"]
+
+[[terms]]
+name = "provider invocation outcome"
+definition = """
+The closed transport, protocol, or semantic classification of one provider \
+invocation, used to decide whether its provider call stops or continues."""
+exported_symbols = [
+  "ProviderInvocationOutcome",
+  "classify_provider_invocation",
+]
+part_of = ["provider call result"]
+
+[[terms]]
+name = "contained transport timeout"
+definition = """
+A provider invocation outcome in which a native transport timeout ends the \
+local HTTP operation before the outcome is observed."""
+is_a = ["provider invocation outcome"]
+
+[[terms]]
+name = "uncontained deadline expiration"
+definition = """
+A provider invocation outcome for evidence that does not establish local \
+termination of the associated operation."""
+is_a = ["provider invocation outcome"]
+
+[[terms]]
+name = "provider call state"
+definition = """
+The closed versioned serializable state needed to validate and continue one \
+provider call between provider invocations."""
+exported_symbols = [
+  "PROVIDER_CALL_STATE_SCHEMA_VERSION",
+  "ProviderCallState",
+]
+part_of = ["provider call"]
+
+[[terms]]
+name = "completed provider invocation observation"
+definition = """
+One completed provider invocation's ordinal, request reference, evidence \
+reference, and provider invocation outcome before a retry decision."""
+exported_symbols = [
+  "COMPLETED_INVOCATION_OBSERVATION_SCHEMA",
+  "COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION",
+  "CompletedProviderInvocationObservation",
+]
+part_of = ["decided provider invocation record"]
+
+[[terms]]
+name = "decided provider invocation record"
+definition = """
+A completed provider invocation observation bound to its selected retry \
+decision, when another invocation is permitted."""
+exported_symbols = [
+  "DECIDED_INVOCATION_RECORD_SCHEMA",
+  "DECIDED_INVOCATION_RECORD_SCHEMA_VERSION",
+  "DecidedProviderInvocationRecord",
+]
+part_of = ["provider call state", "provider call result"]
+
+[[terms]]
+name = "provider call transition"
+definition = """
+A deterministic advancement from provider call state and a completed \
+invocation observation to a provider retry instruction or provider call \
+result."""
+exported_symbols = ["transition_provider_call"]
+
+[[terms]]
+name = "provider retry instruction"
+definition = """
+The nonterminal output of a provider call transition, declaring the selected \
+delay, next invocation ordinal, and next provider call state."""
+exported_symbols = [
+  "PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION",
+  "ProviderRetryDecision",
+  "ProviderRetryDelaySource",
+  "ProviderRetryInstruction",
+]
+
+[[terms]]
+name = "provider retry wait"
+definition = """
+A local execution boundary that waits for a provider retry instruction's \
+declared delay and observes cancellation."""
+exported_symbols = ["EventProviderRetryWait", "ProviderRetryWait"]
+
+[[terms]]
+name = "draining cancellation"
+definition = """
+Cooperative cancellation that starts no successor and retains any completed \
+active invocation observation. It does not promise prompt release of remote \
+resources."""
+exported_symbols = ["cancel_provider_call"]
+is_a = ["provider call outcome"]
+
+[[terms]]
+name = "provider call outcome"
+definition = """
+The closed terminal classification of one provider call: acceptance, a \
+policy-terminal invocation outcome, draining cancellation, or retry-policy \
+exhaustion."""
+exported_symbols = ["ProviderCallOutcome", "ProviderCallOutcomeKind"]
+part_of = ["provider call result"]
+
+[[terms]]
+name = "provider call result"
+definition = """
+The complete versioned serializable terminal value containing provider call \
+identity, ordered decided invocation records, and one provider call outcome."""
+exported_symbols = [
+  "PROVIDER_CALL_RESULT_SCHEMA",
+  "PROVIDER_CALL_RESULT_SCHEMA_VERSION",
+  "ProviderCallResult",
+]
+
+[[terms]]
+name = "local provider call driver"
+definition = """
+A synchronous executor that performs provider invocations and follows provider \
+call transition outputs until cancellation or a terminal result."""
+exported_symbols = ["run_local_provider_call"]

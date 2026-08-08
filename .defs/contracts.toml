@@ -43,20 +43,17 @@ date = "2026-08-05"
 check = "uv run pytest -q tests/modeling/test_call.py::TestConfigPresets::test_openrouter_chat"
 
 [[contracts]]
-title = "Expected transport results are values"
+title = "Provider invocation is the wire-request boundary"
 statement = """
-Provider HTTP statuses, credential lookup failures, supported network and \
-timeout failures, decoding failures, and response-parse outcomes return the \
-closed provider transport response-or-failure union. Invalid caller-supplied \
-transport configuration and unexpected programming or infrastructure errors \
-may raise."""
+Each provider invocation makes at most one provider wire request and produces \
+one provider invocation evidence record containing exactly one provider \
+transport response or expected failure. Retries occur only as distinct visible \
+invocations. Invalid caller-supplied configuration and unexpected programming \
+or infrastructure errors may raise."""
 rationale = """
-Callers need stable data for ordinary provider outcomes and explicit \
-exceptions for defects and invalid inputs outside that result vocabulary. \
-Treating every failure as an exception would erase this boundary; swallowing \
-configuration errors or unexpected defects into returned values would hide \
-bugs."""
-date = "2026-08-05"
+Visible invocation boundaries keep wire-request counts and evidence auditable \
+while preserving exceptions for invalid input and defects."""
+date = "2026-08-08"
 check = "uv run pytest -q tests/core/test_provider.py tests/transport/test_http.py"
 
 [[contracts]]
@@ -73,53 +70,185 @@ date = "2026-08-05"
 check = "uv run pytest -q tests/core/test_failures.py"
 
 [[contracts]]
-title = "Native retry is bounded and transport-only"
+title = "One serializable state machine owns retry transitions"
 statement = """
-Native retry defaults to zero, performs at most native_retry_count plus one \
-attempts, continues only for retryable failures, and stops on success or \
-permanent failure. It supplies no semantic retry, backoff, durability, or \
-checkpointing."""
+Provider call state is closed, versioned, and serializable. It validates call \
+components, ordered invocation ordinals, completed-record hashes, and the next \
+legal transition. Given current state and one completed invocation observation, \
+the deterministic transition produces either a terminal provider call result or \
+a provider retry instruction containing the selected delay, next ordinal, and \
+next state. Serializing and restoring state between invocations preserves the \
+terminal result."""
 rationale = """
-The transport can repeat a bounded native attempt but cannot decide whether a \
-provider result is semantically acceptable or whether an effect is safe to \
-repeat. Those decisions require caller-owned policy and persistence."""
-date = "2026-08-05"
-check = "uv run pytest -q tests/transport/test_http.py -k retry"
+Local and durable drivers can consume one retry model without sharing execution, \
+scheduling, or storage machinery."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_reducer.py tests/lifecycle/test_handoff.py"
 
 [[contracts]]
-title = "Attempt deadlines bound waiting, not containment"
+title = "Native transport timeouts are locally contained"
 statement = """
-Timeout values are strict positive finite policy values, and idle timeout is \
-clamped to the watchdog timeout. Each attempt applies per-operation idle \
-bounds and a caller-visible watchdog of timeout plus five seconds, capped at \
-the platform timeout ceiling. Expiry returns a typed transient failure but \
-does not prove worker or socket termination. Owned clients close best-effort, \
-and injected clients remain caller-owned."""
+Timeout values are strict positive finite policy values, and the response-read \
+idle timeout is clamped to the general timeout. Each provider wire request runs \
+directly under native connect, read, write, and pool timeouts. A native timeout \
+is observed only after the local HTTP operation has ended and is classified as \
+a contained transport timeout. Provider invocation starts no deadline worker or \
+child process."""
 rationale = """
-A synchronous client running in a daemon worker cannot be forcibly cancelled \
-by this package. The truthful guarantee bounds caller-visible waiting while \
-leaving process containment and caller-owned client lifecycle outside the \
-contract."""
-date = "2026-08-05"
-check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_timeout.py tests/transport/test_concurrency.py"
+Direct native execution preserves the reusable connection pool and makes the \
+implemented timeout containment boundary explicit."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_timeout.py tests/lifecycle/test_classification.py"
 
 [[contracts]]
-title = "Invocation evidence has explicit retention and redaction limits"
+title = "Invocation evidence is normalized and byte-bounded"
 statement = """
-Invocation evidence binds frozen request and policy identity payloads, deeply \
-frozen HTTP request evidence, and exactly one response or failure in a \
-versioned identity document. The standard HTTP path redacts known credential \
-headers and retains complete decoded JSON-or-text bodies without silent \
-truncation, but not original wire bytes. Direct construction, deserialization, \
-and outcome dictionaries are trusted inputs and remain mutable. Validated \
-transport-policy construction and deserialization reject URL userinfo before \
-the base URL can be retained in evidence."""
+Transport policy declares positive request and response byte limits that \
+participate in policy identity and invocation evidence. The exact encoded \
+request is counted before dispatch, and decompressed response bytes are streamed \
+and counted before decoding. Over-limit outcomes retain bounded resource-\
+exhaustion evidence and no partial body. Provider HTTP request evidence is the \
+sole owner of the constructed request body; transport failures do not repeat \
+it. Failure summaries are bounded and do not copy response bodies. The standard \
+HTTP path redacts known credential headers, while direct construction and \
+deserialization remain trusted inputs. Original wire bytes are not retained."""
 rationale = """
-Evidence must say exactly what is retained and where sanitization occurs. \
-Claiming byte fidelity, universal secret detection, or deep immutability would \
-exceed the observable implementation and encourage unsafe downstream use."""
-date = "2026-08-05"
-check = "uv run pytest -q tests/outcomes/test_evidence.py tests/transport/test_policy.py"
+Explicit bounds and ownership preserve truthful, self-contained evidence \
+without retry-amplified request data or unbounded buffering."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/outcomes/test_evidence.py tests/transport/test_bounds.py tests/lifecycle/test_handoff.py::test_two_invocation_result_does_not_amplify_large_evidence"
+
+[[contracts]]
+title = "Call results retain normalized complete invocation history"
+statement = """
+A self-contained provider call result stores the complete provider call request \
+and retry policy once. Each ordered decided invocation record binds one embedded \
+observation and its evidence to validated content hashes, refers to its request \
+by hash, and retains any selected retry decision. The result contains one \
+provider call outcome and does not add call-level usage or cost aggregates."""
+rationale = """
+The terminal value remains independently auditable without multiplying large \
+immutable payloads across retries."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_handoff.py tests/lifecycle/test_reducer.py"
+
+[[contracts]]
+title = "The standard retry policy is small and exact"
+statement = """
+The provider call retry policy is the sole retryability authority. The standard \
+policy permits at most two invocations and one deterministic one-second delay, \
+with one second of maximum cumulative delay in policy identity. It retries only \
+contained transient provider or network failure and contained transport timeout. \
+Rate limiting, uncontained deadline expiration, resource exhaustion, provider \
+rejection, permanent failure, and unknown failure are terminal. Blank response, \
+malformed response, and semantic rejection require an explicitly selected \
+custom policy. A retained normalized Retry-After hint does not affect the \
+standard policy."""
+rationale = """
+One explicit retry authority bounds request amplification while making broader \
+caller-selected policies identifiable."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_policy_and_outcomes.py tests/lifecycle/test_reducer.py tests/transport/test_bounds.py -k 'retry_after or standard_policy'"
+
+[[contracts]]
+title = "Invocation and call outcomes are closed and evaluation-neutral"
+statement = """
+Provider invocation outcomes form a closed transport, protocol, and semantic \
+classification. Strict protocol classification precedes semantic classification. \
+Provider call outcomes form a closed terminal classification of acceptance, a \
+policy-terminal invocation outcome, draining cancellation, or policy exhaustion. \
+Neither outcome model assigns application correctness, reward, rank, or \
+statistical meaning."""
+rationale = """
+Exhaustive provider outcomes support deterministic lifecycle transitions without \
+importing evaluation policy."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py"
+
+[[contracts]]
+title = "Semantic classification excludes evaluation policy"
+statement = """
+A semantic response classifier receives a valid nonblank provider transport \
+response and returns success or semantic rejection. Its opaque stable identifier \
+is supplied by the caller, which owns keeping the identifier aligned with \
+classifier behavior. The classifier assigns no application correctness, reward, \
+rank, task-selection, or statistical meaning."""
+rationale = """
+Provider execution needs response acceptance while applications own evaluation \
+meaning."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py -k classifier"
+
+[[contracts]]
+title = "Call and result identities serve different purposes"
+statement = """
+Provider call identity binds request and retry-policy identities, the opaque \
+classifier identifier, and provider-call schema version. Provider call result \
+identity binds call-level fields, ordered decided-record hashes, and the terminal \
+outcome. Embedded component hashes are validated. Package, dependency, runtime, \
+and duration diagnostics may affect result identity but not provider call \
+identity. Standard construction excludes declared credentials from identities \
+without claiming detection of undeclared secrets."""
+rationale = """
+Compositional content identity separates declared call semantics from the \
+complete terminal observation."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_reducer.py tests/lifecycle/test_handoff.py"
+
+[[contracts]]
+title = "HttpProvider owns one bounded reusable client lifecycle"
+statement = """
+Each HttpProvider owns one long-lived synchronous HTTP client with explicit \
+identity-bearing connection and keep-alive limits and reuses it across \
+invocations. Closing stops admission, drains active invocations, closes the \
+client exactly once, rejects new invocations, and leaves the provider terminal."""
+rationale = """
+One bounded owned lifecycle preserves pooling and makes shutdown and ownership \
+auditable."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/transport/test_http.py tests/transport/test_concurrency.py"
+
+[[contracts]]
+title = "Cancellation drains active invocation work"
+statement = """
+Draining cancellation interrupts retry waits through a cancellation event and \
+starts no successor. It does not preempt an active synchronous invocation; any \
+completed active invocation observation is retained before the call returns \
+draining cancellation. The outcome promises neither overload shedding nor prompt \
+release of remote provider capacity."""
+rationale = """
+Completed provider work remains attributable without treating cooperative \
+cancellation as remote resource control."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_driver.py tests/lifecycle/test_reducer.py -k cancellation"
+
+[[contracts]]
+title = "Lifecycle values are storage and workflow neutral"
+statement = """
+dr-providers owns provider invocation, evidence, outcomes, provider call state, \
+retry transitions, and terminal results. Its lifecycle values are serializable \
+without depending on a persistence engine or workflow runtime. External systems \
+may persist state and schedule declared retry instructions but do not redefine \
+retry eligibility. dr-providers makes no global-admission or workflow-membership \
+claim."""
+rationale = """
+Stable lifecycle semantics can run locally or durably without coupling provider \
+models to storage and orchestration machinery."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_handoff.py tests/core/test_package_structure.py"
+
+[[contracts]]
+title = "Serializable retries do not imply exactly-once provider effects"
+statement = """
+Each provider wire request may independently reach the provider. A provider call \
+result reports observed completed invocations but guarantees neither exactly-once \
+provider effects nor atomicity between an external effect and persistence of the \
+next state. Each completed invocation remains independently attributable."""
+rationale = """
+Serializable retry state supports handoff but cannot make an external provider \
+effect atomic with state persistence."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/lifecycle/test_handoff.py::test_serialized_two_invocation_handoff_matches_local_driver"
 
 [[contracts]]
 title = "Conformance warnings are advisory"
