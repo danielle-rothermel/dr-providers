@@ -51,16 +51,58 @@ used to decide whether the provider call stops or continues."""
 part_of = ["provider call result"]
 
 [[terms]]
+name = "contained transport timeout"
+definition = """
+A provider invocation outcome in which the local HTTP operation ended after a \
+transport timeout and no local worker remains active."""
+is_a = ["provider invocation outcome"]
+
+[[terms]]
+name = "uncontained deadline expiration"
+definition = """
+A provider invocation outcome in which a watchdog returned while a local worker \
+or socket for the provider wire request may remain active."""
+is_a = ["provider invocation outcome"]
+
+[[terms]]
+name = "provider call state"
+definition = """
+The closed versioned serializable state needed to validate and continue one \
+provider call between provider invocations."""
+part_of = ["provider call"]
+
+[[terms]]
+name = "provider call transition"
+definition = """
+A deterministic advancement from provider call state and either a completed \
+invocation record or cancellation observation to a provider retry instruction \
+or provider call result."""
+
+[[terms]]
+name = "provider retry instruction"
+definition = """
+The nonterminal output of a provider call transition, declaring the delay, next \
+invocation ordinal, and next provider call state."""
+
+[[terms]]
+name = "draining cancellation"
+definition = """
+Cooperative cancellation that stops pending progress, records any active \
+invocation's terminal observation, and starts no successor. It does not promise \
+prompt release of local or provider resources."""
+is_a = ["provider call outcome"]
+
+[[terms]]
 name = "provider call outcome"
 definition = """
 The terminal classification of one provider call: an accepted invocation \
-outcome, an invocation outcome for which policy stops, cooperative cancellation, \
+outcome, an invocation outcome for which policy stops, draining cancellation, \
 or retry-policy exhaustion."""
 part_of = ["provider call result"]
 
 [[terms]]
 name = "provider call result"
 definition = """
-The complete versioned serializable return value: provider call identity; \
+The complete versioned serializable terminal value: provider call identity; \
 ordered per-invocation associations of evidence, outcomes, and retry decisions; \
 and one provider call outcome."""

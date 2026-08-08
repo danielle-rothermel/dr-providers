@@ -11,51 +11,80 @@ and unexpected defects remain exceptions."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Returned call results preserve invocation history"
+title = "One serializable state machine owns retry transitions"
 statement = """
-A provider call result stores one ordered record per completed invocation, \
-binding its evidence, outcome, and any retry decision and delay. Cooperative \
-cancellation preserves every completed record. If requested during an in-flight \
-invocation, the executor lets that invocation return under its normal timeout, \
-records any returned evidence and outcome, makes the returned call outcome \
-cooperative cancellation, and starts no further invocation. Policy exhaustion \
-is explicit."""
+Provider call state is closed, versioned, and serializable. It validates request, \
+retry-policy, and classifier identities; ordered invocation ordinals; completed-\
+record hashes; and the next legal transition. Given current state and one \
+completed invocation record, one deterministic provider call transition returns \
+either a terminal provider call result or a provider retry instruction containing \
+the declared delay, next ordinal, and next state. Serializing and restoring state \
+between invocations does not change the result."""
 rationale = """
-The result explains what happened and why the call stopped without promising \
-persistence across interruption."""
+Local and durable drivers can execute one retry model without sharing execution \
+or storage machinery."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Retries are bounded, declared, and observable"
+title = "Call results normalize complete invocation history"
 statement = """
-A provider call retry policy is the sole retryability authority. It has stable \
-identity, a positive finite invocation limit, explicit outcome eligibility, and \
-delay rules. The result records each selected delay and source. The standard \
-policy retries transient provider or network failure, rate limiting, and \
-timeout. Blank response, malformed response, and semantic rejection require \
-explicit policy; all other outcomes are terminal under the standard policy. \
-Wall-clock time is excluded from provider call identity."""
+A self-contained provider call result stores the complete provider call request \
+identity document once. Each ordered invocation record refers to that request by \
+hash and binds its evidence, outcome, and any retry decision and delay. HTTP \
+request evidence is the sole owner of the translated request body. A transport \
+failure does not repeat it, and its bounded message does not copy a response body. \
+A decoded response body appears once per invocation; extracted generation text \
+may intentionally duplicate text within it. Repeated immutable components appear \
+once and are referenced by validated content hashes."""
 rationale = """
-One declared policy prevents transport evidence and retry behavior from \
-disagreeing while keeping selected retries auditable."""
+The result remains independently auditable without multiplying large immutable \
+payloads across retries."""
+date = "2026-08-08"
+
+[[contracts]]
+title = "The standard retry policy is small and exact"
+statement = """
+A provider call retry policy is the sole retryability authority. The standard \
+policy has a maximum of two invocations, one deterministic one-second delay, and \
+one second of maximum cumulative delay, all included in policy identity. It \
+retries only contained transient provider or network failure and contained \
+transport timeout. Rate limiting, uncontained deadline expiration, resource \
+exhaustion, provider rejection, permanent failure, and unknown failure are \
+terminal. Blank response, malformed response, and semantic rejection require an \
+explicitly selected custom policy. Each retry instruction and result records the \
+selected delay and source."""
+rationale = """
+The standard path bounds request and worker amplification while custom policies \
+make broader retry choices explicit and identifiable."""
 date = "2026-08-08"
 
 [[contracts]]
 title = "Invocation and call outcomes are closed and evaluation-neutral"
 statement = """
-Closed serializable invocation outcomes are success, blank response, malformed \
-response, provider rejection, semantic rejection, permanent provider or \
-transport failure, transient provider or network failure, rate limiting, \
-resource exhaustion, timeout, or unknown transport failure. A valid accepted \
-response is success; absent generation text is blank; invalid provider protocol \
-or payload structure is malformed; explicit provider refusal is provider \
-rejection; and caller rejection of a valid response is semantic rejection. \
-Closed call outcomes are accepted invocation outcome, an invocation outcome for \
-which policy stops, cooperative cancellation, or policy exhaustion. Neither \
-model encodes evaluation decisions."""
+Closed invocation outcomes are success, blank response, malformed response, \
+provider rejection, semantic rejection, permanent provider or transport failure, \
+transient provider or network failure, rate limiting, resource exhaustion, \
+contained transport timeout, uncontained deadline expiration, or unknown \
+transport failure. Strict protocol translation assigns protocol-derived \
+outcomes before semantic classification. Closed call outcomes are accepted \
+invocation outcome, an invocation outcome for which policy stops, draining \
+cancellation, or policy exhaustion. Neither model encodes evaluation decisions."""
 rationale = """
-Separate exhaustive vocabularies make retry behavior consistent without \
+Exhaustive transport-aware outcomes support consistent transitions without \
 importing evaluation policy."""
+date = "2026-08-08"
+
+[[contracts]]
+title = "Timeout outcomes expose local containment"
+statement = """
+A contained transport timeout means the local HTTP operation ended and no local \
+worker remains active. An uncontained deadline expiration means a watchdog \
+returned while a local worker or socket may remain active. dr-providers starts \
+no successor while it knows an earlier invocation for the call remains locally \
+uncontained."""
+rationale = """
+Retrying work that may still be active can multiply sockets, workers, provider \
+effects, and cost."""
 date = "2026-08-08"
 
 [[contracts]]
@@ -63,12 +92,12 @@ title = "Semantic classification excludes evaluation policy"
 statement = """
 A semantic response classifier returns success or semantic rejection for a \
 valid provider transport response. Its opaque stable identifier is supplied by \
-the caller, which owns keeping that identifier aligned with classifier \
-behavior. The classifier assigns no correctness, reward, rank, task-selection, \
-or statistical meaning."""
+the caller, which owns keeping that identifier aligned with classifier behavior. \
+The classifier assigns no correctness, reward, rank, task-selection, or \
+statistical meaning."""
 rationale = """
-Provider execution needs usability and retryability decisions; applications \
-own evaluation meaning."""
+Provider execution needs response acceptance while applications own evaluation \
+meaning."""
 date = "2026-08-08"
 
 [[contracts]]
@@ -76,28 +105,75 @@ title = "Call and result identities serve different purposes"
 statement = """
 Provider call identity binds request and retry-policy identities, the opaque \
 classifier identifier, and provider-call schema version. Provider call result \
-identity is the content identity of the complete serialized result. Package, \
-dependency, runtime, and duration diagnostics may affect result identity but \
-not provider call identity. Standard construction excludes declared credentials \
-from both identities but does not promise detection of undeclared secrets. \
-Golden tests pin persisted keys and outcome discriminators."""
+identity composes call-level fields with ordered invocation-evidence content \
+hashes. Every embedded component must match its declared hash, and frozen \
+components cache their identities. Package, dependency, runtime, and duration \
+diagnostics may affect result identity but not provider call identity. Standard \
+construction excludes declared credentials from both identities but does not \
+promise detection of undeclared secrets. Golden tests pin persisted keys and \
+outcome discriminators."""
 rationale = """
-The call identity groups executions with the same declared semantics while the \
-result identity identifies one complete observation."""
+Compositional content identity binds the complete observation without repeatedly \
+serializing large nested evidence."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Provider lifecycle ownership excludes workflow and evaluation"
+title = "Request and response evidence are byte-bounded"
 statement = """
-dr-providers owns invocation outcomes, retry decisions, and terminal call \
-evidence, including synchronous waiting between invocations. It exposes no \
-resumable next-invocation state. It excludes workflow orchestration (durable \
-scheduling, timers, fan-out, fan-in, and run membership), global admission or \
-adaptive rate control, result caching, artifact storage, and evaluation \
-decisions."""
+Transport policy declares positive max_request_bytes and max_response_bytes, \
+which participate in transport-policy identity and invocation evidence. The \
+exact encoded request is counted before dispatch, and the response is streamed \
+and counted before decoding. An exceeded limit returns a typed bounded resource-\
+exhaustion outcome with observed accounting and no retained partial body. \
+Complete-evidence guarantees apply within these declared limits. A bounded \
+normalized Retry-After hint may be retained as evidence but does not affect the \
+standard retry policy. Golden tests pin size-accounting, limit, and hint keys."""
 rationale = """
-The one-call boundary works in local and durable systems without importing \
-workflow or research policy."""
+Explicit bounds prevent one provider payload from consuming unbounded memory \
+while preserving truthful evidence."""
+date = "2026-08-08"
+
+[[contracts]]
+title = "HttpProvider owns a bounded reusable client lifecycle"
+statement = """
+Default HttpProvider construction owns one long-lived httpx client with explicit \
+identity-bearing connection and keep-alive limits and reuses it across \
+invocations. close() drains active operations as required, closes the owned \
+client exactly once, rejects new invocations, and leaves the provider terminal. \
+Caller-owned client injection, if supported, is an explicit separate \
+construction path; HttpProvider never closes that client. Provider HTTP \
+invocation does not start a fresh child process for deadline enforcement."""
+rationale = """
+One bounded lifecycle preserves pooling and makes shutdown and ownership \
+auditable."""
+date = "2026-08-08"
+
+[[contracts]]
+title = "Cancellation drains active invocation work"
+statement = """
+Draining cancellation stops admission, cancels pending retry waits without \
+polling, and starts no successor. An active invocation reaches its normal \
+contained or uncontained terminal observation, which is retained before the \
+provider call returns draining cancellation. This outcome promises neither \
+overload shedding nor prompt release of sockets, workers, or provider capacity."""
+rationale = """
+Paid work remains attributable without misrepresenting draining cancellation \
+as transport containment."""
+date = "2026-08-08"
+
+[[contracts]]
+title = "Lifecycle models are storage and workflow neutral"
+statement = """
+dr-providers owns invocation, evidence, outcomes, provider call state, retry \
+transitions, and terminal results. dr-store may persist these serializable values \
+but neither defines their schemas nor becomes a dr-providers dependency. \
+dr-platform owns durable state persistence, retry-delay scheduling, global \
+admission, and workflow membership while consuming provider retry instructions \
+without redefining them. dr-exec owns local process isolation. Applications own \
+semantic acceptance rules, evaluation, rewards, and analysis."""
+rationale = """
+Stable provider semantics can run locally or durably without coupling transport \
+models to storage, workflow, execution, or research policy."""
 date = "2026-08-08"
 
 [[contracts]]
@@ -105,9 +181,10 @@ title = "Retries do not imply exactly-once provider effects"
 statement = """
 Each provider wire request may independently reach the provider. A call result \
 reports observed invocations and wire evidence but guarantees neither exactly-\
-once effects, global rate control, nor termination of in-flight work after a \
-timeout, cooperative cancellation, or process interruption."""
+once effects nor termination of uncontained work. Interruption after a provider \
+effect but before state persistence may cause another invocation after recovery; \
+every completed invocation remains independently attributable."""
 rationale = """
-Evidence proves only what this package observed, not provider effects or \
-transport containment."""
+Serializable retry state supports recovery but cannot make an external provider \
+effect atomic with state persistence."""
 date = "2026-08-08"
