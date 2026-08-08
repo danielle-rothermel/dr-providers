@@ -1,0 +1,69 @@
+#:schema ../../../.defs/terms.schema.json
+
+[[terms]]
+name = "provider wire attempt"
+definition = """
+One transmission of a constructed provider-call request to a provider service \
+and collection of its corresponding transport outcome."""
+part_of = ["physical provider invocation"]
+
+[[terms]]
+name = "physical provider invocation"
+definition = """
+A single execution of a provider call request that performs at most one \
+provider wire attempt and yields one complete provider invocation evidence \
+record."""
+part_of = ["logical provider call"]
+
+[[terms]]
+name = "logical provider call"
+definition = """
+One application of a declared provider call retry policy to an ordered \
+sequence of physical provider invocations for a single provider call request, \
+yielding one logical provider call result."""
+
+[[terms]]
+name = "provider call retry policy"
+definition = """
+A frozen identity-bearing declaration of bounded attempt cardinality, \
+retryable provider attempt dispositions, and delay-selection rules for one \
+logical provider call."""
+part_of = ["logical provider call"]
+
+[[terms]]
+name = "semantic response classifier"
+definition = """
+A caller-supplied boundary that classifies a successful provider transport \
+response into a generic provider attempt disposition without deciding \
+application correctness, reward, or experiment value."""
+
+[[terms]]
+name = "provider attempt disposition"
+definition = """
+The closed provider-level classification of one physical provider invocation, \
+including transport-failure and semantic-response categories, used to decide \
+whether a logical provider call terminates or continues."""
+part_of = ["provider call attempt record"]
+
+[[terms]]
+name = "provider call attempt record"
+definition = """
+One ordered logical-call entry binding a provider invocation evidence record \
+to its provider attempt disposition and any retry decision and delay \
+evidence."""
+part_of = ["logical provider call result"]
+
+[[terms]]
+name = "provider call terminal disposition"
+definition = """
+The closed provider-level reason a logical provider call ended, including \
+terminal attempt outcomes, cancellation or interruption, and retry-policy \
+exhaustion."""
+part_of = ["logical provider call result"]
+
+[[terms]]
+name = "logical provider call result"
+definition = """
+A versioned serializable result containing provider-call request and retry-\
+policy identities, ordered provider call attempt records, and exactly one \
+provider call terminal disposition."""
