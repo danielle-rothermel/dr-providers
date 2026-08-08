@@ -135,7 +135,10 @@ class CompletedProviderInvocationObservation(BaseModel):
             ) is not is_blank:
                 msg = "blank response outcome must match response text"
                 raise ValueError(msg)
-        elif self.outcome in response_outcomes:
+        elif self.outcome in {
+            ProviderInvocationOutcome.SUCCESS,
+            ProviderInvocationOutcome.SEMANTIC_REJECTION,
+        }:
             msg = "provider failure evidence has a response outcome"
             raise ValueError(msg)
         return self
@@ -222,7 +225,6 @@ def _validate_records(
     *,
     records: tuple[DecidedProviderInvocationRecord, ...],
     record_hashes: tuple[str, ...],
-    request: ProviderCallRequest,
     request_identity_hash: str,
     retry_policy: ProviderCallRetryPolicy,
 ) -> None:
@@ -243,10 +245,7 @@ def _validate_records(
         if observation.request_identity_hash != request_identity_hash:
             msg = "completed observation has a different request identity"
             raise ValueError(msg)
-        evidence_request_identity = observation.evidence.model_dump(
-            mode="json"
-        )["request_identity"]
-        if evidence_request_identity != request.identity_payload():
+        if observation.evidence.request_identity_hash != request_identity_hash:
             msg = "invocation evidence has a different request identity"
             raise ValueError(msg)
         if declared_hash != record.identity_hash:
@@ -330,7 +329,6 @@ class ProviderCallState(BaseModel):
         _validate_records(
             records=self.completed_invocations,
             record_hashes=self.completed_invocation_record_hashes,
-            request=self.request,
             request_identity_hash=self.request_identity_hash,
             retry_policy=self.retry_policy,
         )
@@ -418,7 +416,6 @@ class ProviderCallResult(BaseModel):
         _validate_records(
             records=self.completed_invocations,
             record_hashes=self.completed_invocation_record_hashes,
-            request=self.request,
             request_identity_hash=self.request_identity_hash,
             retry_policy=self.retry_policy,
         )

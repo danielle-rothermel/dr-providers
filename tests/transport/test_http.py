@@ -89,12 +89,14 @@ class TestHttpProvider:
             return httpx.Response(200, json=CHAT_BODY_OK)
 
         provider = mock_provider(handler)
-        outcome = provider.complete(openai_request())
+        evidence = provider.invoke(openai_request())
+        outcome = evidence.outcome
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome.text == "hello"
         assert seen["url"] == "https://api.openai.com/v1/chat/completions"
         assert seen["auth"] == "Bearer test-key"
         assert outcome.model == "m"
+        assert evidence.http_request is not None
 
     @pytest.mark.parametrize("status", [200, 202, 299])
     def test_every_2xx_status_dispatches_provider_body(
@@ -104,7 +106,7 @@ class TestHttpProvider:
             lambda _req: httpx.Response(status, json=CHAT_BODY_OK)
         )
 
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
 
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome.text == "hello"
@@ -117,13 +119,14 @@ class TestHttpProvider:
             lambda _req: httpx.Response(status, json=CHAT_BODY_OK)
         )
 
-        outcome = provider.complete(openai_request())
+        evidence = provider.invoke(openai_request())
+        outcome = evidence.outcome
 
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == f"http_status_{status}"
         assert outcome.status_code == status
         assert outcome.response_body == CHAT_BODY_OK
-        assert outcome.request_body
+        assert evidence.http_request is not None
 
     def test_redirect_is_not_followed_even_when_client_default_follows(
         self,
@@ -147,7 +150,7 @@ class TestHttpProvider:
             policy=OPENAI_POLICY, client=client, api_key="test-key"
         )
 
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
 
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == "http_status_302"
@@ -165,15 +168,15 @@ class TestHttpProvider:
             lambda _req: httpx.Response(200, text=json.dumps(body))
         )
 
-        outcome = provider.complete(openai_request())
+        evidence = provider.invoke(openai_request())
+        outcome = evidence.outcome
 
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.failure_class is FailureClass.PERMANENT
         assert outcome.code == "response_parse_error"
-        assert outcome.retryable is False
         assert outcome.response_body == body
         assert outcome.status_code == 200
-        assert outcome.request_body
+        assert evidence.http_request is not None
 
     def test_anthropic_uses_x_api_key_and_version_headers(self) -> None:
         seen: dict[str, Any] = {}
@@ -189,7 +192,7 @@ class TestHttpProvider:
             model="claude", controls=GenerationControls(token_limit=16)
         )
         provider = mock_provider(handler, policy=ANTHROPIC_POLICY)
-        outcome = provider.complete(request_for(config))
+        outcome = provider.invoke(request_for(config)).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome.text == "hello"
         assert seen["url"] == "https://api.anthropic.com/v1/messages"
@@ -211,7 +214,7 @@ class TestHttpProvider:
         provider = mock_provider(
             lambda _req: httpx.Response(status, text="nope")
         )
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.failure_class is failure_class
         assert outcome.code == f"http_status_{status}"
@@ -222,11 +225,10 @@ class TestHttpProvider:
             raise httpx.ConnectError("boom")
 
         provider = mock_provider(handler)
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.failure_class is FailureClass.TRANSIENT
         assert outcome.code == "transport_error"
-        assert outcome.retryable is True
 
     @pytest.mark.parametrize(
         ("error", "expected_code"),
@@ -243,17 +245,16 @@ class TestHttpProvider:
             raise error
 
         provider = mock_provider(handler)
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == expected_code
         assert outcome.failure_class is FailureClass.TRANSIENT
-        assert outcome.retryable is True
 
     def test_invalid_json_is_permanent_no_throw(self) -> None:
         provider = mock_provider(
             lambda _req: httpx.Response(200, text="<html>")
         )
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == "invalid_response_json"
 
@@ -269,9 +270,11 @@ class TestHttpProvider:
                 )
             ),
         )
-        outcome = provider.complete(openai_request())
+        evidence = provider.invoke(openai_request())
+        outcome = evidence.outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == "missing_api_key"
+        assert evidence.http_request is None
 
     def test_missing_base_url_is_permanent_no_throw(self) -> None:
         policy = ProviderTransportPolicy(
@@ -281,13 +284,15 @@ class TestHttpProvider:
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK),
             policy=policy,
         )
-        outcome = provider.complete(openai_request())
+        evidence = provider.invoke(openai_request())
+        outcome = evidence.outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == "missing_base_url"
+        assert evidence.http_request is None
 
 
-class TestNativeRetry:
-    def test_no_retry_by_default(self) -> None:
+class TestInvocationWireBoundary:
+    def test_one_invocation_makes_one_wire_attempt(self) -> None:
         calls: list[int] = []
 
         def handler(_req: httpx.Request) -> httpx.Response:
@@ -295,65 +300,13 @@ class TestNativeRetry:
             return httpx.Response(500)
 
         provider = mock_provider(handler)
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
-        assert len(calls) == 1
-
-    def test_native_retry_count_repeats_retryable(self) -> None:
-        calls: list[int] = []
-
-        def handler(_req: httpx.Request) -> httpx.Response:
-            calls.append(1)
-            return httpx.Response(500)
-
-        policy = ProviderTransportPolicy(
-            api_key_env=str(ApiKeyEnv.OPENAI),
-            base_url=str(ProviderBaseUrl.OPENAI),
-            native_retry_count=2,
-        )
-        provider = mock_provider(handler, policy=policy)
-        outcome = provider.complete(openai_request())
-        assert isinstance(outcome, ProviderTransportFailure)
-        assert len(calls) == 3
-
-    def test_native_retry_recovers_on_success(self) -> None:
-        responses = [
-            httpx.Response(500),
-            httpx.Response(200, json=CHAT_BODY_OK),
-        ]
-
-        def handler(_req: httpx.Request) -> httpx.Response:
-            return responses.pop(0)
-
-        policy = ProviderTransportPolicy(
-            api_key_env=str(ApiKeyEnv.OPENAI),
-            base_url=str(ProviderBaseUrl.OPENAI),
-            native_retry_count=1,
-        )
-        provider = mock_provider(handler, policy=policy)
-        outcome = provider.complete(openai_request())
-        assert isinstance(outcome, ProviderTransportResponse)
-        assert outcome.text == "hello"
-
-    def test_permanent_failure_never_retries(self) -> None:
-        calls: list[int] = []
-
-        def handler(_req: httpx.Request) -> httpx.Response:
-            calls.append(1)
-            return httpx.Response(401)
-
-        policy = ProviderTransportPolicy(
-            api_key_env=str(ApiKeyEnv.OPENAI),
-            base_url=str(ProviderBaseUrl.OPENAI),
-            native_retry_count=3,
-        )
-        provider = mock_provider(handler, policy=policy)
-        provider.complete(openai_request())
         assert len(calls) == 1
 
 
 class TestHttpProviderLifecycle:
-    def test_owned_per_call_client_closed_after_complete(
+    def test_owned_per_call_client_closed_after_invoke(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         real_client = httpx.Client
@@ -370,7 +323,7 @@ class TestHttpProviderLifecycle:
 
         monkeypatch.setattr(httpx, "Client", tracking_client)
         with HttpProvider(policy=OPENAI_POLICY, api_key="k") as provider:
-            outcome = provider.complete(openai_request())
+            outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         assert created
         assert all(client.is_closed for client in created)
@@ -384,7 +337,7 @@ class TestHttpProviderLifecycle:
         with HttpProvider(
             policy=OPENAI_POLICY, client=client, api_key="k"
         ) as provider:
-            outcome = provider.complete(openai_request())
+            outcome = provider.invoke(openai_request()).outcome
             assert isinstance(outcome, ProviderTransportResponse)
         assert not client.is_closed
         client.close()

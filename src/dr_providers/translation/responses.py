@@ -14,6 +14,7 @@ from dr_providers.outcomes.models import (
 )
 from dr_providers.translation.common import (
     PARSE_ERROR_CODE,
+    RESPONSE_NO_TEXT_CODE,
     ParseOutcome,
     cost_from_body,
     optional_str,
@@ -36,7 +37,6 @@ FINISH_REASON_STOP = "stop"
 RESPONSE_REFUSAL_CODE = "response_refusal"
 RESPONSE_INCOMPLETE_NO_TEXT_CODE = "response_incomplete_no_text"
 RESPONSE_FAILED_CODE = "response_failed"
-RESPONSE_NO_TEXT_CODE = "response_no_text"
 RESPONSE_ID_HASH_LENGTH = 16
 UNKNOWN_DIAGNOSTIC_CATEGORY = "unknown"
 RESPONSES_STATUS_VALUES = frozenset(
@@ -358,7 +358,6 @@ def _responses_failure(
         failure_class=FailureClass.PERMANENT,
         code=code,
         message=message,
-        retryable=False,
         response_body=dict(body),
         metadata={
             "provider": config.route.provider.value,

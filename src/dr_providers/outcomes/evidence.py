@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping  # noqa: TC003 -- pydantic field type
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from dr_serialize import (
     IdentityDocument,
@@ -66,6 +66,10 @@ PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 2
+ContentIdentityHash = Annotated[
+    StrictStr,
+    Field(pattern=r"^[0-9a-f]{64}$"),
+]
 
 
 class ProviderHttpRequestEvidence(BaseModel):
@@ -119,9 +123,9 @@ class ProviderInvocationEvidence(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    request_identity: Mapping[str, Any]
-    policy_identity: Mapping[str, Any]
-    http_request: ProviderHttpRequestEvidence
+    request_identity_hash: ContentIdentityHash
+    policy_identity: Mapping[str, Any] | None = None
+    http_request: ProviderHttpRequestEvidence | None = None
     response: ProviderTransportResponse | None = None
     failure: ProviderTransportFailure | None = None
 
@@ -133,12 +137,12 @@ class ProviderInvocationEvidence(BaseModel):
                 "response/failure to be set"
             )
             raise ValueError(msg)
-        object.__setattr__(
-            self, "request_identity", _deep_freeze(dict(self.request_identity))
-        )
-        object.__setattr__(
-            self, "policy_identity", _deep_freeze(dict(self.policy_identity))
-        )
+        if self.policy_identity is not None:
+            object.__setattr__(
+                self,
+                "policy_identity",
+                _deep_freeze(dict(self.policy_identity)),
+            )
         if self.response is not None:
             object.__setattr__(
                 self,
@@ -157,17 +161,11 @@ class ProviderInvocationEvidence(BaseModel):
             )
         return self
 
-    @field_serializer("request_identity")
-    def _serialize_request_identity(
-        self, value: Mapping[str, Any]
-    ) -> dict[str, Any]:
-        return _thaw(value)
-
     @field_serializer("policy_identity")
     def _serialize_policy_identity(
-        self, value: Mapping[str, Any]
-    ) -> dict[str, Any]:
-        return _thaw(value)
+        self, value: Mapping[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return None if value is None else _thaw(value)
 
     @property
     def outcome(self) -> ProviderTransportOutcome:
@@ -181,8 +179,8 @@ class ProviderInvocationEvidence(BaseModel):
         cls,
         *,
         request: ProviderCallRequest,
-        policy: ProviderTransportPolicy,
-        http_request: ProviderHttpRequestEvidence,
+        policy: ProviderTransportPolicy | None,
+        http_request: ProviderHttpRequestEvidence | None,
         outcome: ProviderTransportOutcome,
     ) -> ProviderInvocationEvidence:
         response = (
@@ -192,8 +190,10 @@ class ProviderInvocationEvidence(BaseModel):
             outcome if isinstance(outcome, ProviderTransportFailure) else None
         )
         return cls(
-            request_identity=request.identity_payload(),
-            policy_identity=policy.identity_payload(),
+            request_identity_hash=request.identity_hash,
+            policy_identity=(
+                None if policy is None else policy.identity_payload()
+            ),
             http_request=http_request,
             response=response,
             failure=failure,

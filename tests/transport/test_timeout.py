@@ -142,7 +142,7 @@ def test_provider_uses_saturated_watchdog_timeout(
     with HttpProvider(
         policy=policy, client=client, api_key="test-key"
     ) as provider:
-        outcome = provider.complete(_request())
+        outcome = provider.invoke(_request()).outcome
 
     assert isinstance(outcome, ProviderTransportResponse)
     assert wait_timeouts == [threading.TIMEOUT_MAX]
@@ -211,8 +211,6 @@ def test_idle_stall_returns_exact_typed_evidence() -> None:
     assert isinstance(failure, ProviderTransportFailure)
     assert failure.code == STALLED_RESPONSE_CODE
     assert failure.failure_class is FailureClass.TRANSIENT
-    assert failure.retryable is True
-    assert failure.request_body
     assert failure.metadata == {
         "url": f"{server.base_url}/chat/completions",
         "timeout_seconds": POLICY_TIMEOUT_SECONDS,
@@ -228,7 +226,7 @@ def test_steady_progress_stream_completes() -> None:
             idle_timeout_seconds=0.2,
             timeout_seconds=5.0,
         )
-        call = DaemonCall.start(lambda: provider.complete(_request()))
+        call = DaemonCall.start(lambda: provider.invoke(_request()).outcome)
         call.wait_until_entered()
         server.wait_until_entered()
         outcome = call.result()
@@ -244,7 +242,7 @@ def test_dribble_is_bounded_by_exact_hard_deadline() -> None:
             idle_timeout_seconds=POLICY_TIMEOUT_SECONDS,
             timeout_seconds=POLICY_TIMEOUT_SECONDS,
         )
-        call = DaemonCall.start(lambda: provider.complete(_request()))
+        call = DaemonCall.start(lambda: provider.invoke(_request()).outcome)
         call.wait_until_entered()
         server.wait_until_entered()
         outcome = call.result()
@@ -252,7 +250,6 @@ def test_dribble_is_bounded_by_exact_hard_deadline() -> None:
     assert isinstance(outcome, ProviderTransportFailure)
     assert outcome.code == STALLED_RESPONSE_CODE
     assert outcome.failure_class is FailureClass.TRANSIENT
-    assert outcome.retryable is True
     assert outcome.metadata == {
         "url": f"{server.base_url}/chat/completions",
         "timeout_seconds": POLICY_TIMEOUT_SECONDS,

@@ -12,9 +12,14 @@ import pytest
 import test_matrix
 
 from dr_providers import (
-    ProviderTransportResponse,
+    ProviderCallRequest,
+    ProviderInvocationEvidence,
     TokenUsage,
     openai_chat_config,
+)
+from dr_providers.surfaces.testing.scripted import (
+    ScriptedOutcome,
+    ScriptedProvider,
 )
 from scripts import capture_live_corpus, run_live_matrix
 from scripts.live_matrix_support import (
@@ -33,7 +38,15 @@ if TYPE_CHECKING:
 
 class _SuccessfulProvider:
     def __init__(self, **_kwargs: object) -> None:
-        pass
+        self._provider = ScriptedProvider(
+            [
+                ScriptedOutcome(
+                    text="hello",
+                    response_body={"id": "response-1"},
+                    usage=TokenUsage(total_tokens=1),
+                )
+            ]
+        )
 
     def __enter__(self) -> _SuccessfulProvider:
         return self
@@ -41,12 +54,10 @@ class _SuccessfulProvider:
     def __exit__(self, *_exc: object) -> None:
         return None
 
-    def complete(self, _request: object) -> ProviderTransportResponse:
-        return ProviderTransportResponse(
-            text="hello",
-            response_body={"id": "response-1"},
-            usage=TokenUsage(total_tokens=1),
-        )
+    def invoke(
+        self, request: ProviderCallRequest
+    ) -> ProviderInvocationEvidence:
+        return self._provider.invoke(request)
 
 
 def test_live_verification_does_not_write_corpus(

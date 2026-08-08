@@ -10,9 +10,8 @@ import dr_providers  # noqa: E402
 from dr_providers import ProviderTransportPolicy  # noqa: E402
 from dr_providers.modeling.request import ProviderCallRequest  # noqa: E402
 from dr_providers.modeling.route import ProviderKind  # noqa: E402
-from dr_providers.outcomes.models import (  # noqa: E402
-    ProviderTransportOutcome,
-    ProviderTransportResponse,
+from dr_providers.outcomes.evidence import (  # noqa: E402
+    ProviderInvocationEvidence,
 )
 from dr_providers.surfaces.serve import app as serve_app  # noqa: E402
 from dr_providers.surfaces.serve.app import (  # noqa: E402
@@ -68,13 +67,13 @@ class RecordingHttpProvider:
     ) -> None:
         self.events.append(("exit", exc_type))
 
-    def complete(
+    def invoke(
         self, request: ProviderCallRequest
-    ) -> ProviderTransportOutcome:
-        self.events.append(("complete", request.config.route.model))
+    ) -> ProviderInvocationEvidence:
+        self.events.append(("invoke", request.config.route.model))
         return ScriptedProvider(
             [ScriptedOutcome(text="offline live response")]
-        ).complete(request)
+        ).invoke(request)
 
 
 def test_health_reports_ok(client: TestClient) -> None:
@@ -107,8 +106,13 @@ def test_query_with_scripted_scripted_outcomes(client: TestClient) -> None:
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["response"]["text"] == "scripted hello"
-    assert body["failure"] is None
+    call_result = body["provider_call_result"]
+    assert call_result["outcome"]["kind"] == "accepted"
+    evidence = call_result["completed_invocations"][-1]["observation"][
+        "evidence"
+    ]
+    assert evidence["response"]["text"] == "scripted hello"
+    assert evidence["failure"] is None
 
 
 def test_query_conformance_violation_is_reported(client: TestClient) -> None:
@@ -125,7 +129,11 @@ def test_query_conformance_violation_is_reported(client: TestClient) -> None:
         },
     )
     assert response.status_code == 200
-    warnings = response.json()["response"]["warnings"]
+    call_result = response.json()["provider_call_result"]
+    evidence = call_result["completed_invocations"][-1]["observation"][
+        "evidence"
+    ]
+    warnings = evidence["response"]["warnings"]
     assert any(w["code"] == "token_limit_exceeded" for w in warnings)
 
 
@@ -150,8 +158,13 @@ def test_query_failure_outcome_returns_failure_record(
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["response"] is None
-    assert body["failure"]["code"] == "rate_limited"
+    call_result = body["provider_call_result"]
+    assert call_result["outcome"]["kind"] == "invocation_outcome"
+    evidence = call_result["completed_invocations"][-1]["observation"][
+        "evidence"
+    ]
+    assert evidence["response"] is None
+    assert evidence["failure"]["code"] == "rate_limited"
 
 
 def test_live_provider_without_key_is_424(
@@ -214,15 +227,15 @@ def test_live_provider_maps_key_policy_and_closes_after_success(
     with serve_app.resolve_provider(
         ProviderChoice(kind=ProviderChoiceKind.LIVE), spec
     ) as provider:
-        outcome = provider.complete(build_request(spec))
+        evidence = provider.invoke(build_request(spec))
 
     instance = RecordingHttpProvider.instances[0]
     assert instance.api_key == api_key
     assert instance.policy == policy_for(expected_provider)
-    assert isinstance(outcome, ProviderTransportResponse)
+    assert evidence.response is not None
     assert instance.events == [
         ("enter", None),
-        ("complete", "test/model"),
+        ("invoke", "test/model"),
         ("exit", None),
     ]
 
@@ -293,6 +306,35 @@ def test_variance_endpoint_reports_and_records(client: TestClient) -> None:
         "warning_codes": [],
         "failure_code": None,
     }
+
+
+def test_live_variance_uses_one_provider_context_for_full_run(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    RecordingHttpProvider.instances.clear()
+    monkeypatch.setattr(serve_app, "HttpProvider", RecordingHttpProvider)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    response = client.post(
+        "/variance",
+        json={
+            "prompt": "Say hello.",
+            "models": ["model-a", "model-b"],
+            "samples": 2,
+            "provider": {"kind": "live"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(RecordingHttpProvider.instances) == 1
+    assert RecordingHttpProvider.instances[0].events == [
+        ("enter", None),
+        ("invoke", "model-a"),
+        ("invoke", "model-a"),
+        ("invoke", "model-b"),
+        ("invoke", "model-b"),
+        ("exit", None),
+    ]
 
 
 @pytest.mark.parametrize(

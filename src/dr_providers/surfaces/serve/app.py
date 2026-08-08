@@ -79,7 +79,6 @@ class ScriptedOutcomeSpec(BaseModel):
                 failure_class=FailureClass.PERMANENT,
                 code=self.failure_code,
                 message=self.failure_message or self.failure_code,
-                retryable=False,
             )
         usage = (
             TokenUsage(completion_tokens=self.completion_tokens)

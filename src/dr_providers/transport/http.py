@@ -18,6 +18,9 @@ from dr_providers.outcomes.evidence import (
     ProviderInvocationEvidence,
 )
 from dr_providers.outcomes.models import (
+    INVALID_JSON_CODE,
+    STALLED_RESPONSE_CODE,
+    TIMEOUT_CODE,
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
@@ -40,10 +43,6 @@ MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
 TRANSPORT_ERROR_CODE = "transport_error"
-INVALID_JSON_CODE = "invalid_response_json"
-TIMEOUT_CODE = "timeout"
-STALLED_RESPONSE_CODE = "stalled_response"
-
 # Bound TCP/TLS setup independently of the response idle budget.
 MAX_CONNECT_TIMEOUT_SECONDS = 30.0
 
@@ -105,72 +104,41 @@ class HttpProvider:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    def complete(
-        self, request: ProviderCallRequest
-    ) -> ProviderTransportOutcome:
-        payload = build_payload(request)
-        return self._run_pipeline(request, payload)
-
     def invoke(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
         payload = build_payload(request)
         url = self._request_url(request.config)
+        if url is None:
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=self._policy,
+                http_request=None,
+                outcome=self._missing_base_url_failure(request.config),
+            )
         headers = self._headers(request.config)
+        if headers is None:
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=self._policy,
+                http_request=None,
+                outcome=self._missing_api_key_failure(),
+            )
         http_request = ProviderHttpRequestEvidence.build(
-            url=url or "<missing_base_url>",
-            headers=headers or {},
+            url=url,
+            headers=headers,
             body=payload,
         )
-        outcome = self._run_pipeline(request, payload)
+        outcome = self._wire_attempt_within_deadline(
+            request, url, headers, payload
+        )
+        if isinstance(outcome, ProviderTransportResponse):
+            outcome = with_conformance_warnings(request, outcome)
         return ProviderInvocationEvidence.build(
             request=request,
             policy=self._policy,
             http_request=http_request,
             outcome=outcome,
-        )
-
-    def _run_pipeline(
-        self,
-        request: ProviderCallRequest,
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        outcome = self._complete_with_retries(request, payload)
-        if isinstance(outcome, ProviderTransportResponse):
-            return with_conformance_warnings(request, outcome)
-        return outcome
-
-    def _complete_with_retries(
-        self,
-        request: ProviderCallRequest,
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        attempts = self._policy.native_retry_count + 1
-        outcome: ProviderTransportOutcome = self._complete_once(
-            request, payload
-        )
-        for _ in range(attempts - 1):
-            if isinstance(outcome, ProviderTransportResponse):
-                return outcome
-            if not outcome.retryable:
-                return outcome
-            outcome = self._complete_once(request, payload)
-        return outcome
-
-    def _complete_once(
-        self,
-        request: ProviderCallRequest,
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        config = request.config
-        url = self._request_url(config)
-        if url is None:
-            return self._missing_base_url_failure(config, payload)
-        headers = self._headers(config)
-        if headers is None:
-            return self._missing_api_key_failure(payload)
-        return self._wire_attempt_within_deadline(
-            request, url, headers, payload
         )
 
     def _wire_attempt_within_deadline(
@@ -215,7 +183,7 @@ class HttpProvider:
             if self._owns_client:
                 with contextlib.suppress(Exception):
                     call_client.close()
-            return self._deadline_timeout_failure(url, payload, deadline)
+            return self._deadline_timeout_failure(url, deadline)
         if self._owns_client:
             with contextlib.suppress(Exception):
                 call_client.close()
@@ -240,25 +208,20 @@ class HttpProvider:
                 follow_redirects=False,
             )
         except httpx.TimeoutException as error:
-            return self._httpx_timeout_failure(error, url, payload)
+            return self._httpx_timeout_failure(error, url)
         except httpx.HTTPError as error:
             return ProviderTransportFailure(
                 failure_class=FailureClass.TRANSIENT,
                 code=TRANSPORT_ERROR_CODE,
                 message=f"{type(error).__name__}: {error}",
-                retryable=True,
-                request_body=dict(payload),
                 metadata={"url": url},
             )
-        return self._outcome_from_response(
-            request, http_response, url, payload
-        )
+        return self._outcome_from_response(request, http_response, url)
 
     def _httpx_timeout_failure(
         self,
         error: httpx.TimeoutException,
         url: str,
-        payload: dict[str, Any],
     ) -> ProviderTransportFailure:
         """Classify read timeouts as idle stalls; keep other timeout phases."""
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
@@ -266,8 +229,6 @@ class HttpProvider:
             failure_class=FailureClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
             message=f"{type(error).__name__}: {error}",
-            retryable=True,
-            request_body=dict(payload),
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
@@ -279,7 +240,6 @@ class HttpProvider:
     def _deadline_timeout_failure(
         self,
         url: str,
-        payload: dict[str, Any],
         deadline: float,
     ) -> ProviderTransportFailure:
         return ProviderTransportFailure(
@@ -291,8 +251,6 @@ class HttpProvider:
                 f"{self._policy.timeout_seconds:.1f}s); the response "
                 "stalled without completing"
             ),
-            retryable=True,
-            request_body=dict(payload),
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
@@ -305,10 +263,9 @@ class HttpProvider:
         request: ProviderCallRequest,
         http_response: httpx.Response,
         url: str,
-        payload: dict[str, Any],
     ) -> ProviderTransportOutcome:
         if not http_response.is_success:
-            return self._http_status_failure(http_response, url, payload)
+            return self._http_status_failure(http_response, url)
         try:
             body = http_response.json()
         except ValueError:
@@ -316,8 +273,6 @@ class HttpProvider:
                 failure_class=FailureClass.PERMANENT,
                 code=INVALID_JSON_CODE,
                 message="provider response body is not valid JSON",
-                retryable=False,
-                request_body=dict(payload),
                 response_body=http_response.text,
                 metadata={"url": url},
             )
@@ -326,22 +281,16 @@ class HttpProvider:
                 failure_class=FailureClass.PERMANENT,
                 code=PARSE_ERROR_CODE,
                 message="provider response JSON must be an object",
-                retryable=False,
-                request_body=dict(payload),
                 response_body=body,
                 status_code=http_response.status_code,
                 metadata={"url": url},
             )
-        outcome = parse_response(body, config=request.config)
-        if isinstance(outcome, ProviderTransportFailure):
-            return outcome.model_copy(update={"request_body": dict(payload)})
-        return outcome
+        return parse_response(body, config=request.config)
 
     def _http_status_failure(
         self,
         http_response: httpx.Response,
         url: str,
-        payload: dict[str, Any],
     ) -> ProviderTransportFailure:
         failure_class = classify_status_code(http_response.status_code)
         response_body: Any
@@ -353,8 +302,6 @@ class HttpProvider:
             failure_class=failure_class,
             code=f"{HTTP_STATUS_CODE_PREFIX}{http_response.status_code}",
             message=http_response.text,
-            retryable=failure_class in _RETRYABLE,
-            request_body=dict(payload),
             response_body=response_body,
             status_code=http_response.status_code,
             metadata={"url": url},
@@ -363,7 +310,6 @@ class HttpProvider:
     def _missing_base_url_failure(
         self,
         config: ProviderCallConfig,
-        payload: dict[str, Any],
     ) -> ProviderTransportFailure:
         return ProviderTransportFailure(
             failure_class=FailureClass.PERMANENT,
@@ -372,22 +318,15 @@ class HttpProvider:
                 f"transport policy for route "
                 f"{config.quota_identity.label()!r} has no base_url"
             ),
-            retryable=False,
-            request_body=dict(payload),
         )
 
-    def _missing_api_key_failure(
-        self,
-        payload: dict[str, Any],
-    ) -> ProviderTransportFailure:
+    def _missing_api_key_failure(self) -> ProviderTransportFailure:
         return ProviderTransportFailure(
             failure_class=FailureClass.PERMANENT,
             code=MISSING_API_KEY_CODE,
             message=(
                 f"environment variable {self._policy.api_key_env!r} is not set"
             ),
-            retryable=False,
-            request_body=dict(payload),
         )
 
     def _request_url(self, config: ProviderCallConfig) -> str | None:
@@ -406,6 +345,3 @@ class HttpProvider:
                 ANTHROPIC_VERSION_HEADER: ANTHROPIC_VERSION,
             }
         return {AUTHORIZATION_HEADER: f"Bearer {api_key}"}
-
-
-_RETRYABLE = frozenset({FailureClass.TRANSIENT, FailureClass.RATE_LIMITED})

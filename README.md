@@ -16,16 +16,17 @@ identity, provider translation, transport policy, and outcomes separate.
 | --- | --- |
 | `dr_providers.modeling` | Identity-bearing definitions, configs, requests, routes, controls, and transcripts |
 | `dr_providers.translation` | Pure provider request-body construction and parsed-response translation |
-| `dr_providers.transport` | Credentials, endpoints, timeout and native-retry policy, and HTTP execution |
+| `dr_providers.transport` | Credentials, endpoints, timeout policy, and one-invocation HTTP execution |
 | `dr_providers.outcomes` | Typed responses, expected failures, invocation evidence, and conformance warnings |
+| `dr_providers.lifecycle` | Invocation classification, serializable retry state, deterministic transitions, and terminal call results |
 | `dr_providers.core` | Shared provider protocol and failure vocabulary |
 | `dr_providers.surfaces.testing` | Deterministic `ScriptedProvider` for network-free tests |
 | `dr_providers.surfaces.cli` | Optional `dr-providers` one-shot CLI |
 | `dr_providers.surfaces.serve` | Optional localhost FastAPI facade |
 
-The top-level `dr_providers` exports are the stable import surface. The
-functional-area module paths make ownership discoverable but are not a second
-public API to mirror in application imports.
+The top-level `dr_providers` exports are the stable general import surface.
+Lifecycle-specific contracts are exported by `dr_providers.lifecycle`; the
+remaining functional-area module paths primarily make ownership discoverable.
 
 ## Install
 
@@ -47,9 +48,11 @@ selected by their transport policy:
 
 ## Python quickstart
 
-This OpenAI example uses only names exported by `dr_providers`:
+This OpenAI example uses the stable general and lifecycle import surfaces:
 
 ```python
+from threading import Event
+
 from dr_providers import (
     GenerationControls,
     HttpProvider,
@@ -58,9 +61,15 @@ from dr_providers import (
     ProviderCallRequest,
     ProviderKind,
     Transcript,
-    is_response,
     openai_responses_config,
     policy_for,
+)
+from dr_providers.lifecycle import (
+    AcceptAllSemanticResponseClassifier,
+    ProviderCallOutcomeKind,
+    ProviderCallState,
+    StandardProviderCallRetryPolicy,
+    run_local_provider_call,
 )
 
 config = openai_responses_config(
@@ -79,17 +88,30 @@ request = ProviderCallRequest(
     ),
 )
 
+classifier = AcceptAllSemanticResponseClassifier()
+state = ProviderCallState.initial(
+    request=request,
+    retry_policy=StandardProviderCallRetryPolicy(),
+    classifier_identifier=classifier.identifier,
+)
 with HttpProvider(policy=policy_for(ProviderKind.OPENAI)) as provider:
-    outcome = provider.complete(request)
+    result = run_local_provider_call(
+        provider=provider,
+        state=state,
+        classifier=classifier,
+        cancellation=Event(),
+    )
 
-if is_response(outcome):
-    print(outcome.text)
+evidence = result.completed_invocations[-1].observation.evidence
+if result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED:
+    assert evidence.response is not None
+    print(evidence.response.text)
 else:
-    print(f"{outcome.code}: {outcome.message}")
+    print(result.outcome)
 ```
 
-Expected transport failures are returned as
-`ProviderTransportFailure` values. Unexpected programming or infrastructure
+Expected transport failures are retained in invocation evidence and classified
+into the terminal `ProviderCallResult`. Unexpected programming or infrastructure
 errors can still raise.
 
 ## CLI and local server
@@ -113,23 +135,26 @@ uv run python -m dr_providers.surfaces.serve serve --port 8322
 
 ## Outcome and evidence boundaries
 
-`HttpProvider.complete()` returns a closed
-`ProviderTransportResponse | ProviderTransportFailure` union for expected
-transport results. The timeout plus a fixed five-second operational margin
-bounds each native attempt's caller-visible wait; aggregate latency scales
-with `native_retry_count + 1`. When a caller injects its own synchronous HTTP
-client, a timed-out attempt can leave a daemon worker and socket lingering
-until the caller-owned operation eventually ends.
+`HttpProvider.invoke()` makes at most one provider wire request and returns
+versioned serializable `ProviderInvocationEvidence`. The evidence binds the
+request identity hash and transport-policy identity to structured HTTP request
+metadata and exactly one response or expected failure. The HTTP request
+evidence is the sole owner of the constructed request-body mapping.
 
-`HttpProvider.invoke()` returns versioned serializable invocation evidence:
-request and policy identity payloads, structured request metadata, the
-constructed JSON request-body mapping, and the response body decoded as JSON
-when possible or retained as text otherwise. It does not retain original HTTP
-wire bytes. The standard `HttpProvider` path redacts known credential header
-names; direct `ProviderHttpRequestEvidence` construction and deserialization
-remain trusted-data paths. Evidence fields containing dictionaries remain
-mutable after construction, so callers should serialize the snapshot before
-sharing or persistence.
+`run_local_provider_call()` classifies each invocation, applies the selected
+serializable retry policy through the deterministic lifecycle transition, and
+returns the complete ordered `ProviderCallResult`. The standard policy permits
+at most two invocations with one one-second retry, only for contained transient
+network/provider failures and contained transport timeouts. Uncontained
+deadline expiration is terminal; when a caller injects its own synchronous HTTP
+client, its daemon worker and socket may linger until that caller-owned
+operation eventually ends.
+
+Decoded response bodies are retained as JSON when possible or as text
+otherwise; original HTTP wire bytes are not retained. The standard HTTP path
+redacts known credential header names. Direct
+`ProviderHttpRequestEvidence` construction and deserialization remain
+trusted-data paths.
 
 ## Repository validation
 

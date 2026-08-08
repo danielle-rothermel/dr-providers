@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from threading import Event
 from typing import TYPE_CHECKING
 
 import pytest
@@ -17,7 +18,6 @@ from dr_providers import (
     ProviderCallConfig,
     ProviderCallRequest,
     ProviderTransportPolicy,
-    ProviderTransportResponse,
     ReasoningEffort,
     Transcript,
     anthropic_messages_config,
@@ -25,6 +25,13 @@ from dr_providers import (
     openai_chat_config,
     openai_responses_config,
     openrouter_chat_config,
+)
+from dr_providers.lifecycle import (
+    AcceptAllSemanticResponseClassifier,
+    ProviderCallOutcomeKind,
+    ProviderCallState,
+    StandardProviderCallRetryPolicy,
+    run_local_provider_call,
 )
 from scripts.live_matrix_support import (
     CAPTURE_DIR_ENV,
@@ -135,15 +142,28 @@ def test_live_matrix(
         api_key_env=str(DEFAULT_API_KEY_ENVS[kind]),
         base_url=str(DEFAULT_BASE_URLS[kind]),
     )
+    classifier = AcceptAllSemanticResponseClassifier()
+    state = ProviderCallState.initial(
+        request=request,
+        retry_policy=StandardProviderCallRetryPolicy(),
+        classifier_identifier=classifier.identifier,
+    )
 
     with HttpProvider(policy=policy) as provider:
-        outcome = provider.complete(request)
+        result = run_local_provider_call(
+            provider=provider,
+            state=state,
+            classifier=classifier,
+            cancellation=Event(),
+        )
 
-    assert isinstance(outcome, ProviderTransportResponse)
-    assert outcome.text.strip()
-    assert outcome.usage is not None
+    assert result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
+    response = result.completed_invocations[-1].observation.evidence.response
+    assert response is not None
+    assert response.text.strip()
+    assert response.usage is not None
 
-    _stage_capture(case, outcome.response_body)
+    _stage_capture(case, response.response_body)
 
 
 def _stage_capture(case: LiveCase, body: dict[str, object]) -> None:

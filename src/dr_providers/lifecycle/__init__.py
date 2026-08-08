@@ -1,7 +1,15 @@
 from dr_providers.lifecycle.classifier import (
+    ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
+    AcceptAllSemanticResponseClassifier,
     SemanticResponseClassifier,
     SemanticResponseClassifierIdentifier,
+    classify_provider_invocation,
     classify_semantic_response,
+)
+from dr_providers.lifecycle.driver import (
+    EventProviderRetryWait,
+    ProviderRetryWait,
+    run_local_provider_call,
 )
 from dr_providers.lifecycle.models import (
     COMPLETED_INVOCATION_OBSERVATION_SCHEMA,
@@ -44,6 +52,7 @@ from dr_providers.lifecycle.reducer import (
 )
 
 __all__ = [
+    "ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER",
     "COMPLETED_INVOCATION_OBSERVATION_SCHEMA",
     "COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION",
     "DECIDED_INVOCATION_RECORD_SCHEMA",
@@ -58,9 +67,11 @@ __all__ = [
     "PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION",
     "STANDARD_RETRY_DELAYS_SECONDS",
     "STANDARD_RETRY_ELIGIBLE_OUTCOMES",
+    "AcceptAllSemanticResponseClassifier",
     "CompletedProviderInvocationObservation",
     "CustomProviderCallRetryPolicy",
     "DecidedProviderInvocationRecord",
+    "EventProviderRetryWait",
     "ProviderCallOutcome",
     "ProviderCallOutcomeKind",
     "ProviderCallResult",
@@ -70,12 +81,15 @@ __all__ = [
     "ProviderRetryDecision",
     "ProviderRetryDelaySource",
     "ProviderRetryInstruction",
+    "ProviderRetryWait",
     "SemanticResponseClassifier",
     "SemanticResponseClassifierIdentifier",
     "StandardProviderCallRetryPolicy",
     "cancel_provider_call",
+    "classify_provider_invocation",
     "classify_semantic_response",
     "provider_call_identity_document",
     "provider_call_identity_hash",
+    "run_local_provider_call",
     "transition_provider_call",
 ]

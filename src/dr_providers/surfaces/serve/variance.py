@@ -63,14 +63,26 @@ def _variance_record(
     sample_index: int,
     result: QueryResult,
 ) -> VarianceRecord:
-    if result.response is None:
+    if not result.ok:
+        invocation_outcome = (
+            result.provider_call_result.outcome.invocation_outcome
+        )
         return VarianceRecord(
             model=model,
             sample_index=sample_index,
             ok=False,
-            failure_code=result.failure.code if result.failure else None,
+            failure_code=(
+                result.failure.code
+                if result.failure is not None
+                else (
+                    invocation_outcome.value
+                    if invocation_outcome is not None
+                    else None
+                )
+            ),
         )
     response = result.response
+    assert response is not None
     usage = response.usage
     return VarianceRecord(
         model=model,

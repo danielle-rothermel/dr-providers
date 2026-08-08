@@ -70,7 +70,7 @@ def _observation(
     }
     if outcome in response_outcomes:
         evidence = ProviderInvocationEvidence(
-            request_identity=state.request.identity_payload(),
+            request_identity_hash=state.request_identity_hash,
             policy_identity={"transport_fixture": "v1"},
             http_request=HTTP_REQUEST,
             response=ProviderTransportResponse(
@@ -84,14 +84,13 @@ def _observation(
         )
     else:
         evidence = ProviderInvocationEvidence(
-            request_identity=state.request.identity_payload(),
+            request_identity_hash=state.request_identity_hash,
             policy_identity={"transport_fixture": "v1"},
             http_request=HTTP_REQUEST,
             failure=ProviderTransportFailure(
                 failure_class=FailureClass.TRANSIENT,
                 code=outcome.value,
                 message=marker,
-                retryable=True,
                 metadata={"marker": marker},
             ),
         )
@@ -281,6 +280,7 @@ def test_evidence_identity_cache_is_protected_by_deep_freezing() -> None:
 
     with pytest.raises(TypeError, match="immutable"):
         evidence.response.response_body["id"] = "changed"
+    assert evidence.http_request is not None
     with pytest.raises(TypeError, match="immutable"):
         evidence.http_request.body["messages"][0]["content"] = "changed"
 

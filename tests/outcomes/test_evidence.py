@@ -68,8 +68,6 @@ FAILURE = ProviderTransportFailure(
     failure_class=FailureClass.PERMANENT,
     code="invalid_request",
     message="bad request",
-    retryable=False,
-    request_body={"method": "POST"},
     response_body={"error": "bad"},
     status_code=400,
     metadata={"provider": "openai"},
@@ -82,7 +80,7 @@ def evidence_for(
     failure: ProviderTransportFailure | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
-        request_identity={"request": "req-1"},
+        request_identity_hash="1" * 64,
         policy_identity={"policy": "policy-1"},
         http_request=HTTP_REQUEST,
         response=response,
@@ -99,7 +97,7 @@ def expected_document(
         "schema": "dr_providers.provider_invocation_evidence",
         "schema_version": 2,
         "payload": {
-            "request_identity": {"request": "req-1"},
+            "request_identity_hash": "1" * 64,
             "policy_identity": {"policy": "policy-1"},
             "http_request": {
                 "method": "POST",
@@ -226,11 +224,12 @@ class TestInvocationEvidence:
         evidence = provider.invoke(request)
 
         payload = evidence.identity_payload()
-        assert payload["request_identity"] == request.identity_payload()
+        assert payload["request_identity_hash"] == request.identity_hash
         assert payload["policy_identity"] == OPENAI_POLICY.identity_payload()
         assert isinstance(evidence.outcome, ProviderTransportResponse)
         assert evidence.response is not None
         assert evidence.response.response_body == CHAT_BODY_OK
+        assert evidence.http_request is not None
         assert evidence.http_request.body["model"] == "m"
 
     def test_evidence_retains_complete_failure_body(self) -> None:
@@ -250,6 +249,7 @@ class TestInvocationEvidence:
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
         evidence = provider.invoke(openai_request())
+        assert evidence.http_request is not None
         headers = evidence.http_request.headers
         assert headers.get("Authorization") == "<redacted>"
         serialized = evidence.identity_document().to_json_dict()
@@ -297,8 +297,6 @@ class TestInvocationEvidence:
                     "failure_class": "permanent",
                     "code": "invalid_request",
                     "message": "bad request",
-                    "retryable": False,
-                    "request_body": {"method": "POST"},
                     "response_body": {"error": "bad"},
                     "status_code": 400,
                     "metadata": {"provider": "openai"},

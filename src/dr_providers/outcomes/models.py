@@ -10,6 +10,10 @@ from dr_providers.core.failures import (  # noqa: TC001 -- pydantic field
 )
 from dr_providers.core.frozen import _freeze_json
 
+INVALID_JSON_CODE = "invalid_response_json"
+TIMEOUT_CODE = "timeout"
+STALLED_RESPONSE_CODE = "stalled_response"
+
 
 class WarningSeverity(StrEnum):
     INFO = "info"
@@ -109,7 +113,7 @@ class ProviderTransportResponse(BaseModel):
 
 
 class ProviderTransportFailure(BaseModel):
-    """Expected failure with the constructed request-body mapping.
+    """Expected provider transport or protocol failure.
 
     Response evidence is decoded as JSON when possible or retained as text.
     """
@@ -119,18 +123,11 @@ class ProviderTransportFailure(BaseModel):
     failure_class: FailureClass
     code: StrictStr | None = None
     message: StrictStr
-    retryable: bool
-    request_body: dict[str, Any] = Field(default_factory=dict)
     response_body: Any | None = None
     status_code: StrictInt | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, _context: Any) -> None:
-        object.__setattr__(
-            self,
-            "request_body",
-            _freeze_json(self.request_body),
-        )
         object.__setattr__(
             self,
             "response_body",

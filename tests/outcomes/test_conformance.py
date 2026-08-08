@@ -73,9 +73,9 @@ class TestConformance:
         provider = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
-        outcome = provider.complete(
+        outcome = provider.invoke(
             openai_request(reasoning=ReasoningEffort.LOW)
-        )
+        ).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         codes = [w.code for w in outcome.warnings]
         assert REASONING_NOT_OBSERVED_CODE in codes
@@ -84,7 +84,7 @@ class TestConformance:
         body = dict(CHAT_BODY_OK)
         body["usage"] = {"prompt_tokens": 1, "completion_tokens": 99}
         provider = mock_provider(lambda _req: httpx.Response(200, json=body))
-        outcome = provider.complete(openai_request(token_limit=10))
+        outcome = provider.invoke(openai_request(token_limit=10)).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         codes = [w.code for w in outcome.warnings]
         assert TOKEN_LIMIT_EXCEEDED_CODE in codes
@@ -93,7 +93,7 @@ class TestConformance:
         body = dict(CHAT_BODY_OK)
         body["model"] = "m-other"
         provider = mock_provider(lambda _req: httpx.Response(200, json=body))
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         codes = [w.code for w in outcome.warnings]
         assert MODEL_SUBSTITUTION_CODE in codes
@@ -102,6 +102,6 @@ class TestConformance:
         provider = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
-        outcome = provider.complete(openai_request())
+        outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome.warnings == ()

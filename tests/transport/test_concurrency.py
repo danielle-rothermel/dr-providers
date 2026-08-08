@@ -115,10 +115,14 @@ def test_owned_deadline_breach_does_not_disturb_healthy_call(
     monkeypatch.setattr(httpx, "Client", lambda: next(clients))
     provider = HttpProvider(policy=_policy(), api_key="test-key")
 
-    blocked_call = DaemonCall.start(lambda: provider.complete(_request()))
+    blocked_call = DaemonCall.start(
+        lambda: provider.invoke(_request()).outcome
+    )
     blocked_call.wait_until_entered()
     _wait_for(blocked_entered, "first call did not enter its client")
-    healthy_call = DaemonCall.start(lambda: provider.complete(_request()))
+    healthy_call = DaemonCall.start(
+        lambda: provider.invoke(_request()).outcome
+    )
     healthy_call.wait_until_entered()
     try:
         healthy_outcome = healthy_call.result()
@@ -173,7 +177,7 @@ def test_injected_client_hard_deadline_preserves_caller_lifecycle(
     provider = HttpProvider(
         policy=_policy(), client=client, api_key="test-key"
     )
-    call = DaemonCall.start(lambda: provider.complete(_request()))
+    call = DaemonCall.start(lambda: provider.invoke(_request()).outcome)
     call.wait_until_entered()
     _wait_for(entered, "injected client did not enter its wire call")
 

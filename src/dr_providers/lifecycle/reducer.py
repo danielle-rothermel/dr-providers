@@ -122,10 +122,10 @@ def _validate_observation_for_state(
     if observation.request_identity_hash != state.request_identity_hash:
         msg = "completed observation request does not match provider call"
         raise ValueError(msg)
-    evidence_request_identity = observation.evidence.model_dump(mode="json")[
-        "request_identity"
-    ]
-    if evidence_request_identity != state.request.identity_payload():
+    if (
+        observation.evidence.request_identity_hash
+        != state.request_identity_hash
+    ):
         msg = "completed evidence request does not match provider call"
         raise ValueError(msg)
 

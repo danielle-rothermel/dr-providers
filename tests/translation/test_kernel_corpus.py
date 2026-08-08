@@ -64,7 +64,6 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
     if expected_failure is not None:
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == expected_failure["code"]
-        assert outcome.retryable is False
         if is_responses:
             assert outcome.metadata["diagnostics"] == _expected_diagnostics(
                 entry

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from threading import Event
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from dr_providers.core.provider import Provider
+    from dr_providers.outcomes.models import (
+        ProviderTransportFailure,
+        ProviderTransportResponse,
+    )
 
 from pydantic import (
     BaseModel,
@@ -14,6 +19,14 @@ from pydantic import (
     StrictStr,
 )
 
+from dr_providers.lifecycle import (
+    AcceptAllSemanticResponseClassifier,
+    ProviderCallOutcomeKind,
+    ProviderCallResult,
+    ProviderCallState,
+    StandardProviderCallRetryPolicy,
+    run_local_provider_call,
+)
 from dr_providers.modeling.controls import (
     GenerationControls,
     ProviderBodyExtensions,
@@ -22,10 +35,6 @@ from dr_providers.modeling.controls import (
 from dr_providers.modeling.presets import FACTORY_BY_KIND, ProviderFactoryKind
 from dr_providers.modeling.request import ProviderCallRequest
 from dr_providers.modeling.transcript import PromptMessage, Transcript
-from dr_providers.outcomes.models import (
-    ProviderTransportFailure,
-    ProviderTransportResponse,
-)
 from dr_providers.translation.request import build_payload, protocol_path
 
 
@@ -73,18 +82,34 @@ class QuerySpec(BaseModel):
 
 
 class QueryResult(BaseModel):
-    """One provider call: wire payload plus response or failure."""
+    """One provider call with its complete lifecycle result."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     endpoint_path: StrictStr
     payload: dict[str, Any]
-    response: ProviderTransportResponse | None = None
-    failure: ProviderTransportFailure | None = None
+    provider_call_result: ProviderCallResult
 
     @property
     def ok(self) -> bool:
-        return self.response is not None
+        return (
+            self.provider_call_result.outcome.kind
+            is ProviderCallOutcomeKind.ACCEPTED
+        )
+
+    @property
+    def response(self) -> ProviderTransportResponse | None:
+        records = self.provider_call_result.completed_invocations
+        if not records:
+            return None
+        return records[-1].observation.evidence.response
+
+    @property
+    def failure(self) -> ProviderTransportFailure | None:
+        records = self.provider_call_result.completed_invocations
+        if not records:
+            return None
+        return records[-1].observation.evidence.failure
 
 
 def build_request(spec: QuerySpec) -> ProviderCallRequest:
@@ -115,15 +140,20 @@ def run_query(spec: QuerySpec, provider: Provider) -> QueryResult:
     request = build_request(spec)
     payload = build_payload(request)
     endpoint_path = protocol_path(request.config)
-    outcome = provider.complete(request)
-    if isinstance(outcome, ProviderTransportResponse):
-        return QueryResult(
-            endpoint_path=endpoint_path,
-            payload=payload,
-            response=outcome,
-        )
+    classifier = AcceptAllSemanticResponseClassifier()
+    state = ProviderCallState.initial(
+        request=request,
+        retry_policy=StandardProviderCallRetryPolicy(),
+        classifier_identifier=classifier.identifier,
+    )
+    provider_call_result = run_local_provider_call(
+        provider=provider,
+        state=state,
+        classifier=classifier,
+        cancellation=Event(),
+    )
     return QueryResult(
         endpoint_path=endpoint_path,
         payload=payload,
-        failure=outcome,
+        provider_call_result=provider_call_result,
     )

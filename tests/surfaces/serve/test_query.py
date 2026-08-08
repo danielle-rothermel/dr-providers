@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from dr_providers.core.failures import FailureClass
+from dr_providers.lifecycle import ProviderCallOutcomeKind
 from dr_providers.modeling.controls import ReasoningEffort
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.modeling.transcript import MessageRole, PromptMessage
@@ -165,6 +166,11 @@ def test_run_query_returns_payload_and_response() -> None:
     assert result.payload["messages"] == [{"role": "user", "content": PROMPT}]
     assert result.response is not None
     assert result.response.text == "hello"
+    assert (
+        result.provider_call_result.outcome.kind
+        is ProviderCallOutcomeKind.ACCEPTED
+    )
+    assert len(result.provider_call_result.completed_invocations) == 1
 
 
 def test_run_query_surfaces_failure_records() -> None:
@@ -172,7 +178,6 @@ def test_run_query_surfaces_failure_records() -> None:
         failure_class=FailureClass.PERMANENT,
         code="scripted_down",
         message="scripted failure",
-        retryable=False,
     )
     provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
     result = run_query(make_spec(), provider)
@@ -181,3 +186,7 @@ def test_run_query_surfaces_failure_records() -> None:
     assert result.failure is not None
     assert result.failure.code == "scripted_down"
     assert result.payload["model"] == "test/model"
+    assert (
+        result.provider_call_result.outcome.kind
+        is ProviderCallOutcomeKind.INVOCATION_OUTCOME
+    )

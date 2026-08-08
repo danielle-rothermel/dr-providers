@@ -8,7 +8,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    StrictInt,
     StrictStr,
     field_validator,
     model_validator,
@@ -75,7 +74,6 @@ class ProviderTransportPolicy(BaseModel):
         strict=True,
     )
     """Per-operation httpx idle bound, clamped to ``timeout_seconds``."""
-    native_retry_count: StrictInt = Field(default=0, ge=0)
 
     @field_validator("base_url")
     @classmethod
@@ -106,18 +104,16 @@ class ProviderTransportPolicy(BaseModel):
             "base_url": self.base_url,
             "timeout_seconds": self.timeout_seconds,
             "idle_timeout_seconds": self.idle_timeout_seconds,
-            "native_retry_count": self.native_retry_count,
         }
 
 
-def policy_for(  # noqa: PLR0913 -- explicit keyword-only overrides
+def policy_for(
     kind: ProviderKind,
     *,
     api_key_env: ApiKeyEnv | str | None = None,
     base_url: str | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
-    native_retry_count: int = 0,
 ) -> ProviderTransportPolicy:
     resolved_key_env = (
         DEFAULT_API_KEY_ENVS[kind] if api_key_env is None else api_key_env
@@ -130,5 +126,4 @@ def policy_for(  # noqa: PLR0913 -- explicit keyword-only overrides
         base_url=resolved_base_url,
         timeout_seconds=timeout_seconds,
         idle_timeout_seconds=idle_timeout_seconds,
-        native_retry_count=native_retry_count,
     )

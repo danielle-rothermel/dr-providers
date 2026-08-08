@@ -25,11 +25,9 @@ class TestPolicyFor:
             ProviderKind.OPENAI,
             base_url="https://proxy.example/v1",
             api_key_env="CUSTOM_KEY_ENV",
-            native_retry_count=2,
         )
         assert policy.base_url == "https://proxy.example/v1"
         assert policy.api_key_env == "CUSTOM_KEY_ENV"
-        assert policy.native_retry_count == 2
 
     def test_idle_timeout_clamped_to_timeout(self) -> None:
         policy = policy_for(
@@ -102,16 +100,13 @@ class TestPolicyFor:
         with pytest.raises(ValidationError):
             ProviderTransportPolicy.model_validate_json(payload)
 
-    @pytest.mark.parametrize(
-        "native_retry_count", [-1, True], ids=("negative", "bool")
-    )
-    def test_invalid_native_retry_count_rejected(
-        self, native_retry_count: int
-    ) -> None:
+    def test_removed_native_retry_count_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            policy_for(
-                ProviderKind.OPENAI,
-                native_retry_count=native_retry_count,
+            ProviderTransportPolicy.model_validate(
+                {
+                    "api_key_env": "OPENAI_API_KEY",
+                    "native_retry_count": 1,
+                }
             )
 
     @pytest.mark.parametrize(

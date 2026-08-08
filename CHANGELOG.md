@@ -6,6 +6,29 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Add closed provider-invocation and provider-call outcomes, a caller-identified
+  semantic response classifier, serializable provider-call state and retry
+  instructions, deterministic retry and cancellation transitions, and a thin
+  cancellation-aware local lifecycle driver.
+- Export the provider-call lifecycle models, policies, classifiers, transitions,
+  identities, and local driver from the lifecycle package surface.
+
+### Changed
+
+- Cut the public `Provider` protocol, `HttpProvider`, and `ScriptedProvider` over
+  to one evidence-producing `invoke()` operation. CLI, serve, and all five live
+  provider routes now execute calls through the same standard local lifecycle.
+- Make serve query results retain the complete terminal `ProviderCallResult`,
+  including the ordered decided invocation records and their evidence.
+
+### Removed
+
+- Remove `Provider.complete()`, hidden native transport retries, transport-level
+  `retryable` fields, repeated failure request bodies, and the CLI `--retries`
+  option. The provider-call retry policy is now the sole retry authority.
+
 ## [0.2.2] - 2026-08-05
 
 ### Added

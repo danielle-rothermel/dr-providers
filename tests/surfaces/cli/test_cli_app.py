@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dr_providers import ProviderTransportPolicy
 from dr_providers.modeling.controls import ReasoningEffort
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.surfaces.cli import app as cli
@@ -246,7 +245,6 @@ def test_query_failure_prints_stderr_and_exits_nonzero(
         failure_class=FailureClass.PERMANENT,
         code="boom_code",
         message="boom message",
-        retryable=False,
     )
     patch_http_provider(monkeypatch, [ScriptedOutcome(failure=failure)])
 
@@ -266,7 +264,7 @@ def test_query_failure_prints_stderr_and_exits_nonzero(
     assert result.stderr == "failure: boom_code: boom message\n"
 
 
-def test_retries_flag_is_forwarded_to_policy(
+def test_removed_retries_flag_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = patch_http_provider(monkeypatch)
@@ -285,7 +283,6 @@ def test_retries_flag_is_forwarded_to_policy(
         ],
     )
 
-    assert result.exit_code == 0
-    policy = stub.kwargs["policy"]
-    assert isinstance(policy, ProviderTransportPolicy)
-    assert policy.native_retry_count == 3
+    assert result.exit_code == 2
+    assert "--retries" in result.output
+    assert stub.requests == []
