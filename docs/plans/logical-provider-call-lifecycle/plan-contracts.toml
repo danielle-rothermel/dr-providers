@@ -1,24 +1,25 @@
 [[contracts]]
-title = "Physical invocation is the wire-attempt boundary"
+title = "Provider invocation is the wire-request boundary"
 statement = """
-Each physical provider invocation performs at most one provider wire attempt \
-and yields exactly one provider invocation evidence record. Native client, \
-transport, and adapter retries are disabled; every additional wire attempt \
-requires another physical invocation visible to the logical provider call."""
+Each provider invocation performs at most one provider wire request and yields \
+exactly one provider invocation evidence record. Provider clients, transports, \
+and adapters perform no automatic call retry; every additional wire request \
+requires another invocation visible to the logical provider call."""
 rationale = """
-Attempt cardinality and evidence cannot be audited when retries occur below \
-the invocation boundary. Making every wire attempt explicit gives one stable \
+Invocation cardinality and evidence cannot be audited when retries occur below \
+the invocation boundary. Making every wire request explicit gives one stable \
 unit for classification, retry decisions, and diagnostics."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Logical results preserve exact attempt history"
+title = "Logical results preserve exact invocation history"
 statement = """
 A logical provider call applies one provider call retry policy to one provider \
-call request and returns a closed serializable result with provider call \
-attempt records in execution order and exactly one terminal disposition. \
-Cancellation and interruption preserve every completed attempt, and policy \
-exhaustion is explicit rather than inferred from the final attempt."""
+call request and returns a closed serializable result with ordered provider \
+invocation evidence and corresponding dispositions in execution order and \
+exactly one terminal disposition. Cancellation and interruption preserve every \
+completed invocation, and policy exhaustion is explicit rather than inferred \
+from the final invocation."""
 rationale = """
 The result must explain both what happened and why the call stopped. Ordered \
 complete evidence prevents terminal outcomes from erasing earlier provider \
@@ -28,11 +29,11 @@ date = "2026-08-08"
 [[contracts]]
 title = "Retry behavior is bounded, declared, and reproducible"
 statement = """
-A provider call retry policy has stable identity, a finite maximum attempt \
-cardinality, explicit retry eligibility, and declared delay-selection rules. \
-Attempt evidence records selected policy delay, applicable server-provided \
-delay, and deterministic jitter inputs and result; incidental wall-clock time \
-does not participate in provider-call request identity."""
+A provider call retry policy has stable identity, a finite maximum invocation \
+count, explicit retry eligibility, and declared delay-selection rules. \
+Logical-call evidence records selected policy delay, applicable server-\
+provided delay, and deterministic jitter inputs and result; incidental wall-\
+clock time does not participate in provider-call request identity."""
 rationale = """
 Bounded declared policy makes repetition reviewable before execution, while \
 recorded delay choices explain observed behavior without turning runtime \
@@ -42,7 +43,7 @@ date = "2026-08-08"
 [[contracts]]
 title = "Provider-call dispositions are closed and provider-generic"
 statement = """
-Provider attempt and terminal dispositions form closed serializable models \
+Provider invocation and terminal dispositions form closed serializable models \
 that distinguish success, blank response, malformed response, semantic \
 rejection, transient provider or network failure, rate limiting, timeout, \
 cancellation or interruption, and exhausted policy without encoding \
@@ -57,7 +58,7 @@ date = "2026-08-08"
 title = "Semantic classification stops before evaluation policy"
 statement = """
 A semantic response classifier maps a provider transport response to a closed \
-provider attempt disposition and serializable classification evidence. It \
+provider invocation disposition and serializable classification evidence. It \
 does not assign task correctness, reward, candidate rank, task selection, or \
 statistical meaning."""
 rationale = """
@@ -83,7 +84,7 @@ date = "2026-08-08"
 [[contracts]]
 title = "Provider lifecycle ownership excludes workflow and evaluation"
 statement = """
-dr-providers owns physical-attempt classification, retry decisions, and \
+dr-providers owns provider-invocation classification, retry decisions, and \
 terminal provider-call evidence. It does not own durable scheduling or \
 timers, fan-out or fan-in, run membership, global admission or adaptive rate \
 control, result caching, artifact storage, or evaluation decisions; callers \
@@ -97,11 +98,13 @@ date = "2026-08-08"
 [[contracts]]
 title = "Retries do not imply exactly-once provider effects"
 statement = """
-Every provider wire attempt may independently reach the external provider. A \
-logical provider call reports its observable attempts but does not claim \
-exactly-once external effects, global rate control, or termination of in-\
+Every provider wire request may independently reach the external provider. A \
+logical provider call reports its observable invocations and wire-request \
+evidence but does not claim exactly-once external effects, global rate control, \
+or termination of in-\
 flight provider work after a timeout, cancellation, or interruption."""
 rationale = """
-Evidence can establish the attempts observed by this package, not the \
-provider's internal effects or containment that the transport cannot prove."""
+Evidence can establish the invocations and wire requests observed by this \
+package, not the provider's internal effects or containment that the transport \
+cannot prove."""
 date = "2026-08-08"

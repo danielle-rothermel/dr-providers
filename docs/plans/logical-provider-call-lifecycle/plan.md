@@ -5,7 +5,7 @@ Status: design plan for local refinement; implementation has not started.
 ## Purpose
 
 Make `dr-providers` the single owner of the generic lifecycle for one logical
-model-provider call: physical attempts, response classification, bounded
+model-provider call: provider invocations, response classification, bounded
 retries, and terminal evidence.
 
 This moves provider-specific resilience out of research applications while
@@ -17,28 +17,30 @@ owners.
 `dr-providers` already owns provider request configuration, transport behavior,
 and invocation evidence. Research callers currently add a second semantic
 retry/classification layer, while HTTP transport may also retry natively. That
-split makes attempt counts, evidence, and failure meaning difficult to audit.
+split makes invocation and wire-request counts, evidence, and failure meaning
+difficult to audit.
 
 The intended hard boundary is:
 
-- one **physical invocation** performs one provider wire attempt and yields one
-  complete invocation-evidence record;
-- one **logical call** applies a declared policy to an ordered sequence of
-  physical attempts and yields one terminal result; and
+- one **provider invocation** performs at most one provider wire request and
+  yields one complete invocation-evidence record;
+- one **logical provider call** applies a declared policy to an ordered
+  sequence of provider invocations and yields one terminal result; and
 - a research application maps the terminal result to its own evaluation row,
   reward, or experiment decision.
 
 ## Intended ownership
 
-### Physical invocation
+### Provider invocation
 
-A physical invocation must have exactly one observable wire attempt. Its
-evidence should retain the sanitized request identity, provider/model route,
-timing and usage data when available, response or failure classification, and
-the transport diagnostics needed for replay and debugging.
+A provider invocation may fail before sending a provider wire request;
+otherwise it performs exactly one observable wire request. Its evidence should
+retain the sanitized request identity, provider/model route, timing and usage
+data when available, response or failure classification, and the transport
+diagnostics needed for replay and debugging.
 
 The local design should hard-cut any implicit HTTP retry behavior that would
-hide multiple wire attempts inside one invocation. If a transport library
+hide multiple wire requests inside one invocation. If a transport library
 cannot disable such behavior, the public guarantee and evidence shape must be
 reconsidered before implementation proceeds.
 
@@ -52,8 +54,9 @@ Add one small logical-call executor that accepts:
 - an injectable wait/clock boundary suitable for deterministic tests and
   durable callers.
 
-It returns a closed, serializable result containing ordered attempt evidence
-and exactly one terminal disposition. The result must distinguish at least:
+It returns a closed, serializable result containing ordered invocation evidence
+and corresponding classifications and retry decisions, plus exactly one
+terminal disposition. The result must distinguish at least:
 
 - success;
 - blank response;
@@ -70,7 +73,8 @@ and its value to an evaluation remain outside this package.
 
 Retry schedules must be bounded and explicit. Backoff and jitter choices must
 be reproducible in evidence without making wall-clock timing part of request
-identity. Cancellation and interruption must preserve every completed attempt.
+identity. Cancellation and interruption must preserve every completed
+invocation.
 
 ### Identity and redaction
 
@@ -96,7 +100,8 @@ This foundation does not own:
 
 `dr-platform` may durably invoke this operation later, but it should not learn
 provider retry semantics. Research applications may supply semantic
-classification rules, but they should not reimplement the attempt lifecycle.
+classification rules, but they should not reimplement the invocation
+lifecycle.
 
 ## Design questions to finalize locally
 
@@ -109,22 +114,22 @@ classification rules, but they should not reimplement the attempt lifecycle.
 4. How are server-provided retry delays combined with policy backoff and
    deterministic jitter?
 5. How does cancellation surface when it occurs before, during, or between
-   attempts?
+   invocations?
 6. Which raw response fields are retained, bounded, redacted, or externalized
    as artifacts?
-7. Does the executor perform waiting itself, or return a resumable next-attempt
-   decision for a caller that owns durable waiting?
+7. Does the executor perform waiting itself, or return a resumable
+   next-invocation decision for a caller that owns durable waiting?
 
 The last question should be resolved against the smallest stable provider
 contract, without importing a particular workflow engine into this package.
 
 ## Implementation sequence
 
-1. Inventory every existing physical and logical retry path and establish one
-   wire-attempt contract.
+1. Inventory every existing transport and logical retry path and establish one
+   wire-request contract.
 2. Freeze invocation and logical-result schemas, taxonomy, and identities.
 3. Implement the logical executor over an injected scripted transport.
-4. Convert concrete OpenAI/OpenRouter routes to the same physical-invocation
+4. Convert concrete OpenAI/OpenRouter routes to the same provider-invocation
    contract.
 5. Delete duplicate native or application-level lifecycle paths in the same
    hard-cutover stack where their consumers are controlled.
@@ -133,10 +138,10 @@ contract, without importing a particular workflow engine into this package.
 
 ## Validation bar
 
-- Scripted transports prove exact ordered attempts and terminal outcomes for
+- Scripted transports prove exact ordered invocations and terminal outcomes for
   every disposition.
-- One physical invocation always corresponds to one invocation-evidence
-  record and at most one wire attempt.
+- One provider invocation always corresponds to one invocation-evidence record
+  and at most one provider wire request.
 - Cardinality, timeout, interruption, and retry-exhaustion behavior are exact.
 - Tests control interleavings and clocks explicitly; elapsed time is only a
   watchdog.
