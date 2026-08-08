@@ -22,18 +22,26 @@ to an ordered sequence of provider invocations for one provider call request, \
 producing one provider call result."""
 
 [[terms]]
+name = "provider call identity"
+definition = """
+The stable identity of a provider call's declared semantics, binding its \
+request, retry policy, classifier identifier, and schema version."""
+part_of = ["provider call result"]
+
+[[terms]]
 name = "provider call retry policy"
 definition = """
-A frozen identity-bearing declaration of the finite invocation limit, retryable \
-provider invocation outcomes, and delay rules."""
+A frozen identity-bearing declaration of the finite invocation limit, provider \
+invocation outcome eligibility, and delay rules."""
 part_of = ["provider call"]
 
 [[terms]]
 name = "semantic response classifier"
 definition = """
-An identity-bearing caller-supplied mapping from a provider transport response \
-to a provider invocation outcome. It does not decide application correctness, \
-reward, or experiment value."""
+A caller-supplied mapping from a provider transport response to a provider \
+invocation outcome, identified by an opaque stable identifier whose meaning the \
+caller owns. It does not decide application correctness, reward, or experiment \
+value."""
 
 [[terms]]
 name = "provider invocation outcome"
@@ -45,13 +53,14 @@ part_of = ["provider call result"]
 [[terms]]
 name = "provider call outcome"
 definition = """
-The terminal classification of one provider call: an accepted or non-retryable \
-invocation outcome, cooperative cancellation, or retry-policy exhaustion."""
+The terminal classification of one provider call: an accepted invocation \
+outcome, an invocation outcome for which policy stops, cooperative cancellation, \
+or retry-policy exhaustion."""
 part_of = ["provider call result"]
 
 [[terms]]
 name = "provider call result"
 definition = """
-The complete versioned serializable return value: request, retry-policy, and \
-classifier identities; ordered invocation evidence, outcomes, and retry \
-decisions; and one provider call outcome."""
+The complete versioned serializable return value: provider call identity; \
+ordered per-invocation associations of evidence, outcomes, and retry decisions; \
+and one provider call outcome."""
