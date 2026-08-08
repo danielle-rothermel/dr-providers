@@ -10,16 +10,16 @@ part_of = ["provider invocation"]
 name = "provider invocation"
 definition = """
 A single execution of a provider call request that performs at most one \
-provider wire request and yields one complete provider invocation evidence \
-record."""
+provider wire request and returns one complete provider invocation evidence \
+record for every expected provider transport outcome."""
 part_of = ["provider call"]
 
 [[terms]]
 name = "provider call"
 definition = """
-One application of a declared provider call retry policy to an ordered \
-sequence of provider invocations for a single provider call request, \
-yielding one provider call result."""
+One application of a declared provider call retry policy and semantic response \
+classifier to an ordered sequence of provider invocations for a single provider \
+call request, yielding one provider call result."""
 
 [[terms]]
 name = "provider call retry policy"
@@ -32,9 +32,9 @@ part_of = ["provider call"]
 [[terms]]
 name = "semantic response classifier"
 definition = """
-A caller-supplied boundary that classifies a successful provider transport \
-response into a generic provider invocation outcome without deciding \
-application correctness, reward, or experiment value."""
+An identity-bearing caller-supplied boundary that classifies a successful \
+provider transport response into a generic provider invocation outcome without \
+deciding application correctness, reward, or experiment value."""
 
 [[terms]]
 name = "provider invocation outcome"
@@ -48,13 +48,14 @@ part_of = ["provider call result"]
 name = "provider call outcome"
 definition = """
 The terminal provider-level result of one provider call, including an accepted \
-or non-retryable provider invocation outcome, cancellation or interruption, \
-and retry-policy exhaustion."""
+or non-retryable provider invocation outcome, cooperatively observed \
+cancellation, and retry-policy exhaustion."""
 part_of = ["provider call result"]
 
 [[terms]]
 name = "provider call result"
 definition = """
-A versioned serializable result containing provider-call request and retry-\
-policy identities, ordered provider invocation evidence with corresponding \
-outcomes and retry-decision evidence, and exactly one provider call outcome."""
+A versioned serializable result containing provider-call request, retry-policy, \
+and semantic-classifier identities; ordered provider invocation evidence with \
+corresponding outcomes and retry-decision evidence; and exactly one provider \
+call outcome."""

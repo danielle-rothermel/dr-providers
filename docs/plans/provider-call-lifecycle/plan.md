@@ -22,8 +22,9 @@ difficult to audit.
 
 The intended hard boundary is:
 
-- one **provider invocation** performs at most one provider wire request and
-  yields one complete invocation-evidence record;
+- one **provider invocation** performs at most one provider wire request and,
+  when it returns an expected transport outcome, yields one complete provider
+  invocation evidence record;
 - one **provider call** applies a declared policy to an ordered sequence of
   provider invocations and yields one terminal result; and
 - a research application maps the terminal result to its own evaluation row,
@@ -34,14 +35,19 @@ The intended hard boundary is:
 ### Provider invocation
 
 A provider invocation may fail before sending a provider wire request;
-otherwise it performs exactly one observable wire request. Its evidence should
-retain the sanitized request identity, provider/model route, timing and usage
-data when available, response or failure classification, and the transport
-diagnostics needed for replay and debugging.
+otherwise it performs exactly one observable wire request. An invocation that
+returns an expected transport outcome also returns evidence retaining the
+sanitized request identity, provider/model route, timing and usage data when
+available, response or failure classification, and the transport diagnostics
+needed for replay and debugging. Invalid inputs and unexpected programming or
+infrastructure errors may raise without producing invocation evidence.
 
-The local design should hard-cut any implicit HTTP retry behavior that would
-hide multiple wire requests inside one invocation. If a transport library
-cannot disable such behavior, the public guarantee and evidence shape must be
+The local design should hard-cut package-controlled automatic provider-call
+retry behavior that would hide multiple wire requests inside one invocation.
+Every additional wire request initiated by `dr-providers` requires another
+visible invocation. This does not claim control over protocol-level
+retransmission or provider-side behavior. If a provider client cannot disable
+automatic call retries, the public guarantee and evidence shape must be
 reconsidered before implementation proceeds.
 
 ### Provider call executor
@@ -50,7 +56,7 @@ Add one small provider-call executor that accepts:
 
 - a provider invocation operation;
 - a frozen retry policy with an explicit identity;
-- a semantic response classifier; and
+- a semantic response classifier with an explicit identity; and
 - an injectable wait/clock boundary suitable for deterministic tests and
   durable callers.
 
@@ -64,24 +70,29 @@ outcome. The result must distinguish at least:
 - semantically rejected response;
 - transient provider or network failure;
 - rate limiting;
-- timeout; and
+- timeout;
+- cooperatively observed cancellation; and
 - exhausted policy.
 
 The final taxonomy and which provider invocation outcomes are retryable belong
 here because they describe provider-call behavior. The interpretation of
 success content and its value to an evaluation remain outside this package.
 
-Retry schedules must be bounded and explicit. Backoff and jitter choices must
-be reproducible in evidence without making wall-clock timing part of request
-identity. Cancellation and interruption must preserve every completed
-invocation.
+Retry schedules must be bounded and explicit. The result records each selected
+delay and its declared source without making wall-clock timing part of request
+identity or promising replay of delay computation. A returned cooperative-
+cancellation outcome includes every invocation completed before cancellation
+was observed. Abrupt process or thread interruption does not produce a provider
+call result.
 
 ### Identity and redaction
 
-Provider-call result identity must be derived from stable, credential-free
-inputs. It must be possible to distinguish the request, route, policy, and
-implementation version without persisting API keys, authorization headers, or
-raw secret configuration.
+Provider-call result identity must bind the provider call request, retry policy,
+semantic response classifier, and result schema version. Package, dependency,
+and runtime versions may be retained as diagnostics but do not participate in
+identity. Standard construction excludes API key values, authorization headers,
+and declared credential fields from identity without claiming universal secret
+detection.
 
 The exact persisted keys and discriminators are wire-format contracts and need
 golden tests.
@@ -108,13 +119,13 @@ lifecycle.
 1. What is the closed provider call outcome model, and which provider
    invocation outcomes are retryable by default versus only by explicit policy?
 2. Is the semantic classifier a protocol, a closed configuration, or a narrow
-   callable boundary, and what evidence from it is serializable?
+   callable boundary, and how is its stable identity declared?
 3. What exactly replaces the current native HTTP retry configuration in the
    hard cutover?
-4. How are server-provided retry delays combined with policy backoff and
-   deterministic jitter?
-5. How does cancellation surface when it occurs before, during, or between
-   invocations?
+4. Which delay sources does the initial policy support, and how is the selected
+   source represented in the result?
+5. Where can cooperative cancellation be observed without claiming containment
+   of an in-flight invocation?
 6. Which raw response fields are retained, bounded, redacted, or externalized
    as artifacts?
 7. Does the executor perform waiting itself, or return a resumable
@@ -140,12 +151,15 @@ contract, without importing a particular workflow engine into this package.
 
 - Scripted transports prove exact invocation order and provider-call termination
   for every provider invocation outcome.
-- One provider invocation always corresponds to one invocation-evidence record
-  and at most one provider wire request.
-- Cardinality, timeout, interruption, and retry-exhaustion behavior are exact.
+- Every invocation returning an expected transport outcome corresponds to one
+  invocation-evidence record and at most one provider wire request.
+- Cardinality, timeout, cooperative-cancellation, and retry-exhaustion behavior
+  are exact.
 - Tests control interleavings and clocks explicitly; elapsed time is only a
   watchdog.
-- All representations and persisted evidence pass credential-redaction tests.
+- Standard construction excludes declared credential fields from identity and
+  redacts known credential headers in evidence; no universal detection is
+  claimed.
 - OpenAI and OpenRouter integrations conform to the same lifecycle contract.
 - Public docs make no exactly-once or global rate-control claim.
 

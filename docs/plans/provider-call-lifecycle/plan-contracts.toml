@@ -1,25 +1,31 @@
 [[contracts]]
 title = "Provider invocation is the wire-request boundary"
 statement = """
-Each provider invocation performs at most one provider wire request and yields \
-exactly one provider invocation evidence record. Provider clients, transports, \
-and adapters perform no automatic call retry; every additional wire request \
-requires another invocation visible to the provider call."""
+Each provider invocation performs at most one provider wire request. An \
+invocation that returns an expected provider transport outcome returns exactly \
+one provider invocation evidence record. dr-providers performs no automatic \
+provider-call retry below this boundary; every additional wire request it \
+initiates requires another invocation visible to the provider call. This \
+contract does not cover protocol-level retransmission or provider-side \
+behavior."""
 rationale = """
 Invocation cardinality and evidence cannot be audited when retries occur below \
-the invocation boundary. Making every wire request explicit gives one stable \
-unit for classification, retry decisions, and diagnostics."""
+the invocation boundary. The expected-outcome qualification preserves explicit \
+exceptions for invalid inputs and unexpected defects instead of forcing every \
+failure into evidence data."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Provider call results preserve exact invocation history"
+title = "Returned provider call results preserve exact invocation history"
 statement = """
 A provider call applies one provider call retry policy to one provider call \
 request and returns a closed serializable result with ordered provider \
 invocation evidence and corresponding outcomes in execution order and exactly \
-one provider call outcome. Cancellation and interruption preserve every \
-completed invocation, and policy exhaustion is explicit rather than inferred \
-from the final invocation."""
+one provider call outcome. When cooperative cancellation is observed and \
+returned as an outcome, the result includes every invocation completed before \
+cancellation was observed. Abrupt process or thread interruption and unexpected \
+exceptions are outside the returned-result contract. Policy exhaustion is \
+explicit rather than inferred from the final invocation."""
 rationale = """
 The result must explain both what happened and why the call stopped. Ordered \
 complete evidence prevents terminal outcomes from erasing earlier provider \
@@ -27,27 +33,31 @@ effects or retry decisions."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Retry behavior is bounded, declared, and reproducible"
+title = "Retry behavior is bounded, declared, and observable"
 statement = """
 A provider call retry policy has stable identity, a finite maximum invocation \
 count, explicit retry eligibility, and declared delay-selection rules. \
-The provider call result records selected policy delay, applicable server-\
-provided delay, and deterministic jitter inputs and result; incidental wall-\
-clock time does not participate in provider-call request identity."""
+The provider call result records each selected delay and its declared source; \
+incidental wall-clock time does not participate in provider-call request \
+identity."""
 rationale = """
 Bounded declared policy makes repetition reviewable before execution, while \
-recorded delay choices explain observed behavior without turning runtime \
-scheduling into call meaning."""
+recorded delay choices explain observed behavior without freezing a random-\
+number algorithm, server-delay parser, or runtime scheduling into the \
+contract."""
 date = "2026-08-08"
 
 [[contracts]]
 title = "Provider call outcomes are closed and provider-generic"
 statement = """
-Provider invocation outcomes and provider call outcomes form closed \
-serializable models that distinguish success, blank response, malformed \
-response, semantic rejection, transient provider or network failure, rate \
-limiting, timeout, cancellation or interruption, and exhausted policy without \
-encoding application evaluation decisions."""
+Provider invocation outcomes form a closed serializable model that \
+distinguishes success, blank response, malformed response, semantic rejection, \
+transient provider or network failure, rate limiting, and timeout. Provider \
+call outcomes form a separate closed serializable model that distinguishes an \
+accepted or non-retryable invocation outcome, cooperatively observed \
+cancellation, and exhausted policy. Abrupt process or thread interruption is \
+outside the returned-outcome models. Neither model encodes application \
+evaluation decisions."""
 rationale = """
 One exhaustive provider-level vocabulary makes retry and terminal behavior \
 consistent across callers. Keeping evaluation meaning out of the taxonomy \
@@ -58,9 +68,9 @@ date = "2026-08-08"
 title = "Semantic classification stops before evaluation policy"
 statement = """
 A semantic response classifier maps a provider transport response to a closed \
-provider invocation outcome and serializable classification evidence. It \
-does not assign task correctness, reward, candidate rank, task selection, or \
-statistical meaning."""
+provider invocation outcome. It does not require a separate generic \
+classification-evidence schema and does not assign task correctness, reward, \
+candidate rank, task selection, or statistical meaning."""
 rationale = """
 Provider-call execution needs a generic decision about whether a response is \
 usable or retryable, while only the consuming application can interpret that \
@@ -71,14 +81,17 @@ date = "2026-08-08"
 title = "Provider call results bind layered credential-free identities"
 statement = """
 A provider call result binds the provider call request identity, provider call \
-retry-policy identity, and lifecycle schema and implementation versions. API \
-key values, authorization headers, raw secret configuration, wall-clock \
-timing, and runtime scheduling state do not participate. Persisted identity \
-keys and outcome discriminators are pinned by golden tests."""
+retry-policy identity, semantic response classifier identity, and result schema \
+version. Package, dependency, and runtime versions may be retained as \
+diagnostic metadata but do not participate in identity. Standard construction \
+excludes API key values, authorization headers, and declared credential fields \
+from identity; it does not claim universal secret detection. Persisted \
+identity keys and outcome discriminators are pinned by golden tests."""
 rationale = """
 Stable identities must distinguish changes in call meaning and retry behavior \
-without persisting credentials or allowing incidental runtime conditions to \
-change identity."""
+without making unrelated releases or incidental runtime conditions identity-\
+affecting. Explicit credential exclusions remain testable without promising \
+arbitrary secret discovery."""
 date = "2026-08-08"
 
 [[contracts]]
@@ -102,7 +115,8 @@ Every provider wire request may independently reach the external provider. A \
 provider call reports its observable invocations and wire-request evidence but \
 does not claim exactly-once external effects, global rate control, or \
 termination of in-\
-flight provider work after a timeout, cancellation, or interruption."""
+flight provider work after a timeout, cooperative cancellation, or abrupt \
+process interruption."""
 rationale = """
 Evidence can establish the invocations and wire requests observed by this \
 package, not the provider's internal effects or containment that the transport \
