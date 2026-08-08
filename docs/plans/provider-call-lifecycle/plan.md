@@ -1,12 +1,12 @@
-# Logical Provider-Call Lifecycle
+# Provider-Call Lifecycle
 
 Status: design plan for local refinement; implementation has not started.
 
 ## Purpose
 
-Make `dr-providers` the single owner of the generic lifecycle for one logical
-model-provider call: provider invocations, response classification, bounded
-retries, and terminal evidence.
+Make `dr-providers` the single owner of the generic lifecycle for one provider
+call: provider invocations, response classification, bounded retries, and
+terminal evidence.
 
 This moves provider-specific resilience out of research applications while
 leaving evaluation policy and durable workflow scheduling with their proper
@@ -24,8 +24,8 @@ The intended hard boundary is:
 
 - one **provider invocation** performs at most one provider wire request and
   yields one complete invocation-evidence record;
-- one **logical provider call** applies a declared policy to an ordered
-  sequence of provider invocations and yields one terminal result; and
+- one **provider call** applies a declared policy to an ordered sequence of
+  provider invocations and yields one terminal result; and
 - a research application maps the terminal result to its own evaluation row,
   reward, or experiment decision.
 
@@ -44,9 +44,9 @@ hide multiple wire requests inside one invocation. If a transport library
 cannot disable such behavior, the public guarantee and evidence shape must be
 reconsidered before implementation proceeds.
 
-### Logical call executor
+### Provider call executor
 
-Add one small logical-call executor that accepts:
+Add one small provider-call executor that accepts:
 
 - a provider invocation operation;
 - a frozen retry policy with an explicit identity;
@@ -55,8 +55,8 @@ Add one small logical-call executor that accepts:
   durable callers.
 
 It returns a closed, serializable result containing ordered invocation evidence
-and corresponding outcomes and retry decisions, plus exactly one logical
-provider call outcome. The result must distinguish at least:
+and corresponding outcomes and retry decisions, plus exactly one provider call
+outcome. The result must distinguish at least:
 
 - success;
 - blank response;
@@ -78,10 +78,10 @@ invocation.
 
 ### Identity and redaction
 
-Logical-call identity must be derived from stable, credential-free inputs. It
-must be possible to distinguish the request, route, policy, and implementation
-version without persisting API keys, authorization headers, or raw secret
-configuration.
+Provider-call result identity must be derived from stable, credential-free
+inputs. It must be possible to distinguish the request, route, policy, and
+implementation version without persisting API keys, authorization headers, or
+raw secret configuration.
 
 The exact persisted keys and discriminators are wire-format contracts and need
 golden tests.
@@ -105,9 +105,8 @@ lifecycle.
 
 ## Design questions to finalize locally
 
-1. What is the closed logical provider call outcome model, and which provider
-   invocation outcomes are retryable by default versus only by explicit
-   policy?
+1. What is the closed provider call outcome model, and which provider
+   invocation outcomes are retryable by default versus only by explicit policy?
 2. Is the semantic classifier a protocol, a closed configuration, or a narrow
    callable boundary, and what evidence from it is serializable?
 3. What exactly replaces the current native HTTP retry configuration in the
@@ -126,10 +125,10 @@ contract, without importing a particular workflow engine into this package.
 
 ## Implementation sequence
 
-1. Inventory every existing transport and logical retry path and establish one
-   wire-request contract.
-2. Freeze invocation and logical-result schemas, taxonomy, and identities.
-3. Implement the logical executor over an injected scripted transport.
+1. Inventory every existing transport and provider-call retry path and
+   establish one wire-request contract.
+2. Freeze invocation and provider-call result schemas, taxonomy, and identities.
+3. Implement the provider-call executor over an injected scripted transport.
 4. Convert concrete OpenAI/OpenRouter routes to the same provider-invocation
    contract.
 5. Delete duplicate native or application-level lifecycle paths in the same
@@ -139,7 +138,7 @@ contract, without importing a particular workflow engine into this package.
 
 ## Validation bar
 
-- Scripted transports prove exact invocation order and logical-call termination
+- Scripted transports prove exact invocation order and provider-call termination
   for every provider invocation outcome.
 - One provider invocation always corresponds to one invocation-evidence record
   and at most one provider wire request.

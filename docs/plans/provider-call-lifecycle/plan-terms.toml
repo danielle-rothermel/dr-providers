@@ -12,22 +12,22 @@ definition = """
 A single execution of a provider call request that performs at most one \
 provider wire request and yields one complete provider invocation evidence \
 record."""
-part_of = ["logical provider call"]
+part_of = ["provider call"]
 
 [[terms]]
-name = "logical provider call"
+name = "provider call"
 definition = """
 One application of a declared provider call retry policy to an ordered \
 sequence of provider invocations for a single provider call request, \
-yielding one logical provider call result."""
+yielding one provider call result."""
 
 [[terms]]
 name = "provider call retry policy"
 definition = """
 A frozen identity-bearing declaration of a finite maximum invocation count, \
 retryable provider invocation outcomes, and delay-selection rules for one \
-logical provider call."""
-part_of = ["logical provider call"]
+provider call."""
+part_of = ["provider call"]
 
 [[terms]]
 name = "semantic response classifier"
@@ -41,21 +41,20 @@ name = "provider invocation outcome"
 definition = """
 The terminal provider-level result of one provider invocation, including \
 transport-failure and semantic-response categories, used to decide whether a \
-logical provider call terminates or continues."""
-part_of = ["logical provider call result"]
+provider call terminates or continues."""
+part_of = ["provider call result"]
 
 [[terms]]
-name = "logical provider call outcome"
+name = "provider call outcome"
 definition = """
-The terminal provider-level result of one logical provider call, including an \
-accepted or non-retryable provider invocation outcome, cancellation or \
-interruption, and retry-policy exhaustion."""
-part_of = ["logical provider call result"]
+The terminal provider-level result of one provider call, including an accepted \
+or non-retryable provider invocation outcome, cancellation or interruption, \
+and retry-policy exhaustion."""
+part_of = ["provider call result"]
 
 [[terms]]
-name = "logical provider call result"
+name = "provider call result"
 definition = """
 A versioned serializable result containing provider-call request and retry-\
 policy identities, ordered provider invocation evidence with corresponding \
-outcomes and retry-decision evidence, and exactly one logical provider call \
-outcome."""
+outcomes and retry-decision evidence, and exactly one provider call outcome."""

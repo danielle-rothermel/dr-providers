@@ -4,7 +4,7 @@ statement = """
 Each provider invocation performs at most one provider wire request and yields \
 exactly one provider invocation evidence record. Provider clients, transports, \
 and adapters perform no automatic call retry; every additional wire request \
-requires another invocation visible to the logical provider call."""
+requires another invocation visible to the provider call."""
 rationale = """
 Invocation cardinality and evidence cannot be audited when retries occur below \
 the invocation boundary. Making every wire request explicit gives one stable \
@@ -12,14 +12,14 @@ unit for classification, retry decisions, and diagnostics."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Logical results preserve exact invocation history"
+title = "Provider call results preserve exact invocation history"
 statement = """
-A logical provider call applies one provider call retry policy to one provider \
-call request and returns a closed serializable result with ordered provider \
+A provider call applies one provider call retry policy to one provider call \
+request and returns a closed serializable result with ordered provider \
 invocation evidence and corresponding outcomes in execution order and exactly \
-one logical provider call outcome. Cancellation and interruption preserve \
-every completed invocation, and policy exhaustion is explicit rather than \
-inferred from the final invocation."""
+one provider call outcome. Cancellation and interruption preserve every \
+completed invocation, and policy exhaustion is explicit rather than inferred \
+from the final invocation."""
 rationale = """
 The result must explain both what happened and why the call stopped. Ordered \
 complete evidence prevents terminal outcomes from erasing earlier provider \
@@ -31,7 +31,7 @@ title = "Retry behavior is bounded, declared, and reproducible"
 statement = """
 A provider call retry policy has stable identity, a finite maximum invocation \
 count, explicit retry eligibility, and declared delay-selection rules. \
-Logical-call evidence records selected policy delay, applicable server-\
+The provider call result records selected policy delay, applicable server-\
 provided delay, and deterministic jitter inputs and result; incidental wall-\
 clock time does not participate in provider-call request identity."""
 rationale = """
@@ -41,9 +41,9 @@ scheduling into call meaning."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Provider-call outcomes are closed and provider-generic"
+title = "Provider call outcomes are closed and provider-generic"
 statement = """
-Provider invocation outcomes and logical provider call outcomes form closed \
+Provider invocation outcomes and provider call outcomes form closed \
 serializable models that distinguish success, blank response, malformed \
 response, semantic rejection, transient provider or network failure, rate \
 limiting, timeout, cancellation or interruption, and exhausted policy without \
@@ -68,13 +68,13 @@ response within an evaluation."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Logical-call identity is layered and credential-free"
+title = "Provider call results bind layered credential-free identities"
 statement = """
-A logical provider call result binds the provider call request identity, \
-provider call retry-policy identity, and lifecycle schema and implementation \
-versions. API key values, authorization headers, raw secret configuration, \
-wall-clock timing, and runtime scheduling state do not participate. Persisted \
-identity keys and outcome discriminators are pinned by golden tests."""
+A provider call result binds the provider call request identity, provider call \
+retry-policy identity, and lifecycle schema and implementation versions. API \
+key values, authorization headers, raw secret configuration, wall-clock \
+timing, and runtime scheduling state do not participate. Persisted identity \
+keys and outcome discriminators are pinned by golden tests."""
 rationale = """
 Stable identities must distinguish changes in call meaning and retry behavior \
 without persisting credentials or allowing incidental runtime conditions to \
@@ -84,13 +84,13 @@ date = "2026-08-08"
 [[contracts]]
 title = "Provider lifecycle ownership excludes workflow and evaluation"
 statement = """
-dr-providers owns provider-invocation classification, retry decisions, and \
-terminal provider-call evidence. It does not own durable scheduling or \
-timers, fan-out or fan-in, run membership, global admission or adaptive rate \
-control, result caching, artifact storage, or evaluation decisions; callers \
-may drive waiting or resumption without redefining provider retry semantics."""
+dr-providers owns provider invocation outcomes, retry decisions, and terminal \
+provider-call evidence. It does not own durable scheduling or timers, fan-out \
+or fan-in, run membership, global admission or adaptive rate control, result \
+caching, artifact storage, or evaluation decisions; callers may drive waiting \
+or resumption without redefining provider retry semantics."""
 rationale = """
-Keeping the boundary at one logical provider call makes the lifecycle reusable \
+Keeping the boundary at one provider call makes the lifecycle reusable \
 inside local and durable execution systems without importing workflow or \
 research policy into the provider package."""
 date = "2026-08-08"
@@ -99,9 +99,9 @@ date = "2026-08-08"
 title = "Retries do not imply exactly-once provider effects"
 statement = """
 Every provider wire request may independently reach the external provider. A \
-logical provider call reports its observable invocations and wire-request \
-evidence but does not claim exactly-once external effects, global rate control, \
-or termination of in-\
+provider call reports its observable invocations and wire-request evidence but \
+does not claim exactly-once external effects, global rate control, or \
+termination of in-\
 flight provider work after a timeout, cancellation, or interruption."""
 rationale = """
 Evidence can establish the invocations and wire requests observed by this \
