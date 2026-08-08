@@ -73,7 +73,9 @@ def _http_provider(outcome_kind: OutcomeKind) -> Provider:
             api_key_env="TEST_API_KEY",
             base_url="https://example.test/v1",
         ),
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        _client_factory=lambda **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(handler)
+        ),
         api_key="test-key",
     )
 

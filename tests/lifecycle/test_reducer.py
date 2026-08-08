@@ -37,6 +37,7 @@ HTTP_REQUEST = ProviderHttpRequestEvidence(
     url="https://example.test/v1/chat/completions",
     headers={"Content-Type": "application/json"},
     body={"model": "m", "messages": [{"role": "user", "content": "hi"}]},
+    body_bytes=57,
 )
 
 

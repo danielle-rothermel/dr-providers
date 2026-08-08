@@ -74,7 +74,9 @@ def mock_provider(
 ) -> HttpProvider:
     return HttpProvider(
         policy=policy,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        _client_factory=lambda **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(handler)
+        ),
         api_key="test-key",
     )
 
@@ -147,7 +149,9 @@ class TestHttpProvider:
             transport=httpx.MockTransport(handler), follow_redirects=True
         )
         provider = HttpProvider(
-            policy=OPENAI_POLICY, client=client, api_key="test-key"
+            policy=OPENAI_POLICY,
+            api_key="test-key",
+            _client_factory=lambda **_kwargs: client,
         )
 
         outcome = provider.invoke(openai_request()).outcome
@@ -264,7 +268,7 @@ class TestHttpProvider:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         provider = HttpProvider(
             policy=OPENAI_POLICY,
-            client=httpx.Client(
+            _client_factory=lambda **_kwargs: httpx.Client(
                 transport=httpx.MockTransport(
                     lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
                 )
@@ -306,38 +310,50 @@ class TestInvocationWireBoundary:
 
 
 class TestHttpProviderLifecycle:
-    def test_owned_per_call_client_closed_after_invoke(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        real_client = httpx.Client
+    def test_one_bounded_owned_client_is_reused_and_closed(self) -> None:
         created: list[httpx.Client] = []
+        factory_kwargs: list[dict[str, Any]] = []
+        calls: list[int] = []
 
-        def tracking_client(*_args: object, **_kwargs: object) -> httpx.Client:
-            client = real_client(
+        def tracking_client(**kwargs: Any) -> httpx.Client:
+            factory_kwargs.append(kwargs)
+            client = httpx.Client(
                 transport=httpx.MockTransport(
-                    lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+                    lambda _req: (
+                        calls.append(1)
+                        or httpx.Response(200, json=CHAT_BODY_OK)
+                    )
                 )
             )
             created.append(client)
             return client
 
-        monkeypatch.setattr(httpx, "Client", tracking_client)
-        with HttpProvider(policy=OPENAI_POLICY, api_key="k") as provider:
-            outcome = provider.invoke(openai_request()).outcome
-        assert isinstance(outcome, ProviderTransportResponse)
-        assert created
-        assert all(client.is_closed for client in created)
-
-    def test_injected_client_left_open(self) -> None:
-        client = httpx.Client(
-            transport=httpx.MockTransport(
-                lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
-            )
-        )
         with HttpProvider(
-            policy=OPENAI_POLICY, client=client, api_key="k"
+            policy=OPENAI_POLICY,
+            api_key="k",
+            _client_factory=tracking_client,
         ) as provider:
-            outcome = provider.invoke(openai_request()).outcome
-            assert isinstance(outcome, ProviderTransportResponse)
-        assert not client.is_closed
-        client.close()
+            first = provider.invoke(openai_request()).outcome
+            second = provider.invoke(openai_request()).outcome
+
+        assert isinstance(first, ProviderTransportResponse)
+        assert isinstance(second, ProviderTransportResponse)
+        assert calls == [1, 1]
+        assert len(created) == 1
+        assert created[0].is_closed
+        limits = factory_kwargs[0]["limits"]
+        assert limits.max_connections == OPENAI_POLICY.max_connections
+        assert (
+            limits.max_keepalive_connections
+            == OPENAI_POLICY.max_keepalive_connections
+        )
+        assert factory_kwargs[0]["follow_redirects"] is False
+
+    def test_invoke_after_close_is_unexpected_misuse(self) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+        )
+        provider.close()
+
+        with pytest.raises(RuntimeError, match="closing or closed"):
+            provider.invoke(openai_request())

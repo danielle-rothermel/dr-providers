@@ -12,6 +12,12 @@ from dr_providers import (
     ProviderTransportPolicy,
     policy_for,
 )
+from dr_providers.transport.policy import (
+    DEFAULT_MAX_CONNECTIONS,
+    DEFAULT_MAX_KEEPALIVE_CONNECTIONS,
+    DEFAULT_MAX_REQUEST_BYTES,
+    DEFAULT_MAX_RESPONSE_BYTES,
+)
 
 
 class TestPolicyFor:
@@ -19,15 +25,30 @@ class TestPolicyFor:
         policy = policy_for(ProviderKind.ANTHROPIC)
         assert policy.api_key_env == ApiKeyEnv.ANTHROPIC.value
         assert policy.base_url == ProviderBaseUrl.ANTHROPIC.value
+        assert policy.max_connections == DEFAULT_MAX_CONNECTIONS
+        assert (
+            policy.max_keepalive_connections
+            == DEFAULT_MAX_KEEPALIVE_CONNECTIONS
+        )
+        assert policy.max_request_bytes == DEFAULT_MAX_REQUEST_BYTES
+        assert policy.max_response_bytes == DEFAULT_MAX_RESPONSE_BYTES
 
     def test_overrides_apply(self) -> None:
         policy = policy_for(
             ProviderKind.OPENAI,
             base_url="https://proxy.example/v1",
             api_key_env="CUSTOM_KEY_ENV",
+            max_connections=7,
+            max_keepalive_connections=3,
+            max_request_bytes=4096,
+            max_response_bytes=8192,
         )
         assert policy.base_url == "https://proxy.example/v1"
         assert policy.api_key_env == "CUSTOM_KEY_ENV"
+        assert policy.max_connections == 7
+        assert policy.max_keepalive_connections == 3
+        assert policy.max_request_bytes == 4096
+        assert policy.max_response_bytes == 8192
 
     def test_idle_timeout_clamped_to_timeout(self) -> None:
         policy = policy_for(
@@ -110,6 +131,46 @@ class TestPolicyFor:
             )
 
     @pytest.mark.parametrize(
+        "field_name",
+        [
+            "max_connections",
+            "max_keepalive_connections",
+            "max_request_bytes",
+            "max_response_bytes",
+        ],
+    )
+    @pytest.mark.parametrize(
+        "invalid_value",
+        [0, -1, True, 1.5, "1"],
+        ids=("zero", "negative", "bool", "float", "string"),
+    )
+    def test_invalid_integer_bound_rejected(
+        self,
+        field_name: str,
+        invalid_value: object,
+    ) -> None:
+        with pytest.raises(ValidationError):
+            ProviderTransportPolicy.model_validate(
+                {
+                    "api_key_env": "OPENAI_API_KEY",
+                    field_name: invalid_value,
+                }
+            )
+
+    def test_keepalive_limit_cannot_exceed_total_connections(self) -> None:
+        with pytest.raises(
+            ValidationError,
+            match=(
+                "max_keepalive_connections must not exceed max_connections"
+            ),
+        ):
+            ProviderTransportPolicy(
+                api_key_env="OPENAI_API_KEY",
+                max_connections=2,
+                max_keepalive_connections=3,
+            )
+
+    @pytest.mark.parametrize(
         "timeout_seconds",
         [1, 1.5, 1e300],
         ids=("int", "float", "large-float"),
@@ -142,7 +203,16 @@ class TestPolicyFor:
 
         payload = policy.identity_payload()
 
-        assert payload["api_key_env"] == "OPENAI_API_KEY"
+        assert payload == {
+            "api_key_env": "OPENAI_API_KEY",
+            "base_url": "https://api.openai.com/v1",
+            "timeout_seconds": 120.0,
+            "idle_timeout_seconds": 90.0,
+            "max_connections": DEFAULT_MAX_CONNECTIONS,
+            "max_keepalive_connections": (DEFAULT_MAX_KEEPALIVE_CONNECTIONS),
+            "max_request_bytes": DEFAULT_MAX_REQUEST_BYTES,
+            "max_response_bytes": DEFAULT_MAX_RESPONSE_BYTES,
+        }
         assert "api_key" not in payload
 
     @pytest.mark.parametrize(

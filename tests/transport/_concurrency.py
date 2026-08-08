@@ -13,7 +13,7 @@ SocketHandler = Callable[[socket.socket, threading.Event], None]
 
 @dataclass(frozen=True, slots=True)
 class DaemonCall[ResultT]:
-    """Avoid joining a call while asserting watchdog behavior."""
+    """Run an event-gated call with time used only as a test watchdog."""
 
     _entered: threading.Event
     _done: threading.Event
@@ -54,7 +54,7 @@ class DaemonCall[ResultT]:
 
     def result(self) -> ResultT:
         if not self._done.wait(timeout=WATCHDOG_SECONDS):
-            raise TimeoutError("daemon call exceeded the external watchdog")
+            raise TimeoutError("event-gated call exceeded the test watchdog")
         if self._errors:
             raise self._errors[0]
         return self._results[0]

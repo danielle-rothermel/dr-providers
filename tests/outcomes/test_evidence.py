@@ -62,6 +62,7 @@ HTTP_REQUEST = ProviderHttpRequestEvidence(
     url="https://example.test/v1",
     headers={"Content-Type": "application/json"},
     body={"model": "m"},
+    body_bytes=13,
 )
 SUCCESS = ProviderTransportResponse(text="hi", response_body={"id": "resp-1"})
 FAILURE = ProviderTransportFailure(
@@ -95,16 +96,21 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 2,
+        "schema_version": 3,
         "payload": {
             "request_identity_hash": "1" * 64,
             "policy_identity": {"policy": "policy-1"},
+            "max_request_bytes": None,
+            "max_response_bytes": None,
             "http_request": {
                 "method": "POST",
                 "url": "https://example.test/v1",
                 "headers": {"Content-Type": "application/json"},
                 "body": {"model": "m"},
+                "body_bytes": 13,
             },
+            "response_bytes": None,
+            "retry_after": None,
             "response": response,
             "failure": failure,
         },
@@ -131,7 +137,9 @@ def mock_provider(
 ) -> HttpProvider:
     return HttpProvider(
         policy=policy,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        _client_factory=lambda **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(handler)
+        ),
         api_key="test-key",
     )
 
@@ -143,7 +151,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 2
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 3
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"

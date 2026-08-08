@@ -17,6 +17,10 @@ from dr_providers.modeling.route import ProviderKind
 
 DEFAULT_TIMEOUT_SECONDS = 120.0
 DEFAULT_IDLE_TIMEOUT_SECONDS = 90.0
+DEFAULT_MAX_CONNECTIONS = 10
+DEFAULT_MAX_KEEPALIVE_CONNECTIONS = 5
+DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
+DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 class ApiKeyEnv(StrEnum):
@@ -62,18 +66,38 @@ class ProviderTransportPolicy(BaseModel):
         allow_inf_nan=False,
         strict=True,
     )
-    """Caller-visible watchdog budget, excluding its small fixed margin.
-
-    Expiry returns a typed failure without proving that the worker or socket
-    stopped.
-    """
+    """Native connect, write, and pool timeout bound."""
     idle_timeout_seconds: float = Field(
         default=DEFAULT_IDLE_TIMEOUT_SECONDS,
         gt=0,
         allow_inf_nan=False,
         strict=True,
     )
-    """Per-operation httpx idle bound, clamped to ``timeout_seconds``."""
+    """Native response-read idle bound, clamped to ``timeout_seconds``."""
+    max_connections: int = Field(
+        default=DEFAULT_MAX_CONNECTIONS,
+        gt=0,
+        strict=True,
+    )
+    """Maximum open connections in the provider-owned client pool."""
+    max_keepalive_connections: int = Field(
+        default=DEFAULT_MAX_KEEPALIVE_CONNECTIONS,
+        gt=0,
+        strict=True,
+    )
+    """Maximum idle connections retained by the provider-owned client."""
+    max_request_bytes: int = Field(
+        default=DEFAULT_MAX_REQUEST_BYTES,
+        gt=0,
+        strict=True,
+    )
+    """Maximum exact UTF-8 JSON request-body bytes dispatched."""
+    max_response_bytes: int = Field(
+        default=DEFAULT_MAX_RESPONSE_BYTES,
+        gt=0,
+        strict=True,
+    )
+    """Maximum decompressed response-body bytes retained and decoded."""
 
     @field_validator("base_url")
     @classmethod
@@ -87,11 +111,14 @@ class ProviderTransportPolicy(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _clamp_idle_to_timeout(self) -> ProviderTransportPolicy:
+    def _normalize_and_validate_limits(self) -> ProviderTransportPolicy:
         if self.idle_timeout_seconds > self.timeout_seconds:
             object.__setattr__(
                 self, "idle_timeout_seconds", self.timeout_seconds
             )
+        if self.max_keepalive_connections > self.max_connections:
+            msg = "max_keepalive_connections must not exceed max_connections"
+            raise ValueError(msg)
         return self
 
     def identity_payload(self) -> dict[str, Any]:
@@ -104,16 +131,24 @@ class ProviderTransportPolicy(BaseModel):
             "base_url": self.base_url,
             "timeout_seconds": self.timeout_seconds,
             "idle_timeout_seconds": self.idle_timeout_seconds,
+            "max_connections": self.max_connections,
+            "max_keepalive_connections": self.max_keepalive_connections,
+            "max_request_bytes": self.max_request_bytes,
+            "max_response_bytes": self.max_response_bytes,
         }
 
 
-def policy_for(
+def policy_for(  # noqa: PLR0913 -- one explicit transport policy surface
     kind: ProviderKind,
     *,
     api_key_env: ApiKeyEnv | str | None = None,
     base_url: str | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
+    max_connections: int = DEFAULT_MAX_CONNECTIONS,
+    max_keepalive_connections: int = DEFAULT_MAX_KEEPALIVE_CONNECTIONS,
+    max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
+    max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
 ) -> ProviderTransportPolicy:
     resolved_key_env = (
         DEFAULT_API_KEY_ENVS[kind] if api_key_env is None else api_key_env
@@ -126,4 +161,8 @@ def policy_for(
         base_url=resolved_base_url,
         timeout_seconds=timeout_seconds,
         idle_timeout_seconds=idle_timeout_seconds,
+        max_connections=max_connections,
+        max_keepalive_connections=max_keepalive_connections,
+        max_request_bytes=max_request_bytes,
+        max_response_bytes=max_response_bytes,
     )

@@ -146,13 +146,17 @@ serializable retry policy through the deterministic lifecycle transition, and
 returns the complete ordered `ProviderCallResult`. The standard policy permits
 at most two invocations with one one-second retry, only for contained transient
 network/provider failures and contained transport timeouts. Uncontained
-deadline expiration is terminal; when a caller injects its own synchronous HTTP
-client, its daemon worker and socket may linger until that caller-owned
-operation eventually ends.
+deadline expiration remains terminal in the lifecycle schema. The standard
+HTTP provider uses direct synchronous native phase timeouts, so its timeout
+failures are contained after the HTTP operation returns. It owns and reuses one
+bounded client; closing stops admission, drains active invocations, and closes
+that client once.
 
-Decoded response bodies are retained as JSON when possible or as text
-otherwise; original HTTP wire bytes are not retained. The standard HTTP path
-redacts known credential header names. Direct
+The exact encoded request body and decompressed response body are bounded by
+identity-bearing transport policy limits. Complete in-limit response bodies are
+retained as JSON when possible or as text otherwise; over-limit responses retain
+no partial body. Original HTTP wire bytes are not retained. The standard HTTP
+path redacts known credential header names. Direct
 `ProviderHttpRequestEvidence` construction and deserialization remain
 trusted-data paths.
 

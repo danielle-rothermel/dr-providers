@@ -63,7 +63,9 @@ def mock_provider(
 ) -> HttpProvider:
     return HttpProvider(
         policy=policy,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        _client_factory=lambda **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(handler)
+        ),
         api_key="test-key",
     )
 
