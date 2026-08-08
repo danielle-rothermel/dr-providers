@@ -25,7 +25,7 @@ yielding one logical provider call result."""
 name = "provider call retry policy"
 definition = """
 A frozen identity-bearing declaration of a finite maximum invocation count, \
-retryable provider invocation dispositions, and delay-selection rules for one \
+retryable provider invocation outcomes, and delay-selection rules for one \
 logical provider call."""
 part_of = ["logical provider call"]
 
@@ -33,23 +33,23 @@ part_of = ["logical provider call"]
 name = "semantic response classifier"
 definition = """
 A caller-supplied boundary that classifies a successful provider transport \
-response into a generic provider invocation disposition without deciding \
+response into a generic provider invocation outcome without deciding \
 application correctness, reward, or experiment value."""
 
 [[terms]]
-name = "provider invocation disposition"
+name = "provider invocation outcome"
 definition = """
-The closed provider-level classification of one provider invocation, including \
+The terminal provider-level result of one provider invocation, including \
 transport-failure and semantic-response categories, used to decide whether a \
 logical provider call terminates or continues."""
 part_of = ["logical provider call result"]
 
 [[terms]]
-name = "provider call terminal disposition"
+name = "logical provider call outcome"
 definition = """
-The closed provider-level reason a logical provider call ended, including \
-terminal invocation outcomes, cancellation or interruption, and retry-policy \
-exhaustion."""
+The terminal provider-level result of one logical provider call, including an \
+accepted or non-retryable provider invocation outcome, cancellation or \
+interruption, and retry-policy exhaustion."""
 part_of = ["logical provider call result"]
 
 [[terms]]
@@ -57,5 +57,5 @@ name = "logical provider call result"
 definition = """
 A versioned serializable result containing provider-call request and retry-\
 policy identities, ordered provider invocation evidence with corresponding \
-dispositions and retry-decision evidence, and exactly one provider call \
-terminal disposition."""
+outcomes and retry-decision evidence, and exactly one logical provider call \
+outcome."""

@@ -16,10 +16,10 @@ title = "Logical results preserve exact invocation history"
 statement = """
 A logical provider call applies one provider call retry policy to one provider \
 call request and returns a closed serializable result with ordered provider \
-invocation evidence and corresponding dispositions in execution order and \
-exactly one terminal disposition. Cancellation and interruption preserve every \
-completed invocation, and policy exhaustion is explicit rather than inferred \
-from the final invocation."""
+invocation evidence and corresponding outcomes in execution order and exactly \
+one logical provider call outcome. Cancellation and interruption preserve \
+every completed invocation, and policy exhaustion is explicit rather than \
+inferred from the final invocation."""
 rationale = """
 The result must explain both what happened and why the call stopped. Ordered \
 complete evidence prevents terminal outcomes from erasing earlier provider \
@@ -41,13 +41,13 @@ scheduling into call meaning."""
 date = "2026-08-08"
 
 [[contracts]]
-title = "Provider-call dispositions are closed and provider-generic"
+title = "Provider-call outcomes are closed and provider-generic"
 statement = """
-Provider invocation and terminal dispositions form closed serializable models \
-that distinguish success, blank response, malformed response, semantic \
-rejection, transient provider or network failure, rate limiting, timeout, \
-cancellation or interruption, and exhausted policy without encoding \
-application evaluation decisions."""
+Provider invocation outcomes and logical provider call outcomes form closed \
+serializable models that distinguish success, blank response, malformed \
+response, semantic rejection, transient provider or network failure, rate \
+limiting, timeout, cancellation or interruption, and exhausted policy without \
+encoding application evaluation decisions."""
 rationale = """
 One exhaustive provider-level vocabulary makes retry and terminal behavior \
 consistent across callers. Keeping evaluation meaning out of the taxonomy \
@@ -58,7 +58,7 @@ date = "2026-08-08"
 title = "Semantic classification stops before evaluation policy"
 statement = """
 A semantic response classifier maps a provider transport response to a closed \
-provider invocation disposition and serializable classification evidence. It \
+provider invocation outcome and serializable classification evidence. It \
 does not assign task correctness, reward, candidate rank, task selection, or \
 statistical meaning."""
 rationale = """
@@ -74,7 +74,7 @@ A logical provider call result binds the provider call request identity, \
 provider call retry-policy identity, and lifecycle schema and implementation \
 versions. API key values, authorization headers, raw secret configuration, \
 wall-clock timing, and runtime scheduling state do not participate. Persisted \
-identity keys and disposition discriminators are pinned by golden tests."""
+identity keys and outcome discriminators are pinned by golden tests."""
 rationale = """
 Stable identities must distinguish changes in call meaning and retry behavior \
 without persisting credentials or allowing incidental runtime conditions to \

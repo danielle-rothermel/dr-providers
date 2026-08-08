@@ -55,8 +55,8 @@ Add one small logical-call executor that accepts:
   durable callers.
 
 It returns a closed, serializable result containing ordered invocation evidence
-and corresponding classifications and retry decisions, plus exactly one
-terminal disposition. The result must distinguish at least:
+and corresponding outcomes and retry decisions, plus exactly one logical
+provider call outcome. The result must distinguish at least:
 
 - success;
 - blank response;
@@ -67,9 +67,9 @@ terminal disposition. The result must distinguish at least:
 - timeout; and
 - exhausted policy.
 
-The final taxonomy and which dispositions are retryable belong here because
-they describe provider-call behavior. The interpretation of success content
-and its value to an evaluation remain outside this package.
+The final taxonomy and which provider invocation outcomes are retryable belong
+here because they describe provider-call behavior. The interpretation of
+success content and its value to an evaluation remain outside this package.
 
 Retry schedules must be bounded and explicit. Backoff and jitter choices must
 be reproducible in evidence without making wall-clock timing part of request
@@ -105,8 +105,9 @@ lifecycle.
 
 ## Design questions to finalize locally
 
-1. What is the closed terminal-disposition model, and which dispositions are
-   retryable by default versus only by explicit policy?
+1. What is the closed logical provider call outcome model, and which provider
+   invocation outcomes are retryable by default versus only by explicit
+   policy?
 2. Is the semantic classifier a protocol, a closed configuration, or a narrow
    callable boundary, and what evidence from it is serializable?
 3. What exactly replaces the current native HTTP retry configuration in the
@@ -138,8 +139,8 @@ contract, without importing a particular workflow engine into this package.
 
 ## Validation bar
 
-- Scripted transports prove exact ordered invocations and terminal outcomes for
-  every disposition.
+- Scripted transports prove exact invocation order and logical-call termination
+  for every provider invocation outcome.
 - One provider invocation always corresponds to one invocation-evidence record
   and at most one provider wire request.
 - Cardinality, timeout, interruption, and retry-exhaustion behavior are exact.
