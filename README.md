@@ -152,6 +152,13 @@ failures are contained after the HTTP operation returns. It owns and reuses one
 bounded client; closing stops admission, drains active invocations, and closes
 that client once.
 
+`ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
+JSON-serializable handoff values. A durable consumer can persist the declared
+next state and schedule the instruction's delay before invoking again; restoring
+at that boundary produces the same terminal result as the uninterrupted local
+driver. Storage, scheduling, and exactly-once provider effects remain outside
+this package.
+
 The exact encoded request body and decompressed response body are bounded by
 identity-bearing transport policy limits. Complete in-limit response bodies are
 retained as JSON when possible or as text otherwise; over-limit responses retain
