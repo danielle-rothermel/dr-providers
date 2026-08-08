@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 from dr_providers.core.failures import (  # noqa: TC001 -- pydantic field
     FailureClass,
 )
+from dr_providers.core.frozen import _freeze_json
 
 
 class WarningSeverity(StrEnum):
@@ -25,6 +26,9 @@ class ProviderTransportWarning(BaseModel):
     message: StrictStr
     severity: WarningSeverity = WarningSeverity.WARNING
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def model_post_init(self, _context: Any) -> None:
+        object.__setattr__(self, "metadata", _freeze_json(self.metadata))
 
 
 class TokenUsage(BaseModel):
@@ -65,6 +69,18 @@ class ResponsesDiagnostics(BaseModel):
     refusal_len: StrictInt | None = None
     response_id_hash: StrictStr | None = None
 
+    def model_post_init(self, _context: Any) -> None:
+        object.__setattr__(
+            self,
+            "output_item_types",
+            _freeze_json(self.output_item_types),
+        )
+        object.__setattr__(
+            self,
+            "content_part_types",
+            _freeze_json(self.content_part_types),
+        )
+
 
 class ProviderTransportResponse(BaseModel):
     """Transport success with the parsed JSON response mapping.
@@ -84,6 +100,13 @@ class ProviderTransportResponse(BaseModel):
     model: StrictStr | None = None
     diagnostics: ResponsesDiagnostics | None = None
 
+    def model_post_init(self, _context: Any) -> None:
+        object.__setattr__(
+            self,
+            "response_body",
+            _freeze_json(self.response_body),
+        )
+
 
 class ProviderTransportFailure(BaseModel):
     """Expected failure with the constructed request-body mapping.
@@ -101,6 +124,19 @@ class ProviderTransportFailure(BaseModel):
     response_body: Any | None = None
     status_code: StrictInt | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    def model_post_init(self, _context: Any) -> None:
+        object.__setattr__(
+            self,
+            "request_body",
+            _freeze_json(self.request_body),
+        )
+        object.__setattr__(
+            self,
+            "response_body",
+            _freeze_json(self.response_body),
+        )
+        object.__setattr__(self, "metadata", _freeze_json(self.metadata))
 
 
 ProviderTransportOutcome = ProviderTransportResponse | ProviderTransportFailure

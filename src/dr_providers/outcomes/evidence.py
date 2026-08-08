@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping  # noqa: TC003 -- pydantic field type
+from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from dr_serialize import (
     IdentityDocument,
     build_identity_document,
+    identity_document_hash,
 )
 from pydantic import (
     BaseModel,
@@ -110,7 +112,7 @@ class ProviderHttpRequestEvidence(BaseModel):
 
 
 class ProviderInvocationEvidence(BaseModel):
-    """Freeze identities only; outcome dictionaries remain mutable.
+    """Freeze nested identity-bearing JSON and identity components.
 
     Schema metadata belongs to ``identity_document()``.
     """
@@ -137,6 +139,22 @@ class ProviderInvocationEvidence(BaseModel):
         object.__setattr__(
             self, "policy_identity", _deep_freeze(dict(self.policy_identity))
         )
+        if self.response is not None:
+            object.__setattr__(
+                self,
+                "response",
+                ProviderTransportResponse.model_validate(
+                    self.response.model_dump(mode="python")
+                ),
+            )
+        if self.failure is not None:
+            object.__setattr__(
+                self,
+                "failure",
+                ProviderTransportFailure.model_validate(
+                    self.failure.model_dump(mode="python")
+                ),
+            )
         return self
 
     @field_serializer("request_identity")
@@ -190,3 +208,7 @@ class ProviderInvocationEvidence(BaseModel):
             schema_version=PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
             payload=self.identity_payload(),
         )
+
+    @cached_property
+    def identity_hash(self) -> str:
+        return identity_document_hash(self.identity_document())
