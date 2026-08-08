@@ -23,7 +23,7 @@ difficult to audit.
 The intended hard boundary is:
 
 - one **provider invocation** performs at most one provider wire request and,
-  when it returns an expected transport outcome, yields one complete provider
+  when it returns a provider transport outcome, yields one complete provider
   invocation evidence record;
 - one **provider call** applies a declared policy to an ordered sequence of
   provider invocations and yields one terminal result; and
@@ -36,7 +36,7 @@ The intended hard boundary is:
 
 A provider invocation may fail before sending a provider wire request;
 otherwise it performs exactly one observable wire request. An invocation that
-returns an expected transport outcome also returns evidence retaining the
+returns a provider transport outcome also returns evidence retaining the
 sanitized request identity, provider/model route, timing and usage data when
 available, response or failure classification, and the transport diagnostics
 needed for replay and debugging. Invalid inputs and unexpected programming or
@@ -71,7 +71,7 @@ outcome. The result must distinguish at least:
 - transient provider or network failure;
 - rate limiting;
 - timeout;
-- cooperatively observed cancellation; and
+- cooperative cancellation; and
 - exhausted policy.
 
 The final taxonomy and which provider invocation outcomes are retryable belong
@@ -151,7 +151,7 @@ contract, without importing a particular workflow engine into this package.
 
 - Scripted transports prove exact invocation order and provider-call termination
   for every provider invocation outcome.
-- Every invocation returning an expected transport outcome corresponds to one
+- Every invocation returning a provider transport outcome corresponds to one
   invocation-evidence record and at most one provider wire request.
 - Cardinality, timeout, cooperative-cancellation, and retry-exhaustion behavior
   are exact.

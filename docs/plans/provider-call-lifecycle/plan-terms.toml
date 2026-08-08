@@ -3,59 +3,55 @@
 [[terms]]
 name = "provider wire request"
 definition = """
-One outbound provider-protocol request transmitted to a provider service."""
+An outbound protocol request to a provider service."""
 part_of = ["provider invocation"]
 
 [[terms]]
 name = "provider invocation"
 definition = """
-A single execution of a provider call request that performs at most one \
-provider wire request and returns one complete provider invocation evidence \
-record for every expected provider transport outcome."""
+One execution of a provider call request that makes at most one provider wire \
+request and returns one provider invocation evidence record with any provider \
+transport outcome."""
 part_of = ["provider call"]
 
 [[terms]]
 name = "provider call"
 definition = """
-One application of a declared provider call retry policy and semantic response \
-classifier to an ordered sequence of provider invocations for a single provider \
-call request, yielding one provider call result."""
+Application of one provider call retry policy and semantic response classifier \
+to an ordered sequence of provider invocations for one provider call request, \
+producing one provider call result."""
 
 [[terms]]
 name = "provider call retry policy"
 definition = """
-A frozen identity-bearing declaration of a finite maximum invocation count, \
-retryable provider invocation outcomes, and delay-selection rules for one \
-provider call."""
+A frozen identity-bearing declaration of the finite invocation limit, retryable \
+provider invocation outcomes, and delay rules."""
 part_of = ["provider call"]
 
 [[terms]]
 name = "semantic response classifier"
 definition = """
-An identity-bearing caller-supplied boundary that classifies a successful \
-provider transport response into a generic provider invocation outcome without \
-deciding application correctness, reward, or experiment value."""
+An identity-bearing caller-supplied mapping from a provider transport response \
+to a provider invocation outcome. It does not decide application correctness, \
+reward, or experiment value."""
 
 [[terms]]
 name = "provider invocation outcome"
 definition = """
-The terminal provider-level result of one provider invocation, including \
-transport-failure and semantic-response categories, used to decide whether a \
-provider call terminates or continues."""
+The terminal transport or semantic classification of one provider invocation, \
+used to decide whether the provider call stops or continues."""
 part_of = ["provider call result"]
 
 [[terms]]
 name = "provider call outcome"
 definition = """
-The terminal provider-level result of one provider call, including an accepted \
-or non-retryable provider invocation outcome, cooperatively observed \
-cancellation, and retry-policy exhaustion."""
+The terminal classification of one provider call: an accepted or non-retryable \
+invocation outcome, cooperative cancellation, or retry-policy exhaustion."""
 part_of = ["provider call result"]
 
 [[terms]]
 name = "provider call result"
 definition = """
-A versioned serializable result containing provider-call request, retry-policy, \
-and semantic-classifier identities; ordered provider invocation evidence with \
-corresponding outcomes and retry-decision evidence; and exactly one provider \
-call outcome."""
+The complete versioned serializable return value: request, retry-policy, and \
+classifier identities; ordered invocation evidence, outcomes, and retry \
+decisions; and one provider call outcome."""
