@@ -97,12 +97,13 @@ def classify_provider_invocation(
             return ProviderInvocationOutcome.BLANK_RESPONSE
         return classify_semantic_response(classifier, evidence.response)
     assert evidence.failure is not None
-    return _classify_failure(evidence.failure)
+    return classify_provider_failure(evidence.failure)
 
 
-def _classify_failure(
+def classify_provider_failure(
     failure: ProviderTransportFailure,
 ) -> ProviderInvocationOutcome:
+    """Deterministically classify provider failure evidence."""
     if failure.code in {
         RESPONSE_NO_TEXT_CODE,
         RESPONSE_INCOMPLETE_NO_TEXT_CODE,

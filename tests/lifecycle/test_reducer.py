@@ -31,6 +31,8 @@ from dr_providers.lifecycle import (
     cancel_provider_call,
     transition_provider_call,
 )
+from dr_providers.outcomes.models import STALLED_RESPONSE_CODE
+from dr_providers.translation.responses import RESPONSE_REFUSAL_CODE
 
 CLASSIFIER_ID = SemanticResponseClassifierIdentifier("semantic-v1")
 HTTP_REQUEST = ProviderHttpRequestEvidence(
@@ -87,6 +89,40 @@ def _observation(
             ),
         )
     else:
+        failure_class = {
+            ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE: (
+                FailureClass.TRANSIENT
+            ),
+            ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT: (
+                FailureClass.TRANSIENT
+            ),
+            ProviderInvocationOutcome.RATE_LIMITING: FailureClass.RATE_LIMITED,
+            ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION: (
+                FailureClass.TRANSIENT
+            ),
+            ProviderInvocationOutcome.RESOURCE_EXHAUSTION: (
+                FailureClass.RESOURCE_EXHAUSTION
+            ),
+            ProviderInvocationOutcome.PROVIDER_REJECTION: (
+                FailureClass.PERMANENT
+            ),
+            ProviderInvocationOutcome.UNKNOWN_TRANSPORT_FAILURE: (
+                FailureClass.UNKNOWN
+            ),
+        }[outcome]
+        code = outcome.value
+        metadata = {"marker": marker}
+        if outcome in {
+            ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
+            ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION,
+        }:
+            code = STALLED_RESPONSE_CODE
+            if outcome is (
+                ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
+            ):
+                metadata["phase"] = "ReadTimeout"
+        elif outcome is ProviderInvocationOutcome.PROVIDER_REJECTION:
+            code = RESPONSE_REFUSAL_CODE
         evidence = ProviderInvocationEvidence(
             request_identity_hash=state.request_identity_hash,
             policy_identity={
@@ -95,10 +131,10 @@ def _observation(
             },
             http_request=HTTP_REQUEST,
             failure=ProviderTransportFailure(
-                failure_class=FailureClass.TRANSIENT,
-                code=outcome.value,
+                failure_class=failure_class,
+                code=code,
                 message=marker,
-                metadata={"marker": marker},
+                metadata=metadata,
             ),
         )
     return CompletedProviderInvocationObservation(
@@ -276,6 +312,45 @@ def test_observation_rejects_bad_hash_and_decision_input() -> None:
         CompletedProviderInvocationObservation.model_validate(
             {**data, "retry_decision": {"delay_seconds": 1.0}}
         )
+
+
+def test_failure_outcome_is_recomputed_during_json_restore() -> None:
+    state = _state()
+    evidence = ProviderInvocationEvidence(
+        request_identity_hash=state.request_identity_hash,
+        failure=ProviderTransportFailure(
+            failure_class=FailureClass.PERMANENT,
+            code="missing_api_key",
+            message="missing API key",
+        ),
+    )
+    observation = CompletedProviderInvocationObservation(
+        invocation_ordinal=state.next_invocation_ordinal,
+        request_identity_hash=state.request_identity_hash,
+        evidence=evidence,
+        evidence_identity_hash=evidence.identity_hash,
+        outcome=(
+            ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+        ),
+    )
+    payload = json.loads(observation.model_dump_json())
+    payload["outcome"] = (
+        ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE.value
+    )
+
+    with pytest.raises(
+        ValidationError,
+        match="failure outcome does not match failure evidence",
+    ):
+        CompletedProviderInvocationObservation.model_validate_json(
+            json.dumps(payload)
+        )
+
+    result = transition_provider_call(state, observation)
+    assert isinstance(result, ProviderCallResult)
+    assert result.outcome.invocation_outcome is (
+        ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+    )
 
 
 def test_evidence_identity_cache_is_protected_by_deep_freezing() -> None:

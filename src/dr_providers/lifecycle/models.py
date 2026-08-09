@@ -19,7 +19,8 @@ from pydantic import (
 )
 
 from dr_providers.lifecycle.classifier import (
-    SemanticResponseClassifierIdentifier,  # noqa: TC001 -- pydantic field
+    SemanticResponseClassifierIdentifier,
+    classify_provider_failure,
 )
 from dr_providers.lifecycle.outcomes import (
     ProviderCallOutcome,
@@ -135,12 +136,14 @@ class CompletedProviderInvocationObservation(BaseModel):
             ) is not is_blank:
                 msg = "blank response outcome must match response text"
                 raise ValueError(msg)
-        elif self.outcome in {
-            ProviderInvocationOutcome.SUCCESS,
-            ProviderInvocationOutcome.SEMANTIC_REJECTION,
-        }:
-            msg = "provider failure evidence has a response outcome"
-            raise ValueError(msg)
+        else:
+            assert self.evidence.failure is not None
+            expected_outcome = classify_provider_failure(self.evidence.failure)
+            if self.outcome is not expected_outcome:
+                msg = (
+                    "provider failure outcome does not match failure evidence"
+                )
+                raise ValueError(msg)
         return self
 
     def identity_payload(self) -> dict[str, object]:
