@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from dr_providers.modeling.controls import ReasoningEffort
@@ -290,5 +291,5 @@ def test_removed_retries_flag_is_rejected(
     )
 
     assert result.exit_code == 2
-    assert "--retries" in result.output
+    assert "--retries" in unstyle(result.output)
     assert stub.requests == []
