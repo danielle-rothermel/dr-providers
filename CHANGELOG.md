@@ -6,6 +6,51 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-08
+
+### Added
+
+- Add closed provider-invocation and provider-call outcomes, a caller-identified
+  semantic response classifier, serializable provider-call state and retry
+  instructions, deterministic retry and cancellation transitions, and a thin
+  cancellation-aware local lifecycle driver.
+- Export the provider-call lifecycle models, policies, classifiers, transitions,
+  identities, and local driver from the stable top-level package surface.
+- Publish the provider-call lifecycle vocabulary and standing contracts in the
+  repository definitions.
+
+### Changed
+
+- Reject unsupported provider/protocol model routes, bind transport policies to
+  one provider kind in identity, and reject route-policy mismatches before
+  payload, credential, evidence, or dispatch work.
+- Advance Provider Invocation Evidence to schema version 4 for the persisted
+  provider-kind transport-policy binding.
+- Configure the CLI, live matrix, and README quickstart with one open and one
+  keep-alive connection for each single-invocation provider. Configure the
+  local server the same way per request-created provider; its limit and
+  connection reuse are not server-wide.
+- State explicitly that native phase and response-read idle timeouts do not
+  impose a total wall-clock deadline on a response that keeps producing bytes.
+- Cut the public `Provider` protocol, `HttpProvider`, and `ScriptedProvider` over
+  to one evidence-producing `invoke()` operation. CLI, serve, and all five live
+  provider routes now execute calls through the same standard local lifecycle.
+- Make serve query results retain the complete terminal `ProviderCallResult`,
+  including the ordered decided invocation records and their evidence.
+
+### Fixed
+
+- Reject completed invocation observations whose declared failure outcome does
+  not exactly match deterministic classification of the embedded evidence.
+- Reject custom retry policies with non-finite cumulative delay and split
+  accepted large waits into platform-bounded cancellation-aware chunks.
+
+### Removed
+
+- Remove `Provider.complete()`, hidden native transport retries, transport-level
+  `retryable` fields, repeated failure request bodies, and the CLI `--retries`
+  option. The provider-call retry policy is now the sole retry authority.
+
 ## [0.2.2] - 2026-08-05
 
 ### Added

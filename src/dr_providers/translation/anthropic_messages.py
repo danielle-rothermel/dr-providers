@@ -4,6 +4,7 @@ from typing import Any
 from dr_providers.modeling.call import ProviderCallConfig
 from dr_providers.outcomes.models import ProviderTransportResponse
 from dr_providers.translation.common import (
+    RESPONSE_NO_TEXT_CODE,
     ParseOutcome,
     cost_from_body,
     optional_str,
@@ -27,7 +28,10 @@ def parse_anthropic_messages_body(
         return parse_failure(parse_error, body, config)
     if text is None or not text.strip():
         return parse_failure(
-            "anthropic response produced no generation text", body, config
+            "anthropic response produced no generation text",
+            body,
+            config,
+            code=RESPONSE_NO_TEXT_CODE,
         )
     return ProviderTransportResponse(
         text=text,

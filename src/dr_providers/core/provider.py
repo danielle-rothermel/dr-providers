@@ -4,10 +4,10 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from dr_providers.modeling.request import ProviderCallRequest
-    from dr_providers.outcomes.models import ProviderTransportOutcome
+    from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 
 
 class Provider(Protocol):
-    def complete(
+    def invoke(
         self, request: ProviderCallRequest
-    ) -> ProviderTransportOutcome: ...
+    ) -> ProviderInvocationEvidence: ...

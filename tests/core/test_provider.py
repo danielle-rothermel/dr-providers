@@ -13,6 +13,7 @@ from dr_providers import (
     PromptMessage,
     Provider,
     ProviderCallRequest,
+    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -42,7 +43,6 @@ def _scripted_provider(outcome_kind: OutcomeKind) -> Provider:
                 failure_class=FailureClass.RATE_LIMITED,
                 code="scripted_rate_limit",
                 message="slow down",
-                retryable=True,
             )
         )
     return ScriptedProvider([outcome])
@@ -71,10 +71,13 @@ def _http_provider(outcome_kind: OutcomeKind) -> Provider:
 
     return HttpProvider(
         policy=ProviderTransportPolicy(
+            provider_kind=ProviderKind.OPENAI,
             api_key_env="TEST_API_KEY",
             base_url="https://example.test/v1",
         ),
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        _client_factory=lambda **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(handler)
+        ),
         api_key="test-key",
     )
 
@@ -87,10 +90,12 @@ def _http_provider(outcome_kind: OutcomeKind) -> Provider:
 def test_provider_returns_common_typed_success(
     provider_factory: ProviderFactory,
 ) -> None:
-    outcome = provider_factory("success").complete(REQUEST)
+    evidence = provider_factory("success").invoke(REQUEST)
+    outcome = evidence.outcome
 
     assert isinstance(outcome, ProviderTransportResponse)
     assert outcome.text == "hello"
+    assert evidence.request_identity_hash == REQUEST.identity_hash
 
 
 @pytest.mark.parametrize(
@@ -101,8 +106,7 @@ def test_provider_returns_common_typed_success(
 def test_provider_returns_common_typed_failure(
     provider_factory: ProviderFactory,
 ) -> None:
-    outcome = provider_factory("failure").complete(REQUEST)
+    outcome = provider_factory("failure").invoke(REQUEST).outcome
 
     assert isinstance(outcome, ProviderTransportFailure)
     assert outcome.failure_class is FailureClass.RATE_LIMITED
-    assert outcome.retryable is True

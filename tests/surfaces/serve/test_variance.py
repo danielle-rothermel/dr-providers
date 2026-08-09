@@ -23,10 +23,9 @@ PROMPT = "Say hello."
 
 def test_run_variance_preserves_exact_records_and_summaries() -> None:
     failure = ProviderTransportFailure(
-        failure_class=FailureClass.TRANSIENT,
+        failure_class=FailureClass.RATE_LIMITED,
         code="rate_limited",
         message="scripted",
-        retryable=True,
     )
     warning = ProviderTransportWarning(
         code="provider_notice",
@@ -125,6 +124,25 @@ def test_run_variance_preserves_exact_records_and_summaries() -> None:
             mean_length=None,
             min_length=None,
             max_length=None,
+        ),
+    )
+
+
+def test_run_variance_does_not_treat_blank_response_as_accepted() -> None:
+    report = run_variance(
+        PROMPT,
+        models=["model-a"],
+        samples=1,
+        provider_kind=ServeProviderKind.OPENROUTER,
+        provider=ScriptedProvider([ScriptedOutcome(text="   ")]),
+    )
+
+    assert report.records == (
+        VarianceRecord(
+            model="model-a",
+            sample_index=0,
+            ok=False,
+            failure_code="blank_response",
         ),
     )
 

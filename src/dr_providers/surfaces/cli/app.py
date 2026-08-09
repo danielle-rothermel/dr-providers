@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from threading import Event
 from typing import Annotated
 
 import typer
 
+from dr_providers.lifecycle import (
+    AcceptAllSemanticResponseClassifier,
+    ProviderCallOutcomeKind,
+    ProviderCallState,
+    StandardProviderCallRetryPolicy,
+    run_local_provider_call,
+)
 from dr_providers.modeling.controls import GenerationControls, ReasoningEffort
 from dr_providers.modeling.presets import FACTORY_BY_KIND, ProviderFactoryKind
 from dr_providers.modeling.request import ProviderCallRequest
@@ -13,11 +21,8 @@ from dr_providers.modeling.transcript import (
     PromptMessage,
     Transcript,
 )
-from dr_providers.outcomes.models import ProviderTransportResponse
 from dr_providers.transport.http import HttpProvider
 from dr_providers.transport.policy import policy_for
-
-DEFAULT_RETRIES = 0
 
 # Anthropic requires max_tokens; the CLI defaults it when omitted.
 DEFAULT_ANTHROPIC_TOKEN_LIMIT = 4096
@@ -58,11 +63,6 @@ TOKEN_LIMIT_OPTION = typer.Option(
         f"{DEFAULT_ANTHROPIC_TOKEN_LIMIT}."
     ),
 )
-RETRIES_OPTION = typer.Option(
-    "--retries",
-    help="Native transport retry count (defaults to zero).",
-)
-
 app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
 
 
@@ -76,7 +76,6 @@ def query(  # noqa: PLR0913
     temperature: Annotated[float | None, TEMPERATURE_OPTION] = None,
     top_p: Annotated[float | None, TOP_P_OPTION] = None,
     token_limit: Annotated[int | None, TOKEN_LIMIT_OPTION] = None,
-    retries: Annotated[int, RETRIES_OPTION] = DEFAULT_RETRIES,
 ) -> None:
     """Run a single-shot provider query and print the response text."""
     if token_limit is None and provider is ProviderChoice.ANTHROPIC:
@@ -100,20 +99,46 @@ def query(  # noqa: PLR0913
         transcript=Transcript(messages=tuple(messages)),
     )
 
-    policy = policy_for(config.route.provider, native_retry_count=retries)
-    with HttpProvider(policy=policy) as http_provider:
-        outcome = http_provider.complete(request)
+    classifier = AcceptAllSemanticResponseClassifier()
+    state = ProviderCallState.initial(
+        request=request,
+        retry_policy=StandardProviderCallRetryPolicy(),
+        classifier_identifier=classifier.identifier,
+    )
+    transport_policy = policy_for(
+        config.route.provider,
+        max_connections=1,
+        max_keepalive_connections=1,
+    )
+    with HttpProvider(policy=transport_policy) as http_provider:
+        result = run_local_provider_call(
+            provider=http_provider,
+            state=state,
+            classifier=classifier,
+            cancellation=Event(),
+        )
 
-    if not isinstance(outcome, ProviderTransportResponse):
-        typer.echo(f"failure: {outcome.code}: {outcome.message}", err=True)
+    final_evidence = result.completed_invocations[-1].observation.evidence
+    if result.outcome.kind is not ProviderCallOutcomeKind.ACCEPTED:
+        failure = final_evidence.failure
+        if failure is not None:
+            typer.echo(f"failure: {failure.code}: {failure.message}", err=True)
+        else:
+            assert result.outcome.invocation_outcome is not None
+            typer.echo(
+                f"failure: {result.outcome.invocation_outcome.value}",
+                err=True,
+            )
         raise typer.Exit(code=1)
 
-    typer.echo(outcome.text)
-    typer.echo(f"model: {outcome.model}", err=True)
-    typer.echo(f"finish_reason: {outcome.finish_reason}", err=True)
-    if outcome.usage is not None:
-        typer.echo(f"usage: {outcome.usage.model_dump()}", err=True)
-    for warning in outcome.warnings:
+    response = final_evidence.response
+    assert response is not None
+    typer.echo(response.text)
+    typer.echo(f"model: {response.model}", err=True)
+    typer.echo(f"finish_reason: {response.finish_reason}", err=True)
+    if response.usage is not None:
+        typer.echo(f"usage: {response.usage.model_dump()}", err=True)
+    for warning in response.warnings:
         typer.echo(f"warning: {warning.code}", err=True)
 
 

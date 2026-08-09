@@ -17,7 +17,6 @@ class TestOutcomeGuards:
             failure_class=FailureClass.PERMANENT,
             code="x",
             message="m",
-            retryable=False,
         )
         assert is_response(response) is True
         assert is_failure(response) is False
@@ -30,12 +29,12 @@ def test_removed_persisted_field_names_are_rejected() -> None:
         ProviderTransportResponse.model_validate(
             {"text": "hi", "raw_body": {}}
         )
-    with pytest.raises(ValidationError):
-        ProviderTransportFailure.model_validate(
-            {
-                "failure_class": FailureClass.PERMANENT,
-                "message": "bad",
-                "retryable": False,
-                "raw_request": {},
-            }
-        )
+    for removed_field in ("retryable", "request_body", "raw_request"):
+        with pytest.raises(ValidationError):
+            ProviderTransportFailure.model_validate(
+                {
+                    "failure_class": FailureClass.PERMANENT,
+                    "message": "bad",
+                    removed_field: False,
+                }
+            )

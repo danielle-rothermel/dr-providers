@@ -60,7 +60,8 @@ class TestScriptedProvider:
             ]
         )
 
-        outcome = provider.complete(request)
+        evidence = provider.invoke(request)
+        outcome = evidence.outcome
 
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome == ProviderTransportResponse(
@@ -86,18 +87,20 @@ class TestScriptedProvider:
                 ],
             }
         ]
+        assert evidence.http_request is None
+        assert evidence.policy_identity is None
+        assert evidence.request_identity_hash == request.identity_hash
 
     def test_scripted_failure_returns_typed_outcome(self) -> None:
         failure = ProviderTransportFailure(
             failure_class=FailureClass.RATE_LIMITED,
             message="scripted 429",
-            retryable=True,
         )
         provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
-        outcome = provider.complete(request_for(openai_chat_config(model="m")))
+        outcome = provider.invoke(
+            request_for(openai_chat_config(model="m"))
+        ).outcome
         assert isinstance(outcome, ProviderTransportFailure)
-        assert outcome.retryable is True
-        assert outcome.request_body["model"] == "m"
 
     def test_outcomes_are_consumed_in_order_then_last_repeats(self) -> None:
         provider = ScriptedProvider(
@@ -109,9 +112,9 @@ class TestScriptedProvider:
             request_for(openai_chat_config(model="model-3")),
         ]
 
-        first = provider.complete(requests[0])
-        second = provider.complete(requests[1])
-        repeated = provider.complete(requests[2])
+        first = provider.invoke(requests[0]).outcome
+        second = provider.invoke(requests[1]).outcome
+        repeated = provider.invoke(requests[2]).outcome
 
         assert isinstance(first, ProviderTransportResponse)
         assert isinstance(second, ProviderTransportResponse)
@@ -151,7 +154,7 @@ class TestScriptedProvider:
                 model="m", controls=GenerationControls(token_limit=10)
             )
         )
-        outcome = provider.complete(request)
+        outcome = provider.invoke(request).outcome
         assert isinstance(outcome, ProviderTransportResponse)
         codes = [warning.code for warning in outcome.warnings]
         assert "token_limit_exceeded" in codes

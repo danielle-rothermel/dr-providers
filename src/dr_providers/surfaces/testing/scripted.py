@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from dr_providers.outcomes.conformance import with_conformance_warnings
+from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 from dr_providers.outcomes.models import (
     CostInfo,
     ProviderTransportFailure,
-    ProviderTransportOutcome,
     ProviderTransportResponse,
     ProviderTransportWarning,
     TokenUsage,
@@ -52,17 +52,20 @@ class ScriptedProvider:
         self.requests: list[ProviderCallRequest] = []
         self.payloads: list[dict[str, Any]] = []
 
-    def complete(
+    def invoke(
         self, request: ProviderCallRequest
-    ) -> ProviderTransportOutcome:
+    ) -> ProviderInvocationEvidence:
         payload = build_payload(request)
         self.requests.append(request)
         self.payloads.append(payload)
         index = min(len(self.requests) - 1, len(self._outcomes) - 1)
         outcome = self._outcomes[index]
         if outcome.failure is not None:
-            return outcome.failure.model_copy(
-                update={"request_body": dict(payload)}
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=None,
+                http_request=None,
+                outcome=outcome.failure,
             )
         response_id = f"{SCRIPTED_RESPONSE_ID_PREFIX}-{len(self.requests)}"
         response = ProviderTransportResponse(
@@ -75,4 +78,9 @@ class ScriptedProvider:
             response_id=response_id,
             model=request.config.route.model,
         )
-        return with_conformance_warnings(request, response)
+        return ProviderInvocationEvidence.build(
+            request=request,
+            policy=None,
+            http_request=None,
+            outcome=with_conformance_warnings(request, response),
+        )

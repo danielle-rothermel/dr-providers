@@ -4,6 +4,7 @@ from typing import Any
 from dr_providers.modeling.call import ProviderCallConfig
 from dr_providers.outcomes.models import ProviderTransportResponse
 from dr_providers.translation.common import (
+    RESPONSE_NO_TEXT_CODE,
     ParseOutcome,
     content_to_text,
     cost_from_body,
@@ -31,7 +32,10 @@ def parse_chat_completions_body(
     text = content_to_text(get_value(message, "content"))
     if text is None or not text.strip():
         return parse_failure(
-            "provider response produced no generation text", body, config
+            "provider response produced no generation text",
+            body,
+            config,
+            code=RESPONSE_NO_TEXT_CODE,
         )
     return ProviderTransportResponse(
         text=text,

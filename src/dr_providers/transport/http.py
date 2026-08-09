@@ -1,23 +1,30 @@
 from __future__ import annotations
 
-import contextlib
+import json
 import os
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from datetime import UTC
+from email.utils import format_datetime, parsedate_to_datetime
+from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from dr_providers.core.failures import (
-    FailureClass,
-)
+from dr_providers.core.failures import FailureClass
 from dr_providers.modeling.route import Protocol
 from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import (
+    MAX_RETRY_AFTER_DELTA_SECONDS,
+    MAX_RETRY_AFTER_HEADER_BYTES,
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
+    ProviderRetryAfterHint,
 )
 from dr_providers.outcomes.models import (
+    INVALID_JSON_CODE,
+    STALLED_RESPONSE_CODE,
+    TIMEOUT_CODE,
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
@@ -36,68 +43,123 @@ ANTHROPIC_VERSION = "2023-06-01"
 ANTHROPIC_VERSION_HEADER = "anthropic-version"
 ANTHROPIC_API_KEY_HEADER = "x-api-key"
 AUTHORIZATION_HEADER = "Authorization"
+CONTENT_TYPE_HEADER = "Content-Type"
+JSON_CONTENT_TYPE = "application/json"
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
 TRANSPORT_ERROR_CODE = "transport_error"
-INVALID_JSON_CODE = "invalid_response_json"
-TIMEOUT_CODE = "timeout"
-STALLED_RESPONSE_CODE = "stalled_response"
+REQUEST_TOO_LARGE_CODE = "request_body_too_large"
+RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 
-# Bound TCP/TLS setup independently of the response idle budget.
+# Bound TCP/TLS setup independently of the response-read idle budget.
 MAX_CONNECT_TIMEOUT_SECONDS = 30.0
+MAX_FAILURE_MESSAGE_CHARS = 256
+RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
+SUCCESS_STATUS_FLOOR = 200
+SUCCESS_STATUS_CEILING = 300
 
-# Give httpx idle failures time to win before the caller-visible watchdog.
-ATTEMPT_DEADLINE_MARGIN_SECONDS = 5.0
+
+class _ProviderState(Enum):
+    OPEN = auto()
+    CLOSING = auto()
+    CLOSED = auto()
 
 
 def _operational_timeout_seconds(timeout_seconds: float) -> float:
     return min(timeout_seconds, threading.TIMEOUT_MAX)
 
 
-def _operational_attempt_deadline_seconds(
-    timeout_seconds: float,
-) -> float:
-    return _operational_timeout_seconds(
-        timeout_seconds + ATTEMPT_DEADLINE_MARGIN_SECONDS
-    )
-
-
-def _httpx_timeout(idle_timeout_seconds: float) -> httpx.Timeout:
-    """Use per-operation idle bounds, with a separately capped connect."""
-    operational_timeout_seconds = _operational_timeout_seconds(
-        idle_timeout_seconds
-    )
+def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
+    """Use direct native phase timeouts for the synchronous HTTP operation."""
+    operation_timeout = _operational_timeout_seconds(policy.timeout_seconds)
+    read_timeout = _operational_timeout_seconds(policy.idle_timeout_seconds)
     return httpx.Timeout(
-        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, operational_timeout_seconds),
-        read=operational_timeout_seconds,
-        write=operational_timeout_seconds,
-        pool=operational_timeout_seconds,
+        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, operation_timeout),
+        read=read_timeout,
+        write=operation_timeout,
+        pool=operation_timeout,
+    )
+
+
+def _bounded_message(message: str) -> str:
+    return message[:MAX_FAILURE_MESSAGE_CHARS]
+
+
+def _normalize_retry_after(value: str | None) -> ProviderRetryAfterHint | None:
+    if (
+        value is None
+        or len(value.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES
+    ):
+        return None
+    normalized = value.strip()
+    if normalized.isascii() and normalized.isdigit():
+        seconds = int(normalized)
+        if seconds <= MAX_RETRY_AFTER_DELTA_SECONDS:
+            return ProviderRetryAfterHint(
+                kind="delta_seconds",
+                value=seconds,
+            )
+        return None
+    try:
+        parsed = parsedate_to_datetime(normalized)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return ProviderRetryAfterHint(
+        kind="http_date",
+        value=format_datetime(parsed.astimezone(UTC), usegmt=True),
     )
 
 
 class HttpProvider:
-    """Bound caller-visible waiting with one daemon worker per wire call.
-
-    Owned clients are isolated per call and closed best-effort. Injected
-    clients remain caller-owned, so their worker and socket may linger after
-    a deadline result is returned.
-    """
+    """Own and reuse one bounded synchronous HTTP client until closed."""
 
     def __init__(
         self,
         *,
         policy: ProviderTransportPolicy,
-        client: httpx.Client | None = None,
         api_key: str | None = None,
+        _client_factory: Callable[..., httpx.Client] | None = None,
     ) -> None:
         self._policy = policy
-        self._client = client
-        self._owns_client = client is None
         self._api_key = api_key
+        limits = httpx.Limits(
+            max_connections=policy.max_connections,
+            max_keepalive_connections=policy.max_keepalive_connections,
+        )
+        client_factory = (
+            httpx.Client if _client_factory is None else _client_factory
+        )
+        self._client = client_factory(
+            limits=limits,
+            follow_redirects=False,
+        )
+        self._condition = threading.Condition()
+        self._state = _ProviderState.OPEN
+        self._active_invocations = 0
 
     def close(self) -> None:
-        """Leave injected clients open; owned clients are closed per call."""
+        """Stop admission, drain active invocations, and close exactly once."""
+        with self._condition:
+            if self._state is _ProviderState.CLOSED:
+                return
+            if self._state is _ProviderState.CLOSING:
+                while self._state is _ProviderState.CLOSING:
+                    self._condition.wait()
+                return
+            self._state = _ProviderState.CLOSING
+            self._condition.notify_all()
+            while self._active_invocations:
+                self._condition.wait()
+
+        try:
+            self._client.close()
+        finally:
+            with self._condition:
+                self._state = _ProviderState.CLOSED
+                self._condition.notify_all()
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -105,220 +167,208 @@ class HttpProvider:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
-    def complete(
-        self, request: ProviderCallRequest
-    ) -> ProviderTransportOutcome:
-        payload = build_payload(request)
-        return self._run_pipeline(request, payload)
-
     def invoke(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
+        self._begin_invocation()
+        try:
+            return self._invoke_admitted(request)
+        finally:
+            self._end_invocation()
+
+    def _begin_invocation(self) -> None:
+        with self._condition:
+            if self._state is not _ProviderState.OPEN:
+                msg = "HttpProvider is closing or closed"
+                raise RuntimeError(msg)
+            self._active_invocations += 1
+
+    def _end_invocation(self) -> None:
+        with self._condition:
+            self._active_invocations -= 1
+            if self._active_invocations == 0:
+                self._condition.notify_all()
+
+    def _invoke_admitted(
+        self, request: ProviderCallRequest
+    ) -> ProviderInvocationEvidence:
+        if request.config.route.provider is not self._policy.provider_kind:
+            msg = (
+                "request route provider does not match transport policy: "
+                f"{request.config.route.provider.value} != "
+                f"{self._policy.provider_kind.value}"
+            )
+            raise ValueError(msg)
         payload = build_payload(request)
+        encoded_payload = json.dumps(
+            payload,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
         url = self._request_url(request.config)
+        if url is None:
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=self._policy,
+                http_request=None,
+                outcome=self._missing_base_url_failure(request.config),
+            )
         headers = self._headers(request.config)
+        if headers is None:
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=self._policy,
+                http_request=None,
+                outcome=self._missing_api_key_failure(),
+            )
         http_request = ProviderHttpRequestEvidence.build(
-            url=url or "<missing_base_url>",
-            headers=headers or {},
+            url=url,
+            headers=headers,
             body=payload,
+            body_bytes=len(encoded_payload),
         )
-        outcome = self._run_pipeline(request, payload)
+        if len(encoded_payload) > self._policy.max_request_bytes:
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=self._policy,
+                http_request=None,
+                outcome=self._request_too_large_failure(len(encoded_payload)),
+            )
+        outcome, response_bytes, retry_after = self._wire_call(
+            request,
+            url,
+            headers,
+            encoded_payload,
+        )
+        if isinstance(outcome, ProviderTransportResponse):
+            outcome = with_conformance_warnings(request, outcome)
         return ProviderInvocationEvidence.build(
             request=request,
             policy=self._policy,
             http_request=http_request,
             outcome=outcome,
+            response_bytes=response_bytes,
+            retry_after=retry_after,
         )
-
-    def _run_pipeline(
-        self,
-        request: ProviderCallRequest,
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        outcome = self._complete_with_retries(request, payload)
-        if isinstance(outcome, ProviderTransportResponse):
-            return with_conformance_warnings(request, outcome)
-        return outcome
-
-    def _complete_with_retries(
-        self,
-        request: ProviderCallRequest,
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        attempts = self._policy.native_retry_count + 1
-        outcome: ProviderTransportOutcome = self._complete_once(
-            request, payload
-        )
-        for _ in range(attempts - 1):
-            if isinstance(outcome, ProviderTransportResponse):
-                return outcome
-            if not outcome.retryable:
-                return outcome
-            outcome = self._complete_once(request, payload)
-        return outcome
-
-    def _complete_once(
-        self,
-        request: ProviderCallRequest,
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        config = request.config
-        url = self._request_url(config)
-        if url is None:
-            return self._missing_base_url_failure(config, payload)
-        headers = self._headers(config)
-        if headers is None:
-            return self._missing_api_key_failure(payload)
-        return self._wire_attempt_within_deadline(
-            request, url, headers, payload
-        )
-
-    def _wire_attempt_within_deadline(
-        self,
-        request: ProviderCallRequest,
-        url: str,
-        headers: dict[str, str],
-        payload: dict[str, Any],
-    ) -> ProviderTransportOutcome:
-        """Bound caller-visible waiting without joining a timed-out worker."""
-        deadline = (
-            self._policy.timeout_seconds + ATTEMPT_DEADLINE_MARGIN_SECONDS
-        )
-        operational_deadline = _operational_attempt_deadline_seconds(
-            self._policy.timeout_seconds
-        )
-        outcome_box: list[ProviderTransportOutcome] = []
-        error_box: list[BaseException] = []
-        # Isolate owned pools; never close an injected client.
-        if self._owns_client or self._client is None:
-            call_client = httpx.Client()
-        else:
-            call_client = self._client
-        done = threading.Event()
-
-        def worker() -> None:
-            try:
-                outcome_box.append(
-                    self._wire_call(
-                        request, url, headers, payload, call_client
-                    )
-                )
-            except BaseException as error:  # noqa: BLE001 -- box, never raise
-                error_box.append(error)
-            finally:
-                done.set()
-
-        thread = threading.Thread(target=worker, daemon=True)
-        thread.start()
-        if not done.wait(timeout=operational_deadline):
-            # Closing an owned client may unblock its worker; never join here.
-            if self._owns_client:
-                with contextlib.suppress(Exception):
-                    call_client.close()
-            return self._deadline_timeout_failure(url, payload, deadline)
-        if self._owns_client:
-            with contextlib.suppress(Exception):
-                call_client.close()
-        if error_box:
-            raise error_box[0]
-        return outcome_box[0]
 
     def _wire_call(
         self,
         request: ProviderCallRequest,
         url: str,
         headers: dict[str, str],
-        payload: dict[str, Any],
-        client: httpx.Client,
-    ) -> ProviderTransportOutcome:
+        encoded_payload: bytes,
+    ) -> tuple[
+        ProviderTransportOutcome,
+        int | None,
+        ProviderRetryAfterHint | None,
+    ]:
         try:
-            http_response = client.post(
+            with self._client.stream(
+                "POST",
                 url,
-                json=payload,
+                content=encoded_payload,
                 headers=headers,
-                timeout=_httpx_timeout(self._policy.idle_timeout_seconds),
+                timeout=_httpx_timeout(self._policy),
                 follow_redirects=False,
-            )
+            ) as http_response:
+                retry_after = _normalize_retry_after(
+                    http_response.headers.get("retry-after")
+                )
+                body, observed_bytes = self._read_response(http_response)
+                if body is None:
+                    return (
+                        self._response_too_large_failure(observed_bytes),
+                        observed_bytes,
+                        retry_after,
+                    )
+                return (
+                    self._outcome_from_response(
+                        request,
+                        http_response.status_code,
+                        body,
+                        url,
+                    ),
+                    observed_bytes,
+                    retry_after,
+                )
         except httpx.TimeoutException as error:
-            return self._httpx_timeout_failure(error, url, payload)
+            return self._httpx_timeout_failure(error, url), None, None
         except httpx.HTTPError as error:
-            return ProviderTransportFailure(
-                failure_class=FailureClass.TRANSIENT,
-                code=TRANSPORT_ERROR_CODE,
-                message=f"{type(error).__name__}: {error}",
-                retryable=True,
-                request_body=dict(payload),
-                metadata={"url": url},
+            phase = type(error).__name__[:64]
+            return (
+                ProviderTransportFailure(
+                    failure_class=FailureClass.TRANSIENT,
+                    code=TRANSPORT_ERROR_CODE,
+                    message=_bounded_message(
+                        f"provider transport error ({phase})"
+                    ),
+                    metadata={"url": url, "phase": phase},
+                ),
+                None,
+                None,
             )
-        return self._outcome_from_response(
-            request, http_response, url, payload
-        )
+
+    def _read_response(
+        self,
+        http_response: httpx.Response,
+    ) -> tuple[bytearray | None, int]:
+        body = bytearray()
+        observed_bytes = 0
+        for chunk in http_response.iter_bytes(
+            chunk_size=RESPONSE_STREAM_CHUNK_BYTES
+        ):
+            observed_bytes += len(chunk)
+            if observed_bytes > self._policy.max_response_bytes:
+                return None, observed_bytes
+            body.extend(chunk)
+        return body, observed_bytes
 
     def _httpx_timeout_failure(
         self,
         error: httpx.TimeoutException,
         url: str,
-        payload: dict[str, Any],
     ) -> ProviderTransportFailure:
-        """Classify read timeouts as idle stalls; keep other timeout phases."""
+        """Every native timeout is contained because the HTTP call returned."""
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
+        phase = type(error).__name__[:64]
         return ProviderTransportFailure(
             failure_class=FailureClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
-            message=f"{type(error).__name__}: {error}",
-            retryable=True,
-            request_body=dict(payload),
+            message=_bounded_message(f"provider transport timeout ({phase})"),
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
                 "idle_timeout_seconds": self._policy.idle_timeout_seconds,
-                "phase": type(error).__name__,
-            },
-        )
-
-    def _deadline_timeout_failure(
-        self,
-        url: str,
-        payload: dict[str, Any],
-        deadline: float,
-    ) -> ProviderTransportFailure:
-        return ProviderTransportFailure(
-            failure_class=FailureClass.TRANSIENT,
-            code=STALLED_RESPONSE_CODE,
-            message=(
-                "provider attempt exceeded the per-attempt deadline "
-                f"of {deadline:.1f}s (policy timeout_seconds="
-                f"{self._policy.timeout_seconds:.1f}s); the response "
-                "stalled without completing"
-            ),
-            retryable=True,
-            request_body=dict(payload),
-            metadata={
-                "url": url,
-                "timeout_seconds": self._policy.timeout_seconds,
-                "deadline_seconds": deadline,
+                "phase": phase,
             },
         )
 
     def _outcome_from_response(
         self,
         request: ProviderCallRequest,
-        http_response: httpx.Response,
+        status_code: int,
+        response_bytes: bytearray,
         url: str,
-        payload: dict[str, Any],
     ) -> ProviderTransportOutcome:
-        if not http_response.is_success:
-            return self._http_status_failure(http_response, url, payload)
+        if not SUCCESS_STATUS_FLOOR <= status_code < SUCCESS_STATUS_CEILING:
+            return self._http_status_failure(
+                status_code,
+                response_bytes,
+                url,
+            )
         try:
-            body = http_response.json()
+            body = json.loads(response_bytes)
         except ValueError:
             return ProviderTransportFailure(
                 failure_class=FailureClass.PERMANENT,
                 code=INVALID_JSON_CODE,
                 message="provider response body is not valid JSON",
-                retryable=False,
-                request_body=dict(payload),
-                response_body=http_response.text,
+                response_body=response_bytes.decode(
+                    "utf-8",
+                    errors="replace",
+                ),
+                status_code=status_code,
                 metadata={"url": url},
             )
         if not isinstance(body, Mapping):
@@ -326,68 +376,85 @@ class HttpProvider:
                 failure_class=FailureClass.PERMANENT,
                 code=PARSE_ERROR_CODE,
                 message="provider response JSON must be an object",
-                retryable=False,
-                request_body=dict(payload),
                 response_body=body,
-                status_code=http_response.status_code,
+                status_code=status_code,
                 metadata={"url": url},
             )
-        outcome = parse_response(body, config=request.config)
-        if isinstance(outcome, ProviderTransportFailure):
-            return outcome.model_copy(update={"request_body": dict(payload)})
-        return outcome
+        return parse_response(body, config=request.config)
 
     def _http_status_failure(
         self,
-        http_response: httpx.Response,
+        status_code: int,
+        response_bytes: bytearray,
         url: str,
-        payload: dict[str, Any],
     ) -> ProviderTransportFailure:
-        failure_class = classify_status_code(http_response.status_code)
-        response_body: Any
         try:
-            response_body = http_response.json()
+            response_body: Any = json.loads(response_bytes)
         except ValueError:
-            response_body = http_response.text
+            response_body = response_bytes.decode("utf-8", errors="replace")
         return ProviderTransportFailure(
-            failure_class=failure_class,
-            code=f"{HTTP_STATUS_CODE_PREFIX}{http_response.status_code}",
-            message=http_response.text,
-            retryable=failure_class in _RETRYABLE,
-            request_body=dict(payload),
+            failure_class=classify_status_code(status_code),
+            code=f"{HTTP_STATUS_CODE_PREFIX}{status_code}",
+            message=f"provider returned HTTP status {status_code}",
             response_body=response_body,
-            status_code=http_response.status_code,
+            status_code=status_code,
             metadata={"url": url},
+        )
+
+    def _request_too_large_failure(
+        self,
+        observed_bytes: int,
+    ) -> ProviderTransportFailure:
+        limit = self._policy.max_request_bytes
+        return ProviderTransportFailure(
+            failure_class=FailureClass.RESOURCE_EXHAUSTION,
+            code=REQUEST_TOO_LARGE_CODE,
+            message=_bounded_message(
+                f"request body exceeds {limit} byte limit"
+            ),
+            metadata={
+                "limit_bytes": limit,
+                "observed_bytes": observed_bytes,
+            },
+        )
+
+    def _response_too_large_failure(
+        self,
+        observed_bytes: int,
+    ) -> ProviderTransportFailure:
+        limit = self._policy.max_response_bytes
+        return ProviderTransportFailure(
+            failure_class=FailureClass.RESOURCE_EXHAUSTION,
+            code=RESPONSE_TOO_LARGE_CODE,
+            message=_bounded_message(
+                f"response body exceeds {limit} byte limit"
+            ),
+            metadata={
+                "limit_bytes": limit,
+                "observed_bytes": observed_bytes,
+            },
         )
 
     def _missing_base_url_failure(
         self,
         config: ProviderCallConfig,
-        payload: dict[str, Any],
     ) -> ProviderTransportFailure:
         return ProviderTransportFailure(
             failure_class=FailureClass.PERMANENT,
             code=MISSING_BASE_URL_CODE,
-            message=(
-                f"transport policy for route "
+            message=_bounded_message(
+                "transport policy for route "
                 f"{config.quota_identity.label()!r} has no base_url"
             ),
-            retryable=False,
-            request_body=dict(payload),
         )
 
-    def _missing_api_key_failure(
-        self,
-        payload: dict[str, Any],
-    ) -> ProviderTransportFailure:
+    def _missing_api_key_failure(self) -> ProviderTransportFailure:
         return ProviderTransportFailure(
             failure_class=FailureClass.PERMANENT,
             code=MISSING_API_KEY_CODE,
-            message=(
+            message=_bounded_message(
                 f"environment variable {self._policy.api_key_env!r} is not set"
             ),
-            retryable=False,
-            request_body=dict(payload),
         )
 
     def _request_url(self, config: ProviderCallConfig) -> str | None:
@@ -404,8 +471,9 @@ class HttpProvider:
             return {
                 ANTHROPIC_API_KEY_HEADER: api_key,
                 ANTHROPIC_VERSION_HEADER: ANTHROPIC_VERSION,
+                CONTENT_TYPE_HEADER: JSON_CONTENT_TYPE,
             }
-        return {AUTHORIZATION_HEADER: f"Bearer {api_key}"}
-
-
-_RETRYABLE = frozenset({FailureClass.TRANSIENT, FailureClass.RATE_LIMITED})
+        return {
+            AUTHORIZATION_HEADER: f"Bearer {api_key}",
+            CONTENT_TYPE_HEADER: JSON_CONTENT_TYPE,
+        }

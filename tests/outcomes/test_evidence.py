@@ -19,6 +19,7 @@ from dr_providers import (
     ProviderCallRequest,
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
+    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -50,10 +51,12 @@ ANTHROPIC_BODY_OK: dict[str, Any] = {
 }
 
 OPENAI_POLICY = ProviderTransportPolicy(
+    provider_kind=ProviderKind.OPENAI,
     api_key_env=str(ApiKeyEnv.OPENAI),
     base_url=str(ProviderBaseUrl.OPENAI),
 )
 ANTHROPIC_POLICY = ProviderTransportPolicy(
+    provider_kind=ProviderKind.ANTHROPIC,
     api_key_env=str(ApiKeyEnv.ANTHROPIC),
     base_url=str(ProviderBaseUrl.ANTHROPIC),
 )
@@ -62,14 +65,13 @@ HTTP_REQUEST = ProviderHttpRequestEvidence(
     url="https://example.test/v1",
     headers={"Content-Type": "application/json"},
     body={"model": "m"},
+    body_bytes=13,
 )
 SUCCESS = ProviderTransportResponse(text="hi", response_body={"id": "resp-1"})
 FAILURE = ProviderTransportFailure(
     failure_class=FailureClass.PERMANENT,
     code="invalid_request",
     message="bad request",
-    retryable=False,
-    request_body={"method": "POST"},
     response_body={"error": "bad"},
     status_code=400,
     metadata={"provider": "openai"},
@@ -82,8 +84,11 @@ def evidence_for(
     failure: ProviderTransportFailure | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
-        request_identity={"request": "req-1"},
-        policy_identity={"policy": "policy-1"},
+        request_identity_hash="1" * 64,
+        policy_identity={
+            "provider_kind": "openai",
+            "policy": "policy-1",
+        },
         http_request=HTTP_REQUEST,
         response=response,
         failure=failure,
@@ -97,16 +102,24 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 2,
+        "schema_version": 4,
         "payload": {
-            "request_identity": {"request": "req-1"},
-            "policy_identity": {"policy": "policy-1"},
+            "request_identity_hash": "1" * 64,
+            "policy_identity": {
+                "provider_kind": "openai",
+                "policy": "policy-1",
+            },
+            "max_request_bytes": None,
+            "max_response_bytes": None,
             "http_request": {
                 "method": "POST",
                 "url": "https://example.test/v1",
                 "headers": {"Content-Type": "application/json"},
                 "body": {"model": "m"},
+                "body_bytes": 13,
             },
+            "response_bytes": None,
+            "retry_after": None,
             "response": response,
             "failure": failure,
         },
@@ -133,19 +146,40 @@ def mock_provider(
 ) -> HttpProvider:
     return HttpProvider(
         policy=policy,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        _client_factory=lambda **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(handler)
+        ),
         api_key="test-key",
     )
 
 
 class TestInvocationEvidence:
+    @pytest.mark.parametrize(
+        "policy_identity",
+        [{"policy": "v3"}, {"provider_kind": "unsupported"}],
+        ids=("missing-provider-kind", "unsupported-provider-kind"),
+    )
+    def test_policy_identity_requires_supported_provider_kind(
+        self,
+        policy_identity: dict[str, str],
+    ) -> None:
+        with pytest.raises(
+            ValidationError,
+            match="policy_identity requires a supported provider_kind",
+        ):
+            ProviderInvocationEvidence(
+                request_identity_hash="1" * 64,
+                policy_identity=policy_identity,
+                response=ProviderTransportResponse(text="ok"),
+            )
+
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         provider = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 2
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 4
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -226,11 +260,12 @@ class TestInvocationEvidence:
         evidence = provider.invoke(request)
 
         payload = evidence.identity_payload()
-        assert payload["request_identity"] == request.identity_payload()
+        assert payload["request_identity_hash"] == request.identity_hash
         assert payload["policy_identity"] == OPENAI_POLICY.identity_payload()
         assert isinstance(evidence.outcome, ProviderTransportResponse)
         assert evidence.response is not None
         assert evidence.response.response_body == CHAT_BODY_OK
+        assert evidence.http_request is not None
         assert evidence.http_request.body["model"] == "m"
 
     def test_evidence_retains_complete_failure_body(self) -> None:
@@ -250,6 +285,7 @@ class TestInvocationEvidence:
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
         )
         evidence = provider.invoke(openai_request())
+        assert evidence.http_request is not None
         headers = evidence.http_request.headers
         assert headers.get("Authorization") == "<redacted>"
         serialized = evidence.identity_document().to_json_dict()
@@ -297,8 +333,6 @@ class TestInvocationEvidence:
                     "failure_class": "permanent",
                     "code": "invalid_request",
                     "message": "bad request",
-                    "retryable": False,
-                    "request_body": {"method": "POST"},
                     "response_body": {"error": "bad"},
                     "status_code": 400,
                     "metadata": {"provider": "openai"},

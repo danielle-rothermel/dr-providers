@@ -9,6 +9,7 @@ TEST_ROOT = REPO_ROOT / "tests"
 
 FUNCTIONAL_AREAS = {
     "core",
+    "lifecycle",
     "modeling",
     "outcomes",
     "surfaces",

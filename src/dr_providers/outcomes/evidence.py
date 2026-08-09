@@ -1,22 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Mapping  # noqa: TC003 -- pydantic field type
-from typing import TYPE_CHECKING, Any
+from datetime import UTC
+from email.utils import format_datetime, parsedate_to_datetime
+from functools import cached_property
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from dr_serialize import (
     IdentityDocument,
     build_identity_document,
+    identity_document_hash,
 )
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictInt,
     StrictStr,
     field_serializer,
     model_validator,
 )
 
 from dr_providers.core.frozen import _deep_freeze, _thaw
+from dr_providers.modeling.route import ProviderKind
 from dr_providers.outcomes.models import (
     ProviderTransportFailure,
     ProviderTransportOutcome,
@@ -63,7 +69,13 @@ def sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 2
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 4
+ContentIdentityHash = Annotated[
+    StrictStr,
+    Field(pattern=r"^[0-9a-f]{64}$"),
+]
+MAX_RETRY_AFTER_HEADER_BYTES = 128
+MAX_RETRY_AFTER_DELTA_SECONDS = 31_536_000
 
 
 class ProviderHttpRequestEvidence(BaseModel):
@@ -77,6 +89,7 @@ class ProviderHttpRequestEvidence(BaseModel):
     url: StrictStr
     headers: Mapping[str, str] = Field(default_factory=dict)
     body: Mapping[str, Any] = Field(default_factory=dict)
+    body_bytes: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")
     def _freeze_maps(self) -> ProviderHttpRequestEvidence:
@@ -99,6 +112,7 @@ class ProviderHttpRequestEvidence(BaseModel):
         url: str,
         headers: dict[str, str],
         body: dict[str, Any],
+        body_bytes: int,
         method: str = "POST",
     ) -> ProviderHttpRequestEvidence:
         return cls(
@@ -106,20 +120,68 @@ class ProviderHttpRequestEvidence(BaseModel):
             url=url,
             headers=sanitize_headers(headers),
             body=dict(body),
+            body_bytes=body_bytes,
         )
 
 
+class ProviderRetryAfterHint(BaseModel):
+    """Small normalized form of a response ``Retry-After`` header."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["delta_seconds", "http_date"]
+    value: StrictInt | StrictStr
+
+    @model_validator(mode="after")
+    def _value_matches_kind(self) -> ProviderRetryAfterHint:
+        if self.kind == "delta_seconds":
+            if (
+                not isinstance(self.value, int)
+                or not 0 <= self.value <= MAX_RETRY_AFTER_DELTA_SECONDS
+            ):
+                msg = "delta_seconds Retry-After value is outside its bound"
+                raise ValueError(msg)
+        else:
+            if (
+                not isinstance(self.value, str)
+                or len(self.value.encode("utf-8"))
+                > MAX_RETRY_AFTER_HEADER_BYTES
+            ):
+                msg = "http_date Retry-After value is outside its bound"
+                raise ValueError(msg)
+            try:
+                parsed = parsedate_to_datetime(self.value)
+                canonical = (
+                    None
+                    if parsed.tzinfo is None
+                    else format_datetime(
+                        parsed.astimezone(UTC),
+                        usegmt=True,
+                    )
+                )
+            except (TypeError, ValueError, OverflowError):
+                canonical = None
+            if canonical != self.value:
+                msg = "http_date Retry-After value must be canonical"
+                raise ValueError(msg)
+        return self
+
+
 class ProviderInvocationEvidence(BaseModel):
-    """Freeze identities only; outcome dictionaries remain mutable.
+    """Freeze nested identity-bearing JSON and identity components.
 
     Schema metadata belongs to ``identity_document()``.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    request_identity: Mapping[str, Any]
-    policy_identity: Mapping[str, Any]
-    http_request: ProviderHttpRequestEvidence
+    request_identity_hash: ContentIdentityHash
+    policy_identity: Mapping[str, Any] | None = None
+    max_request_bytes: StrictInt | None = Field(default=None, gt=0)
+    max_response_bytes: StrictInt | None = Field(default=None, gt=0)
+    http_request: ProviderHttpRequestEvidence | None = None
+    response_bytes: StrictInt | None = Field(default=None, ge=0)
+    retry_after: ProviderRetryAfterHint | None = None
     response: ProviderTransportResponse | None = None
     failure: ProviderTransportFailure | None = None
 
@@ -131,25 +193,46 @@ class ProviderInvocationEvidence(BaseModel):
                 "response/failure to be set"
             )
             raise ValueError(msg)
-        object.__setattr__(
-            self, "request_identity", _deep_freeze(dict(self.request_identity))
-        )
-        object.__setattr__(
-            self, "policy_identity", _deep_freeze(dict(self.policy_identity))
-        )
+        if self.policy_identity is not None:
+            object.__setattr__(
+                self,
+                "policy_identity",
+                _deep_freeze(dict(self.policy_identity)),
+            )
+            try:
+                ProviderKind(self.policy_identity["provider_kind"])
+            except (KeyError, TypeError, ValueError):
+                msg = "policy_identity requires a supported provider_kind"
+                raise ValueError(msg) from None
+            for field_name in ("max_request_bytes", "max_response_bytes"):
+                if field_name in self.policy_identity and self.policy_identity[
+                    field_name
+                ] != getattr(self, field_name):
+                    msg = f"{field_name} must match policy_identity evidence"
+                    raise ValueError(msg)
+        if self.response is not None:
+            object.__setattr__(
+                self,
+                "response",
+                ProviderTransportResponse.model_validate(
+                    self.response.model_dump(mode="python")
+                ),
+            )
+        if self.failure is not None:
+            object.__setattr__(
+                self,
+                "failure",
+                ProviderTransportFailure.model_validate(
+                    self.failure.model_dump(mode="python")
+                ),
+            )
         return self
-
-    @field_serializer("request_identity")
-    def _serialize_request_identity(
-        self, value: Mapping[str, Any]
-    ) -> dict[str, Any]:
-        return _thaw(value)
 
     @field_serializer("policy_identity")
     def _serialize_policy_identity(
-        self, value: Mapping[str, Any]
-    ) -> dict[str, Any]:
-        return _thaw(value)
+        self, value: Mapping[str, Any] | None
+    ) -> dict[str, Any] | None:
+        return None if value is None else _thaw(value)
 
     @property
     def outcome(self) -> ProviderTransportOutcome:
@@ -159,13 +242,15 @@ class ProviderInvocationEvidence(BaseModel):
         return self.failure
 
     @classmethod
-    def build(
+    def build(  # noqa: PLR0913 -- normalized evidence components
         cls,
         *,
         request: ProviderCallRequest,
-        policy: ProviderTransportPolicy,
-        http_request: ProviderHttpRequestEvidence,
+        policy: ProviderTransportPolicy | None,
+        http_request: ProviderHttpRequestEvidence | None,
         outcome: ProviderTransportOutcome,
+        response_bytes: int | None = None,
+        retry_after: ProviderRetryAfterHint | None = None,
     ) -> ProviderInvocationEvidence:
         response = (
             outcome if isinstance(outcome, ProviderTransportResponse) else None
@@ -174,9 +259,19 @@ class ProviderInvocationEvidence(BaseModel):
             outcome if isinstance(outcome, ProviderTransportFailure) else None
         )
         return cls(
-            request_identity=request.identity_payload(),
-            policy_identity=policy.identity_payload(),
+            request_identity_hash=request.identity_hash,
+            policy_identity=(
+                None if policy is None else policy.identity_payload()
+            ),
+            max_request_bytes=(
+                None if policy is None else policy.max_request_bytes
+            ),
+            max_response_bytes=(
+                None if policy is None else policy.max_response_bytes
+            ),
             http_request=http_request,
+            response_bytes=response_bytes,
+            retry_after=retry_after,
             response=response,
             failure=failure,
         )
@@ -190,3 +285,7 @@ class ProviderInvocationEvidence(BaseModel):
             schema_version=PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
             payload=self.identity_payload(),
         )
+
+    @cached_property
+    def identity_hash(self) -> str:
+        return identity_document_hash(self.identity_document())

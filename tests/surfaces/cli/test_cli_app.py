@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
-from dr_providers import ProviderTransportPolicy
 from dr_providers.modeling.controls import ReasoningEffort
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.surfaces.cli import app as cli
@@ -13,6 +13,7 @@ from dr_providers.surfaces.testing.scripted import (
     ScriptedOutcome,
     ScriptedProvider,
 )
+from dr_providers.transport.policy import ProviderTransportPolicy
 
 if TYPE_CHECKING:
     from dr_providers.modeling.request import ProviderCallRequest
@@ -148,6 +149,11 @@ def test_provider_flags_select_request_route(
     assert request.config.route.provider is expected_provider
     assert request.config.route.protocol is expected_protocol
     assert request.config.controls.token_limit == expected_token_limit
+    policy = scripted.kwargs["policy"]
+    assert isinstance(policy, ProviderTransportPolicy)
+    assert policy.provider_kind is expected_provider
+    assert policy.max_connections == 1
+    assert policy.max_keepalive_connections == 1
 
 
 def test_query_flags_build_full_request(
@@ -246,7 +252,6 @@ def test_query_failure_prints_stderr_and_exits_nonzero(
         failure_class=FailureClass.PERMANENT,
         code="boom_code",
         message="boom message",
-        retryable=False,
     )
     patch_http_provider(monkeypatch, [ScriptedOutcome(failure=failure)])
 
@@ -266,7 +271,7 @@ def test_query_failure_prints_stderr_and_exits_nonzero(
     assert result.stderr == "failure: boom_code: boom message\n"
 
 
-def test_retries_flag_is_forwarded_to_policy(
+def test_removed_retries_flag_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stub = patch_http_provider(monkeypatch)
@@ -285,7 +290,6 @@ def test_retries_flag_is_forwarded_to_policy(
         ],
     )
 
-    assert result.exit_code == 0
-    policy = stub.kwargs["policy"]
-    assert isinstance(policy, ProviderTransportPolicy)
-    assert policy.native_retry_count == 3
+    assert result.exit_code == 2
+    assert "--retries" in unstyle(result.output)
+    assert stub.requests == []

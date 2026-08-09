@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from dr_providers.modeling.call import ProviderCallConfig
 
 PARSE_ERROR_CODE = "response_parse_error"
+RESPONSE_NO_TEXT_CODE = "response_no_text"
 
 ParseOutcome = ProviderTransportResponse | ProviderTransportFailure
 
@@ -98,12 +99,13 @@ def parse_failure(
     message: str,
     body: Mapping[str, Any],
     config: ProviderCallConfig,
+    *,
+    code: str = PARSE_ERROR_CODE,
 ) -> ProviderTransportFailure:
     return ProviderTransportFailure(
         failure_class=FailureClass.PERMANENT,
-        code=PARSE_ERROR_CODE,
+        code=code,
         message=message,
-        retryable=False,
         response_body=dict(body),
         metadata={
             "provider": config.route.provider.value,
