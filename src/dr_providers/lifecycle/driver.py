@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from threading import TIMEOUT_MAX
 from typing import TYPE_CHECKING, Protocol
 
 from dr_providers.lifecycle.classifier import (
@@ -35,7 +36,14 @@ class EventProviderRetryWait:
     """Production retry wait interruptible by a cancellation event."""
 
     def wait(self, delay_seconds: float, cancellation: Event) -> None:
-        cancellation.wait(delay_seconds)
+        full_chunk_count, final_delay_seconds = divmod(
+            delay_seconds, TIMEOUT_MAX
+        )
+        for _ in range(int(full_chunk_count)):
+            if cancellation.wait(TIMEOUT_MAX):
+                return
+        if final_delay_seconds > 0 or full_chunk_count == 0:
+            cancellation.wait(final_delay_seconds)
 
 
 def run_local_provider_call(

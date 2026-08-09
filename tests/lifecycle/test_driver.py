@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from threading import Event, Thread
+from threading import TIMEOUT_MAX, Event, Thread
 
 from dr_providers import (
     FailureClass,
@@ -16,6 +16,7 @@ from dr_providers import (
 from dr_providers.lifecycle import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
     AcceptAllSemanticResponseClassifier,
+    EventProviderRetryWait,
     ProviderCallOutcomeKind,
     ProviderCallResult,
     ProviderCallState,
@@ -52,6 +53,17 @@ class _RecordingWait:
         self.delays.append(delay_seconds)
 
 
+class _ScriptedCancellation(Event):
+    def __init__(self, wait_results: list[bool]) -> None:
+        super().__init__()
+        self._wait_results = iter(wait_results)
+        self.wait_timeouts: list[float | None] = []
+
+    def wait(self, timeout: float | None = None) -> bool:
+        self.wait_timeouts.append(timeout)
+        return next(self._wait_results)
+
+
 def test_driver_follows_reducer_retry_instruction() -> None:
     provider = ScriptedProvider(
         [
@@ -78,6 +90,22 @@ def test_driver_follows_reducer_retry_instruction() -> None:
     assert len(result.completed_invocations) == 2
     assert wait.delays == [1.0]
     assert len(provider.requests) == 2
+
+
+def test_event_retry_wait_chunks_large_delay_until_cancellation() -> None:
+    cancellation = _ScriptedCancellation([False, True])
+
+    EventProviderRetryWait().wait(1e308, cancellation)
+
+    assert cancellation.wait_timeouts == [TIMEOUT_MAX, TIMEOUT_MAX]
+
+
+def test_event_retry_wait_uses_final_bounded_remainder() -> None:
+    cancellation = _ScriptedCancellation([False, False])
+
+    EventProviderRetryWait().wait(TIMEOUT_MAX + 1.0, cancellation)
+
+    assert cancellation.wait_timeouts == [TIMEOUT_MAX, 1.0]
 
 
 def test_cancellation_before_invocation_starts_no_work() -> None:

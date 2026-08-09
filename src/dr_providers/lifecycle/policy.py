@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from functools import cached_property
 from typing import Annotated, Literal
 
@@ -106,6 +107,9 @@ class CustomProviderCallRetryPolicy(BaseModel):
                 "custom retry policy requires exactly one declared delay "
                 "between each permitted invocation"
             )
+            raise ValueError(msg)
+        if not math.isfinite(self.maximum_cumulative_delay_seconds):
+            msg = "custom retry policy cumulative delay must be finite"
             raise ValueError(msg)
         forbidden = {
             ProviderInvocationOutcome.SUCCESS,

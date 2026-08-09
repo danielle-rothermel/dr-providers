@@ -109,6 +109,18 @@ def test_custom_policy_is_closed_deterministic_data() -> None:
     ]
 
 
+def test_custom_policy_rejects_non_finite_cumulative_delay() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="custom retry policy cumulative delay must be finite",
+    ):
+        CustomProviderCallRetryPolicy(
+            maximum_invocations=3,
+            eligible_outcomes=frozenset(),
+            declared_delays_seconds=(1e308, 1e308),
+        )
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
