@@ -26,9 +26,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   payload, credential, evidence, or dispatch work.
 - Advance Provider Invocation Evidence to schema version 4 for the persisted
   provider-kind transport-policy binding.
-- Configure the CLI, local server, live matrix, and README quickstart for their
-  evidenced single-invocation concurrency with one open and one keep-alive
-  connection.
+- Configure the CLI, live matrix, and README quickstart with one open and one
+  keep-alive connection for each single-invocation provider. Configure the
+  local server the same way per request-created provider; its limit and
+  connection reuse are not server-wide.
 - State explicitly that native phase and response-read idle timeouts do not
   impose a total wall-clock deadline on a response that keeps producing bytes.
 - Cut the public `Provider` protocol, `HttpProvider`, and `ScriptedProvider` over
@@ -36,6 +37,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   provider routes now execute calls through the same standard local lifecycle.
 - Make serve query results retain the complete terminal `ProviderCallResult`,
   including the ordered decided invocation records and their evidence.
+
+### Fixed
+
+- Reject completed invocation observations whose declared failure outcome does
+  not exactly match deterministic classification of the embedded evidence.
+- Reject custom retry policies with non-finite cumulative delay and split
+  accepted large waits into platform-bounded cancellation-aware chunks.
 
 ### Removed
 

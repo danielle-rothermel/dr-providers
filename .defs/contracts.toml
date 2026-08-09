@@ -171,7 +171,9 @@ check = "uv run pytest -q tests/lifecycle/test_policy_and_outcomes.py tests/life
 title = "Invocation and call outcomes are closed and evaluation-neutral"
 statement = """
 Provider invocation outcomes form a closed transport, protocol, and semantic \
-classification. Strict protocol classification precedes semantic classification. \
+classification. Failure evidence deterministically fixes its exact outcome; \
+only success versus semantic rejection remains classifier-owned for a valid \
+nonblank response. Strict protocol classification precedes semantic classification. \
 Provider call outcomes form a closed terminal classification of acceptance, a \
 policy-terminal invocation outcome, draining cancellation, or policy exhaustion. \
 Neither outcome model assigns application correctness, reward, rank, or \
@@ -180,7 +182,7 @@ rationale = """
 Exhaustive provider outcomes support deterministic lifecycle transitions without \
 importing evaluation policy."""
 date = "2026-08-08"
-check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py"
+check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py tests/lifecycle/test_reducer.py"
 
 [[contracts]]
 title = "Semantic classification excludes evaluation policy"

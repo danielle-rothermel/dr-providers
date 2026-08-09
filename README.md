@@ -160,9 +160,11 @@ producing bytes.
 The public transport-policy defaults allow 10 open connections and retain 5
 idle connections. A caller that shares one `HttpProvider` across concurrent
 work must explicitly size both limits to its own maximum concurrent
-`invoke()` calls. The one-shot CLI, local server, live matrix, and quickstart
-run with one admitted invocation at a time and therefore configure both limits
-to 1.
+`invoke()` calls. The one-shot CLI, live matrix, and quickstart run one admitted
+invocation per provider and therefore configure both limits to 1. The local
+server also configures both limits to 1, but it creates one `HttpProvider` per
+HTTP request, so its connection limit and reuse are scoped to that provider and
+request rather than the server as a whole.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared

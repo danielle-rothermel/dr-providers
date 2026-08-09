@@ -320,7 +320,8 @@ part_of = ["provider call result"]
 name = "provider call retry policy"
 definition = """
 A frozen identity-bearing declaration of a finite invocation limit, eligible \
-provider invocation outcomes, and finite nonnegative delay rules."""
+provider invocation outcomes, finite nonnegative individual delays, and a \
+finite maximum cumulative delay."""
 exported_symbols = [
   "PROVIDER_CALL_RETRY_POLICY_SCHEMA",
   "PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION",
@@ -387,7 +388,9 @@ part_of = ["provider call"]
 name = "completed provider invocation observation"
 definition = """
 One completed provider invocation's ordinal, request reference, evidence \
-reference, and provider invocation outcome before a retry decision."""
+reference, and evidence-consistent provider invocation outcome before a retry \
+decision. Failure evidence fixes the outcome exactly; only a valid nonblank \
+response leaves success versus semantic rejection to the selected classifier."""
 exported_symbols = [
   "COMPLETED_INVOCATION_OBSERVATION_SCHEMA",
   "COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION",
@@ -431,7 +434,7 @@ exported_symbols = [
 name = "provider retry wait"
 definition = """
 A local execution boundary that waits for a provider retry instruction's \
-declared delay and observes cancellation."""
+declared delay in platform-bounded chunks and observes cancellation."""
 exported_symbols = ["EventProviderRetryWait", "ProviderRetryWait"]
 
 [[terms]]
