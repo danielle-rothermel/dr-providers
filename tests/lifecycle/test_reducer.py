@@ -72,7 +72,10 @@ def _observation(
     if outcome in response_outcomes:
         evidence = ProviderInvocationEvidence(
             request_identity_hash=state.request_identity_hash,
-            policy_identity={"transport_fixture": "v1"},
+            policy_identity={
+                "provider_kind": "openai",
+                "transport_fixture": "v1",
+            },
             http_request=HTTP_REQUEST,
             response=ProviderTransportResponse(
                 text=(
@@ -86,7 +89,10 @@ def _observation(
     else:
         evidence = ProviderInvocationEvidence(
             request_identity_hash=state.request_identity_hash,
-            policy_identity={"transport_fixture": "v1"},
+            policy_identity={
+                "provider_kind": "openai",
+                "transport_fixture": "v1",
+            },
             http_request=HTTP_REQUEST,
             failure=ProviderTransportFailure(
                 failure_class=FailureClass.TRANSIENT,

@@ -105,7 +105,11 @@ def query(  # noqa: PLR0913
         retry_policy=StandardProviderCallRetryPolicy(),
         classifier_identifier=classifier.identifier,
     )
-    transport_policy = policy_for(config.route.provider)
+    transport_policy = policy_for(
+        config.route.provider,
+        max_connections=1,
+        max_keepalive_connections=1,
+    )
     with HttpProvider(policy=transport_policy) as http_provider:
         result = run_local_provider_call(
             provider=http_provider,

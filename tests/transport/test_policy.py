@@ -21,8 +21,15 @@ from dr_providers.transport.policy import (
 
 
 class TestPolicyFor:
+    def test_provider_kind_is_required(self) -> None:
+        with pytest.raises(ValidationError):
+            ProviderTransportPolicy.model_validate(
+                {"api_key_env": "OPENAI_API_KEY"}
+            )
+
     def test_derives_defaults_from_provider_kind(self) -> None:
         policy = policy_for(ProviderKind.ANTHROPIC)
+        assert policy.provider_kind is ProviderKind.ANTHROPIC
         assert policy.api_key_env == ApiKeyEnv.ANTHROPIC.value
         assert policy.base_url == ProviderBaseUrl.ANTHROPIC.value
         assert policy.max_connections == DEFAULT_MAX_CONNECTIONS
@@ -90,6 +97,7 @@ class TestPolicyFor:
     def test_timeout_type_rejected_direct(self, invalid_value: object) -> None:
         with pytest.raises(ValidationError):
             ProviderTransportPolicy(
+                provider_kind=ProviderKind.OPENAI,
                 api_key_env="OPENAI_API_KEY",
                 timeout_seconds=cast("float", invalid_value),
             )
@@ -102,6 +110,7 @@ class TestPolicyFor:
     ) -> None:
         with pytest.raises(ValidationError):
             ProviderTransportPolicy(
+                provider_kind=ProviderKind.OPENAI,
                 api_key_env="OPENAI_API_KEY",
                 idle_timeout_seconds=cast("float", invalid_value),
             )
@@ -116,7 +125,8 @@ class TestPolicyFor:
         self, field_name: str, json_value: str
     ) -> None:
         payload = (
-            f'{{"api_key_env":"OPENAI_API_KEY","{field_name}":{json_value}}}'
+            '{"provider_kind":"openai","api_key_env":"OPENAI_API_KEY",'
+            f'"{field_name}":{json_value}}}'
         )
         with pytest.raises(ValidationError):
             ProviderTransportPolicy.model_validate_json(payload)
@@ -125,6 +135,7 @@ class TestPolicyFor:
         with pytest.raises(ValidationError):
             ProviderTransportPolicy.model_validate(
                 {
+                    "provider_kind": "openai",
                     "api_key_env": "OPENAI_API_KEY",
                     "native_retry_count": 1,
                 }
@@ -152,6 +163,7 @@ class TestPolicyFor:
         with pytest.raises(ValidationError):
             ProviderTransportPolicy.model_validate(
                 {
+                    "provider_kind": "openai",
                     "api_key_env": "OPENAI_API_KEY",
                     field_name: invalid_value,
                 }
@@ -165,6 +177,7 @@ class TestPolicyFor:
             ),
         ):
             ProviderTransportPolicy(
+                provider_kind=ProviderKind.OPENAI,
                 api_key_env="OPENAI_API_KEY",
                 max_connections=2,
                 max_keepalive_connections=3,
@@ -179,12 +192,14 @@ class TestPolicyFor:
         self, timeout_seconds: int | float
     ) -> None:
         direct = ProviderTransportPolicy(
+            provider_kind=ProviderKind.OPENAI,
             api_key_env="OPENAI_API_KEY",
             timeout_seconds=timeout_seconds,
             idle_timeout_seconds=timeout_seconds,
         )
         from_json = ProviderTransportPolicy.model_validate_json(
             "{"
+            '"provider_kind":"openai",'
             '"api_key_env":"OPENAI_API_KEY",'
             f'"timeout_seconds":{timeout_seconds},'
             f'"idle_timeout_seconds":{timeout_seconds}'
@@ -195,8 +210,11 @@ class TestPolicyFor:
             assert policy.timeout_seconds == timeout_seconds
             assert policy.idle_timeout_seconds == timeout_seconds
 
-    def test_identity_carries_only_credential_environment_name(self) -> None:
+    def test_identity_carries_provider_and_credential_environment_name(
+        self,
+    ) -> None:
         policy = ProviderTransportPolicy(
+            provider_kind=ProviderKind.OPENAI,
             api_key_env=str(ApiKeyEnv.OPENAI),
             base_url=str(ProviderBaseUrl.OPENAI),
         )
@@ -204,6 +222,7 @@ class TestPolicyFor:
         payload = policy.identity_payload()
 
         assert payload == {
+            "provider_kind": "openai",
             "api_key_env": "OPENAI_API_KEY",
             "base_url": "https://api.openai.com/v1",
             "timeout_seconds": 120.0,
@@ -228,6 +247,7 @@ class TestPolicyFor:
             ValidationError, match="must not contain URL userinfo"
         ):
             ProviderTransportPolicy(
+                provider_kind=ProviderKind.OPENAI,
                 api_key_env="OPENAI_API_KEY",
                 base_url=base_url,
             )
@@ -236,5 +256,6 @@ class TestPolicyFor:
             ValidationError, match="must not contain URL userinfo"
         ):
             ProviderTransportPolicy.model_validate_json(
-                f'{{"api_key_env":"OPENAI_API_KEY","base_url":"{base_url}"}}'
+                '{"provider_kind":"openai",'
+                f'"api_key_env":"OPENAI_API_KEY","base_url":"{base_url}"}}'
             )

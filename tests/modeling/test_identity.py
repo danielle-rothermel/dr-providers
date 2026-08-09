@@ -280,6 +280,7 @@ class TestPolicyExclusion:
         )
         request = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
         policy = ProviderTransportPolicy(
+            provider_kind=ProviderKind.OPENAI,
             api_key_env=str(ApiKeyEnv.OPENAI),
             base_url=str(ProviderBaseUrl.OPENAI),
             timeout_seconds=5.0,

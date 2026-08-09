@@ -192,6 +192,13 @@ class HttpProvider:
     def _invoke_admitted(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
+        if request.config.route.provider is not self._policy.provider_kind:
+            msg = (
+                "request route provider does not match transport policy: "
+                f"{request.config.route.provider.value} != "
+                f"{self._policy.provider_kind.value}"
+            )
+            raise ValueError(msg)
         payload = build_payload(request)
         encoded_payload = json.dumps(
             payload,

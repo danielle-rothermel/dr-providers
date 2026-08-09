@@ -12,6 +12,7 @@ from dr_providers import (
     ProviderBaseUrl,
     ProviderCallConfig,
     ProviderCallRequest,
+    ProviderKind,
     ProviderTransportPolicy,
     ProviderTransportResponse,
     ReasoningEffort,
@@ -38,6 +39,7 @@ CHAT_BODY_OK: dict[str, Any] = {
     "usage": {"prompt_tokens": 1, "completion_tokens": 1},
 }
 OPENAI_POLICY = ProviderTransportPolicy(
+    provider_kind=ProviderKind.OPENAI,
     api_key_env=str(ApiKeyEnv.OPENAI),
     base_url=str(ProviderBaseUrl.OPENAI),
 )

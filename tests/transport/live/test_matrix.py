@@ -9,15 +9,12 @@ from typing import TYPE_CHECKING
 import pytest
 
 from dr_providers import (
-    DEFAULT_API_KEY_ENVS,
-    DEFAULT_BASE_URLS,
     GenerationControls,
     HttpProvider,
     MessageRole,
     PromptMessage,
     ProviderCallConfig,
     ProviderCallRequest,
-    ProviderTransportPolicy,
     ReasoningEffort,
     Transcript,
     anthropic_messages_config,
@@ -25,6 +22,7 @@ from dr_providers import (
     openai_chat_config,
     openai_responses_config,
     openrouter_chat_config,
+    policy_for,
 )
 from dr_providers.lifecycle import (
     AcceptAllSemanticResponseClassifier,
@@ -138,9 +136,10 @@ def test_live_matrix(
         ),
     )
     kind = config.route.provider
-    policy = ProviderTransportPolicy(
-        api_key_env=str(DEFAULT_API_KEY_ENVS[kind]),
-        base_url=str(DEFAULT_BASE_URLS[kind]),
+    policy = policy_for(
+        kind,
+        max_connections=1,
+        max_keepalive_connections=1,
     )
     classifier = AcceptAllSemanticResponseClassifier()
     state = ProviderCallState.initial(

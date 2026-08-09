@@ -13,6 +13,7 @@ from dr_providers import (
     PromptMessage,
     Provider,
     ProviderCallRequest,
+    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -70,6 +71,7 @@ def _http_provider(outcome_kind: OutcomeKind) -> Provider:
 
     return HttpProvider(
         policy=ProviderTransportPolicy(
+            provider_kind=ProviderKind.OPENAI,
             api_key_env="TEST_API_KEY",
             base_url="https://example.test/v1",
         ),

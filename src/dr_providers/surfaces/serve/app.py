@@ -40,7 +40,7 @@ from dr_providers.transport.policy import (
 )
 
 SERVE_TITLE = "dr-providers serve"
-SERVE_VERSION = "0.2.2"
+SERVE_VERSION = "0.3.0"
 LOCALHOST_ORIGIN_REGEX = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
 MAX_VARIANCE_SAMPLES = 25
 MAX_VARIANCE_MODELS = 8
@@ -154,7 +154,11 @@ def resolve_provider(
                 "to run live queries"
             ),
         )
-    policy = policy_for(kind)
+    policy = policy_for(
+        kind,
+        max_connections=1,
+        max_keepalive_connections=1,
+    )
     with HttpProvider(policy=policy, api_key=api_key) as provider:
         yield provider
 

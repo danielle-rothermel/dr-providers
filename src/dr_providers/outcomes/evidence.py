@@ -22,6 +22,7 @@ from pydantic import (
 )
 
 from dr_providers.core.frozen import _deep_freeze, _thaw
+from dr_providers.modeling.route import ProviderKind
 from dr_providers.outcomes.models import (
     ProviderTransportFailure,
     ProviderTransportOutcome,
@@ -68,7 +69,7 @@ def sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 3
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 4
 ContentIdentityHash = Annotated[
     StrictStr,
     Field(pattern=r"^[0-9a-f]{64}$"),
@@ -198,6 +199,11 @@ class ProviderInvocationEvidence(BaseModel):
                 "policy_identity",
                 _deep_freeze(dict(self.policy_identity)),
             )
+            try:
+                ProviderKind(self.policy_identity["provider_kind"])
+            except (KeyError, TypeError, ValueError):
+                msg = "policy_identity requires a supported provider_kind"
+                raise ValueError(msg) from None
             for field_name in ("max_request_bytes", "max_response_bytes"):
                 if field_name in self.policy_identity and self.policy_identity[
                     field_name

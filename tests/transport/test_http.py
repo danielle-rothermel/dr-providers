@@ -15,6 +15,7 @@ from dr_providers import (
     ProviderBaseUrl,
     ProviderCallConfig,
     ProviderCallRequest,
+    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -22,6 +23,7 @@ from dr_providers import (
     anthropic_messages_config,
     openai_chat_config,
 )
+from dr_providers.transport import http as transport_http
 from dr_providers.transport.http import HttpProvider
 
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="write add"),)
@@ -45,10 +47,12 @@ ANTHROPIC_BODY_OK: dict[str, Any] = {
 }
 
 OPENAI_POLICY = ProviderTransportPolicy(
+    provider_kind=ProviderKind.OPENAI,
     api_key_env=str(ApiKeyEnv.OPENAI),
     base_url=str(ProviderBaseUrl.OPENAI),
 )
 ANTHROPIC_POLICY = ProviderTransportPolicy(
+    provider_kind=ProviderKind.ANTHROPIC,
     api_key_env=str(ApiKeyEnv.ANTHROPIC),
     base_url=str(ProviderBaseUrl.ANTHROPIC),
 )
@@ -82,6 +86,95 @@ def mock_provider(
 
 
 class TestHttpProvider:
+    @pytest.mark.parametrize(
+        ("provider_request", "policy_kind", "secret_env", "endpoint"),
+        [
+            pytest.param(
+                openai_request(),
+                ProviderKind.ANTHROPIC,
+                "ANTHROPIC_MISMATCH_SECRET",
+                "https://anthropic-mismatch.example/v1",
+                id="openai-request-anthropic-policy",
+            ),
+            pytest.param(
+                request_for(
+                    anthropic_messages_config(
+                        model="claude",
+                        controls=GenerationControls(token_limit=8),
+                    )
+                ),
+                ProviderKind.OPENAI,
+                "OPENAI_MISMATCH_SECRET",
+                "https://openai-mismatch.example/v1",
+                id="anthropic-request-openai-policy",
+            ),
+        ],
+    )
+    def test_route_policy_mismatch_precedes_request_and_credential_work(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        provider_request: ProviderCallRequest,
+        policy_kind: ProviderKind,
+        secret_env: str,
+        endpoint: str,
+    ) -> None:
+        payload_builds: list[ProviderCallRequest] = []
+        credential_resolutions: list[ProviderCallConfig] = []
+        wire_requests: list[httpx.Request] = []
+        monkeypatch.setenv(secret_env, f"secret-for-{secret_env}")
+
+        def record_payload_build(
+            attempted_request: ProviderCallRequest,
+        ) -> dict[str, Any]:
+            payload_builds.append(attempted_request)
+            return {}
+
+        def record_credential_resolution(
+            _provider: HttpProvider,
+            config: ProviderCallConfig,
+        ) -> dict[str, str]:
+            credential_resolutions.append(config)
+            return {}
+
+        def handler(http_request: httpx.Request) -> httpx.Response:
+            wire_requests.append(http_request)
+            return httpx.Response(200, json=CHAT_BODY_OK)
+
+        monkeypatch.setattr(
+            transport_http,
+            "build_payload",
+            record_payload_build,
+        )
+        monkeypatch.setattr(
+            HttpProvider,
+            "_headers",
+            record_credential_resolution,
+        )
+        policy = ProviderTransportPolicy(
+            provider_kind=policy_kind,
+            api_key_env=secret_env,
+            base_url=endpoint,
+        )
+        provider = HttpProvider(
+            policy=policy,
+            _client_factory=lambda **_kwargs: httpx.Client(
+                transport=httpx.MockTransport(handler)
+            ),
+        )
+
+        with (
+            provider,
+            pytest.raises(
+                ValueError,
+                match="request route provider does not match transport policy",
+            ),
+        ):
+            provider.invoke(provider_request)
+
+        assert payload_builds == []
+        assert credential_resolutions == []
+        assert wire_requests == []
+
     def test_success_posts_payload_and_parses(self) -> None:
         seen: dict[str, Any] = {}
 
@@ -282,7 +375,9 @@ class TestHttpProvider:
 
     def test_missing_base_url_is_permanent_no_throw(self) -> None:
         policy = ProviderTransportPolicy(
-            api_key_env=str(ApiKeyEnv.OPENAI), base_url=None
+            provider_kind=ProviderKind.OPENAI,
+            api_key_env=str(ApiKeyEnv.OPENAI),
+            base_url=None,
         )
         provider = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK),

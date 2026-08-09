@@ -12,6 +12,7 @@ from dr_providers.surfaces.testing.scripted import (
     ScriptedOutcome,
     ScriptedProvider,
 )
+from dr_providers.transport.policy import ProviderTransportPolicy
 
 if TYPE_CHECKING:
     from dr_providers.modeling.request import ProviderCallRequest
@@ -147,6 +148,11 @@ def test_provider_flags_select_request_route(
     assert request.config.route.provider is expected_provider
     assert request.config.route.protocol is expected_protocol
     assert request.config.controls.token_limit == expected_token_limit
+    policy = scripted.kwargs["policy"]
+    assert isinstance(policy, ProviderTransportPolicy)
+    assert policy.provider_kind is expected_provider
+    assert policy.max_connections == 1
+    assert policy.max_keepalive_connections == 1
 
 
 def test_query_flags_build_full_request(

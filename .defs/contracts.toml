@@ -43,6 +43,21 @@ date = "2026-08-05"
 check = "uv run pytest -q tests/modeling/test_call.py::TestConfigPresets::test_openrouter_chat"
 
 [[contracts]]
+title = "Routes and transport policies bind one supported provider service"
+statement = """
+A model route admits only the supported provider-service and protocol pairs. A \
+provider transport policy binds exactly one provider service in policy identity. \
+HttpProvider rejects a request whose route provider differs from that binding \
+before payload construction, endpoint or credential resolution, HTTP request \
+evidence construction, or dispatch."""
+rationale = """
+Rejecting invalid routes at their model boundary and mismatched policies before \
+request work prevents one provider's credentials or endpoint from being applied \
+to another provider's request."""
+date = "2026-08-08"
+check = "uv run pytest -q tests/modeling/test_route.py tests/transport/test_http.py"
+
+[[contracts]]
 title = "Provider invocation is the wire-request boundary"
 statement = """
 Each provider invocation makes at most one provider wire request and produces \
@@ -92,11 +107,13 @@ Timeout values are strict positive finite policy values, and the response-read \
 idle timeout is clamped to the general timeout. Each provider wire request runs \
 directly under native connect, read, write, and pool timeouts. A native timeout \
 is observed only after the local HTTP operation has ended and is classified as \
-a contained transport timeout. Provider invocation starts no deadline worker or \
-child process."""
+a contained transport timeout. Native phase and response-read idle timeouts do \
+not bound the total wall-clock duration of a slow response that continues to \
+produce bytes. Provider invocation starts no deadline worker or child process."""
 rationale = """
 Direct native execution preserves the reusable connection pool and makes the \
-implemented timeout containment boundary explicit."""
+implemented timeout containment boundary explicit without claiming a total \
+response deadline."""
 date = "2026-08-08"
 check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_timeout.py tests/lifecycle/test_classification.py"
 

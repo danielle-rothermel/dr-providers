@@ -163,9 +163,9 @@ exported_symbols = [
 [[terms]]
 name = "provider transport policy"
 definition = """
-An identity-bearing declaration of provider credentials location, endpoint, \
-native phase timeouts, connection-pool limits, and request and response byte \
-limits. It is excluded from provider-call request identity."""
+An identity-bearing declaration binding one provider service to its credentials \
+location, endpoint, native phase timeouts, connection-pool limits, and request \
+and response byte limits. It is excluded from provider-call request identity."""
 exported_symbols = [
   "ProviderTransportPolicy",
   "ApiKeyEnv",

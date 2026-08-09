@@ -12,6 +12,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
+    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     Transcript,
@@ -41,6 +42,7 @@ def _request() -> ProviderCallRequest:
 
 def _policy(**overrides: Any) -> ProviderTransportPolicy:
     return ProviderTransportPolicy(
+        provider_kind=ProviderKind.OPENAI,
         api_key_env=str(ApiKeyEnv.OPENAI),
         base_url="https://example.test",
         timeout_seconds=overrides.pop("timeout_seconds", 0.3),

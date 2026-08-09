@@ -57,6 +57,7 @@ DEFAULT_API_KEY_ENVS: dict[ProviderKind, ApiKeyEnv] = {
 class ProviderTransportPolicy(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    provider_kind: ProviderKind
     api_key_env: StrictStr
     base_url: StrictStr | None = None
     """Retained verbatim in evidence after URL userinfo is rejected."""
@@ -127,6 +128,7 @@ class ProviderTransportPolicy(BaseModel):
         ``base_url`` is retained verbatim after URL userinfo is rejected.
         """
         return {
+            "provider_kind": self.provider_kind.value,
             "api_key_env": self.api_key_env,
             "base_url": self.base_url,
             "timeout_seconds": self.timeout_seconds,
@@ -157,6 +159,7 @@ def policy_for(  # noqa: PLR0913 -- one explicit transport policy surface
         str(DEFAULT_BASE_URLS[kind]) if base_url is None else base_url
     )
     return ProviderTransportPolicy(
+        provider_kind=kind,
         api_key_env=str(resolved_key_env),
         base_url=resolved_base_url,
         timeout_seconds=timeout_seconds,

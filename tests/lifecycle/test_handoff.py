@@ -48,22 +48,22 @@ CALL_IDENTITY_HASH = (
     "a1ca086506691c936b6f19342935a27b592eaf0f7e2f4642038df9a7c5658c91"
 )
 FIRST_EVIDENCE_IDENTITY_HASH = (
-    "3dc1361347e1f3192bdf7952f7b82d71818a7d3ad3d7ab29145ffba26835d0e6"
+    "eb01af647d148ecf4294ea54a87308c64beccb2d799b100e587ad05612691cf8"
 )
 FIRST_OBSERVATION_IDENTITY_HASH = (
-    "424ff346aaf8a119aa42365b5db98cbf48cc00ab43614e3ea82992c45be129b1"
+    "2a024f2af5114e82ffb54ec2c6238813dbc0ba45a2eb9992063997cba8febc28"
 )
 FIRST_RECORD_IDENTITY_HASH = (
-    "88811571da71473b44490274834fb34f37b9da58259dd9fa3ec364831b08bea0"
+    "f22529b6a2c010711ff32dfa47be06e4619a2468fe2ff5fd6b59225da46d613b"
 )
 SECOND_RECORD_IDENTITY_HASH = (
-    "a45d463e71f7629074c22c91ee71cb760e3cf10bfd35242c5024f7f8e93d2366"
+    "962a198db09e39ba58d31ce5de5c6b23a160159f8d2b52561774e0590d295cbd"
 )
 RESULT_IDENTITY_HASH = (
-    "a3bdde8e74ba99974f1d8159f27153343190af5a36f0f36301474d79c56e88e3"
+    "fefa7cbaab7685f587092156f547ffa4742fd7bffebac6ca4e7dcebee6f1422c"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "98ae5bc5c80c78c28f83d64337dc04622b21f1a505a0d158d94e225d5e36a89a"
+    "391b87d6df7f2ffdda79d80a063f8af051e287380669af08f6b1afe836c6fb18"
 )
 
 
@@ -190,7 +190,10 @@ def _golden_trace() -> tuple[
     )
     first_evidence = ProviderInvocationEvidence(
         request_identity_hash=state.request_identity_hash,
-        policy_identity={"transport_fixture": "v1"},
+        policy_identity={
+            "provider_kind": "openai",
+            "transport_fixture": "v1",
+        },
         max_request_bytes=1024,
         max_response_bytes=2048,
         http_request=http_request,
@@ -217,7 +220,10 @@ def _golden_trace() -> tuple[
 
     second_evidence = ProviderInvocationEvidence(
         request_identity_hash=state.request_identity_hash,
-        policy_identity={"transport_fixture": "v1"},
+        policy_identity={
+            "provider_kind": "openai",
+            "transport_fixture": "v1",
+        },
         max_request_bytes=1024,
         max_response_bytes=2048,
         http_request=http_request,

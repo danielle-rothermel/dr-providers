@@ -13,6 +13,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
+    ProviderKind,
     ProviderTransportPolicy,
     ProviderTransportResponse,
     Transcript,
@@ -42,6 +43,7 @@ def _request() -> ProviderCallRequest:
 
 def _policy() -> ProviderTransportPolicy:
     return ProviderTransportPolicy(
+        provider_kind=ProviderKind.OPENAI,
         api_key_env=str(ApiKeyEnv.OPENAI),
         base_url="https://example.test",
     )

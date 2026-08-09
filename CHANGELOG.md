@@ -6,6 +6,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-08
+
 ### Added
 
 - Add closed provider-invocation and provider-call outcomes, a caller-identified
@@ -19,6 +21,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Reject unsupported provider/protocol model routes, bind transport policies to
+  one provider kind in identity, and reject route-policy mismatches before
+  payload, credential, evidence, or dispatch work.
+- Advance Provider Invocation Evidence to schema version 4 for the persisted
+  provider-kind transport-policy binding.
+- Configure the CLI, local server, live matrix, and README quickstart for their
+  evidenced single-invocation concurrency with one open and one keep-alive
+  connection.
+- State explicitly that native phase and response-read idle timeouts do not
+  impose a total wall-clock deadline on a response that keeps producing bytes.
 - Cut the public `Provider` protocol, `HttpProvider`, and `ScriptedProvider` over
   to one evidence-producing `invoke()` operation. CLI, serve, and all five live
   provider routes now execute calls through the same standard local lifecycle.

@@ -231,7 +231,13 @@ def test_live_provider_maps_key_policy_and_closes_after_success(
 
     instance = RecordingHttpProvider.instances[0]
     assert instance.api_key == api_key
-    assert instance.policy == policy_for(expected_provider)
+    assert instance.policy == policy_for(
+        expected_provider,
+        max_connections=1,
+        max_keepalive_connections=1,
+    )
+    assert instance.policy.max_connections == 1
+    assert instance.policy.max_keepalive_connections == 1
     assert evidence.response is not None
     assert instance.events == [
         ("enter", None),
