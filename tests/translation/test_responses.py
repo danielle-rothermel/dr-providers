@@ -3,6 +3,7 @@ import json
 import pytest
 
 from dr_providers import (
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     openai_responses_config,
@@ -29,7 +30,7 @@ def test_responses_body_reports_response_id() -> None:
 
     assert isinstance(response, ProviderTransportResponse)
     assert response.response_id == "resp-1"
-    assert response.finish_reason == "stop"
+    assert response.stop_reason == ProviderStopReason.STOP
     assert response.diagnostics is not None
     assert response.diagnostics.output_text_len == 2
 

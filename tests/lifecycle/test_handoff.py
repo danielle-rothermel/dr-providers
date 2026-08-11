@@ -48,22 +48,22 @@ CALL_IDENTITY_HASH = (
     "a1ca086506691c936b6f19342935a27b592eaf0f7e2f4642038df9a7c5658c91"
 )
 FIRST_EVIDENCE_IDENTITY_HASH = (
-    "eb01af647d148ecf4294ea54a87308c64beccb2d799b100e587ad05612691cf8"
+    "02421ea37c05cc25d88a108a99df475967099fa29bee005cd6a646e63afb11d9"
 )
 FIRST_OBSERVATION_IDENTITY_HASH = (
-    "2a024f2af5114e82ffb54ec2c6238813dbc0ba45a2eb9992063997cba8febc28"
+    "50c7faf6ddc509368a901dc8d7af1b0880ca39104694d7b1acc7e04a0f44dee0"
 )
 FIRST_RECORD_IDENTITY_HASH = (
-    "f22529b6a2c010711ff32dfa47be06e4619a2468fe2ff5fd6b59225da46d613b"
+    "dbcf1d748c394da7c6890cda7bb39c400a4c7b0dc8b7a81e4d48b8eed093da37"
 )
 SECOND_RECORD_IDENTITY_HASH = (
-    "962a198db09e39ba58d31ce5de5c6b23a160159f8d2b52561774e0590d295cbd"
+    "ec842dcfd80702e4a0a738b00bf32e0de1332b63f2625ca359dae0d15164229b"
 )
 RESULT_IDENTITY_HASH = (
-    "fefa7cbaab7685f587092156f547ffa4742fd7bffebac6ca4e7dcebee6f1422c"
+    "8369d3b8335de472be0b860565911bdc07100d6f47e3bb73d31bea50ed80304c"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "391b87d6df7f2ffdda79d80a063f8af051e287380669af08f6b1afe836c6fb18"
+    "0e2452a8340af2b119c14730b87d7797f0dc4ca9dc5ccdf2fd031a7ce9fccba1"
 )
 
 
@@ -203,7 +203,6 @@ def _golden_trace() -> tuple[
             code="connection_reset",
             message="retryable failure",
             response_body={"failure_body_marker": "first"},
-            metadata={"phase": "dispatch"},
         ),
     )
     first_observation = CompletedProviderInvocationObservation(

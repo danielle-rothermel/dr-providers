@@ -2,6 +2,7 @@ import pytest
 
 from dr_providers import (
     FailureClass,
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     openai_chat_config,
@@ -39,7 +40,7 @@ def test_chat_body_parses_parts() -> None:
     assert response.cost is not None
     assert response.cost.total_cost == 0.001
     assert response.model == "m-actual"
-    assert response.finish_reason == "stop"
+    assert response.stop_reason is ProviderStopReason.STOP
     assert response.response_body == body
 
 

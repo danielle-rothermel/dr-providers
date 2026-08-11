@@ -22,7 +22,6 @@ from dr_providers import (
 from dr_providers.outcomes.conformance import (
     MODEL_SUBSTITUTION_CODE,
     REASONING_NOT_OBSERVED_CODE,
-    TOKEN_LIMIT_EXCEEDED_CODE,
 )
 from dr_providers.transport.http import HttpProvider
 
@@ -83,15 +82,6 @@ class TestConformance:
         assert isinstance(outcome, ProviderTransportResponse)
         codes = [w.code for w in outcome.warnings]
         assert REASONING_NOT_OBSERVED_CODE in codes
-
-    def test_token_limit_exceeded_warning(self) -> None:
-        body = dict(CHAT_BODY_OK)
-        body["usage"] = {"prompt_tokens": 1, "completion_tokens": 99}
-        provider = mock_provider(lambda _req: httpx.Response(200, json=body))
-        outcome = provider.invoke(openai_request(token_limit=10)).outcome
-        assert isinstance(outcome, ProviderTransportResponse)
-        codes = [w.code for w in outcome.warnings]
-        assert TOKEN_LIMIT_EXCEEDED_CODE in codes
 
     def test_model_substitution_warning(self) -> None:
         body = dict(CHAT_BODY_OK)

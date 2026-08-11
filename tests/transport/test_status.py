@@ -14,6 +14,7 @@ from dr_providers import FailureClass, classify_status_code
         (425, FailureClass.TRANSIENT),
         (400, FailureClass.PERMANENT),
         (401, FailureClass.PERMANENT),
+        (402, FailureClass.PERMANENT),
         (404, FailureClass.PERMANENT),
     ],
 )

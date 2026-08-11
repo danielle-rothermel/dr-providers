@@ -1,5 +1,6 @@
 from dr_providers import (
     GenerationControls,
+    ProviderStopReason,
     ProviderTransportResponse,
     anthropic_messages_config,
     parse_anthropic_messages_body,
@@ -24,6 +25,6 @@ def test_anthropic_body_parses_parts() -> None:
 
     assert isinstance(response, ProviderTransportResponse)
     assert response.text == "hello"
-    assert response.finish_reason == "end_turn"
+    assert response.stop_reason is ProviderStopReason.STOP
     assert response.usage is not None
     assert response.usage.total_tokens == 7

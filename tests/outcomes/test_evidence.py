@@ -316,7 +316,7 @@ class TestInvocationEvidence:
                     "usage": None,
                     "cost": None,
                     "warnings": [],
-                    "finish_reason": None,
+                    "stop_reason": None,
                     "response_id": None,
                     "model": None,
                     "diagnostics": None,
@@ -335,6 +335,7 @@ class TestInvocationEvidence:
                     "message": "bad request",
                     "response_body": {"error": "bad"},
                     "status_code": 400,
+                    "containment": None,
                     "metadata": {"provider": "openai"},
                 }
             )

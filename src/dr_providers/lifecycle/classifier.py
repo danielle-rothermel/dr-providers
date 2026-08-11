@@ -13,6 +13,7 @@ from dr_providers.outcomes.models import (
     TIMEOUT_CODE,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    TransportTimeoutContainment,
 )
 from dr_providers.translation.common import (
     PARSE_ERROR_CODE,
@@ -26,6 +27,32 @@ from dr_providers.translation.responses import (
 
 if TYPE_CHECKING:
     from dr_providers.outcomes.evidence import ProviderInvocationEvidence
+
+MISSING_API_KEY_CODE = "missing_api_key"
+MISSING_BASE_URL_CODE = "missing_base_url"
+HTTP_STATUS_402_CODE = "http_status_402"
+
+CODE_TO_OUTCOME = {
+    RESPONSE_INCOMPLETE_NO_TEXT_CODE: (
+        ProviderInvocationOutcome.TRUNCATED_NO_TEXT
+    ),
+    RESPONSE_NO_TEXT_CODE: ProviderInvocationOutcome.MISSING_GENERATION_TEXT,
+    MISSING_API_KEY_CODE: ProviderInvocationOutcome.MISSING_CREDENTIAL,
+    MISSING_BASE_URL_CODE: ProviderInvocationOutcome.MISSING_TRANSPORT_CONFIG,
+    HTTP_STATUS_402_CODE: ProviderInvocationOutcome.BUDGET_EXHAUSTED,
+    PARSE_ERROR_CODE: ProviderInvocationOutcome.MALFORMED_RESPONSE,
+    INVALID_JSON_CODE: ProviderInvocationOutcome.MALFORMED_RESPONSE,
+    RESPONSE_REFUSAL_CODE: ProviderInvocationOutcome.PROVIDER_REJECTION,
+    RESPONSE_FAILED_CODE: ProviderInvocationOutcome.PROVIDER_REJECTION,
+}
+
+BLANK_RESPONSE_OUTCOMES = frozenset(
+    {
+        ProviderInvocationOutcome.EMPTY_GENERATION,
+        ProviderInvocationOutcome.TRUNCATED_NO_TEXT,
+        ProviderInvocationOutcome.MISSING_GENERATION_TEXT,
+    }
+)
 
 
 class SemanticResponseClassifierIdentifier(
@@ -94,7 +121,7 @@ def classify_provider_invocation(
     """Classify transport and protocol evidence before semantic response."""
     if evidence.response is not None:
         if not evidence.response.text.strip():
-            return ProviderInvocationOutcome.BLANK_RESPONSE
+            return ProviderInvocationOutcome.EMPTY_GENERATION
         return classify_semantic_response(classifier, evidence.response)
     assert evidence.failure is not None
     return classify_provider_failure(evidence.failure)
@@ -104,17 +131,10 @@ def classify_provider_failure(
     failure: ProviderTransportFailure,
 ) -> ProviderInvocationOutcome:
     """Deterministically classify provider failure evidence."""
-    if failure.code in {
-        RESPONSE_NO_TEXT_CODE,
-        RESPONSE_INCOMPLETE_NO_TEXT_CODE,
-    }:
-        return ProviderInvocationOutcome.BLANK_RESPONSE
-    if failure.code in {PARSE_ERROR_CODE, INVALID_JSON_CODE}:
-        return ProviderInvocationOutcome.MALFORMED_RESPONSE
-    if failure.code in {RESPONSE_REFUSAL_CODE, RESPONSE_FAILED_CODE}:
-        return ProviderInvocationOutcome.PROVIDER_REJECTION
+    if failure.code in CODE_TO_OUTCOME:
+        return CODE_TO_OUTCOME[failure.code]
     if failure.code in {TIMEOUT_CODE, STALLED_RESPONSE_CODE}:
-        if "phase" in failure.metadata:
+        if failure.containment is TransportTimeoutContainment.CONTAINED:
             return ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
         return ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION
     by_failure_class = {

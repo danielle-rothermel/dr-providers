@@ -28,6 +28,7 @@ from dr_providers.outcomes.models import (
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
+    TransportTimeoutContainment,
 )
 from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
@@ -295,15 +296,15 @@ class HttpProvider:
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url), None, None
         except httpx.HTTPError as error:
-            phase = type(error).__name__[:64]
+            error_type = type(error).__name__[:64]
             return (
                 ProviderTransportFailure(
                     failure_class=FailureClass.TRANSIENT,
                     code=TRANSPORT_ERROR_CODE,
                     message=_bounded_message(
-                        f"provider transport error ({phase})"
+                        f"provider transport error ({error_type})"
                     ),
-                    metadata={"url": url, "phase": phase},
+                    metadata={"url": url},
                 ),
                 None,
                 None,
@@ -331,16 +332,18 @@ class HttpProvider:
     ) -> ProviderTransportFailure:
         """Every native timeout is contained because the HTTP call returned."""
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
-        phase = type(error).__name__[:64]
+        error_type = type(error).__name__[:64]
         return ProviderTransportFailure(
             failure_class=FailureClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
-            message=_bounded_message(f"provider transport timeout ({phase})"),
+            message=_bounded_message(
+                f"provider transport timeout ({error_type})"
+            ),
+            containment=TransportTimeoutContainment.CONTAINED,
             metadata={
                 "url": url,
                 "timeout_seconds": self._policy.timeout_seconds,
                 "idle_timeout_seconds": self._policy.idle_timeout_seconds,
-                "phase": phase,
             },
         )
 

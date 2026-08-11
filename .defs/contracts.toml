@@ -106,7 +106,8 @@ statement = """
 Timeout values are strict positive finite policy values, and the response-read \
 idle timeout is clamped to the general timeout. Each provider wire request runs \
 directly under native connect, read, write, and pool timeouts. A native timeout \
-is observed only after the local HTTP operation has ended and is classified as \
+is observed only after the local HTTP operation has ended, records \
+``TransportTimeoutContainment.CONTAINED`` on the failure, and is classified as \
 a contained transport timeout. Native phase and response-read idle timeouts do \
 not bound the total wall-clock duration of a slow response that continues to \
 produce bytes. Provider invocation starts no deadline worker or child process."""
@@ -157,10 +158,10 @@ policy permits at most two invocations and one deterministic one-second delay, \
 with one second of maximum cumulative delay in policy identity. It retries only \
 contained transient provider or network failure and contained transport timeout. \
 Rate limiting, uncontained deadline expiration, resource exhaustion, provider \
-rejection, permanent failure, and unknown failure are terminal. Blank response, \
-malformed response, and semantic rejection require an explicitly selected \
-custom policy. A retained normalized Retry-After hint does not affect the \
-standard policy."""
+rejection, permanent failure, and unknown failure are terminal. Empty generation, \
+truncated-no-text, missing-generation-text, malformed response, and semantic \
+rejection require an explicitly selected custom policy. A retained normalized \
+Retry-After hint does not affect the standard policy."""
 rationale = """
 One explicit retry authority bounds request amplification while making broader \
 caller-selected policies identifiable."""
@@ -272,9 +273,10 @@ check = "uv run pytest -q tests/lifecycle/test_handoff.py::test_serialized_two_i
 [[contracts]]
 title = "Conformance warnings are advisory"
 statement = """
-Reasoning-not-observed, token-limit-exceeded, and model-substitution checks \
-add warnings without reclassifying a successful transport response; callers \
-decide fatality."""
+Reasoning-not-observed and model-substitution checks add warnings without \
+reclassifying a successful transport response; callers decide fatality. \
+Token-limit truncation is expressed by ``ProviderStopReason`` on the transport \
+response, not by conformance warnings."""
 rationale = """
 The transport can report a mismatch against requested controls but does not \
 own application acceptance policy. Reclassifying transport success would \

@@ -15,6 +15,21 @@ TIMEOUT_CODE = "timeout"
 STALLED_RESPONSE_CODE = "stalled_response"
 
 
+class ProviderStopReason(StrEnum):
+    """Typed protocol stop reason for a successful transport response."""
+
+    STOP = "stop"
+    LENGTH = "length"
+    CONTENT_FILTER = "content_filter"
+
+
+class TransportTimeoutContainment(StrEnum):
+    """Whether a transport timeout ended the local HTTP operation."""
+
+    CONTAINED = "contained"
+    UNCONTAINED = "uncontained"
+
+
 class WarningSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
@@ -99,7 +114,7 @@ class ProviderTransportResponse(BaseModel):
     usage: TokenUsage | None = None
     cost: CostInfo | None = None
     warnings: tuple[ProviderTransportWarning, ...] = ()
-    finish_reason: StrictStr | None = None
+    stop_reason: ProviderStopReason | None = None
     response_id: StrictStr | None = None
     model: StrictStr | None = None
     diagnostics: ResponsesDiagnostics | None = None
@@ -125,6 +140,7 @@ class ProviderTransportFailure(BaseModel):
     message: StrictStr
     response_body: Any | None = None
     status_code: StrictInt | None = None
+    containment: TransportTimeoutContainment | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, _context: Any) -> None:

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from dr_providers.core.failures import FailureClass
 from dr_providers.outcomes.models import (
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     ResponsesDiagnostics,
@@ -31,9 +32,6 @@ RESPONSES_INCOMPLETE_REASON_LENGTH = "max_output_tokens"
 RESPONSES_INCOMPLETE_REASON_CONTENT_FILTER = "content_filter"
 RESPONSES_STATUS_COMPLETED = "completed"
 RESPONSES_STATUS_FAILED = "failed"
-FINISH_REASON_LENGTH = "length"
-FINISH_REASON_CONTENT_FILTER = "content_filter"
-FINISH_REASON_STOP = "stop"
 RESPONSE_REFUSAL_CODE = "response_refusal"
 RESPONSE_INCOMPLETE_NO_TEXT_CODE = "response_incomplete_no_text"
 RESPONSE_FAILED_CODE = "response_failed"
@@ -116,7 +114,7 @@ def parse_responses_body(
         response_body=dict(body),
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
-        finish_reason=_finish_reason_from_responses_body(body),
+        stop_reason=_stop_reason_from_responses_body(body),
         response_id=optional_str(body.get("id")),
         model=optional_str(body.get("model")) or config.route.model,
         diagnostics=walk.diagnostics,
@@ -147,19 +145,19 @@ def _responses_no_text_reason(
     )
 
 
-def _finish_reason_from_responses_body(
+def _stop_reason_from_responses_body(
     body: Mapping[str, Any],
-) -> str | None:
+) -> ProviderStopReason | None:
     incomplete_details = body.get("incomplete_details")
     if isinstance(incomplete_details, Mapping):
         reason = optional_str(incomplete_details.get("reason"))
         if reason == RESPONSES_INCOMPLETE_REASON_LENGTH:
-            return FINISH_REASON_LENGTH
+            return ProviderStopReason.LENGTH
         if reason == RESPONSES_INCOMPLETE_REASON_CONTENT_FILTER:
-            return FINISH_REASON_CONTENT_FILTER
+            return ProviderStopReason.CONTENT_FILTER
     status = optional_str(body.get("status"))
     if status == RESPONSES_STATUS_COMPLETED:
-        return FINISH_REASON_STOP
+        return ProviderStopReason.STOP
     return None
 
 

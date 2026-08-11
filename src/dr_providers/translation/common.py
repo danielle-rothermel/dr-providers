@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from dr_providers.core.failures import FailureClass
 from dr_providers.outcomes.models import (
     CostInfo,
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     TokenUsage,
@@ -93,6 +94,26 @@ def optional_int(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
     return value if isinstance(value, int) else None
+
+
+def stop_reason_from_chat_completions(
+    value: str | None,
+) -> ProviderStopReason | None:
+    if value == "stop":
+        return ProviderStopReason.STOP
+    if value == "length":
+        return ProviderStopReason.LENGTH
+    if value == "content_filter":
+        return ProviderStopReason.CONTENT_FILTER
+    return None
+
+
+def stop_reason_from_anthropic(value: str | None) -> ProviderStopReason | None:
+    if value in {"end_turn", "stop_sequence"}:
+        return ProviderStopReason.STOP
+    if value == "max_tokens":
+        return ProviderStopReason.LENGTH
+    return None
 
 
 def parse_failure(

@@ -123,7 +123,7 @@ class CompletedProviderInvocationObservation(BaseModel):
             raise ValueError(msg)
         response_outcomes = {
             ProviderInvocationOutcome.SUCCESS,
-            ProviderInvocationOutcome.BLANK_RESPONSE,
+            ProviderInvocationOutcome.EMPTY_GENERATION,
             ProviderInvocationOutcome.SEMANTIC_REJECTION,
         }
         if self.evidence.response is not None:
@@ -132,9 +132,9 @@ class CompletedProviderInvocationObservation(BaseModel):
                 raise ValueError(msg)
             is_blank = not self.evidence.response.text.strip()
             if (
-                self.outcome is ProviderInvocationOutcome.BLANK_RESPONSE
+                self.outcome is ProviderInvocationOutcome.EMPTY_GENERATION
             ) is not is_blank:
-                msg = "blank response outcome must match response text"
+                msg = "empty generation outcome must match response text"
                 raise ValueError(msg)
         else:
             assert self.evidence.failure is not None

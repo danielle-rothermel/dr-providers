@@ -10,6 +10,7 @@ import pytest
 from dr_providers import (
     GenerationControls,
     ProviderCallConfig,
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     anthropic_messages_config,
@@ -74,7 +75,7 @@ def test_corpus_entry_parses_to_ground_truth(entry: dict[str, Any]) -> None:
     expected = entry["expected"]
 
     assert outcome.text == expected["text"]
-    assert outcome.finish_reason == expected["finish_reason"]
+    assert outcome.stop_reason is ProviderStopReason(expected["stop_reason"])
     assert outcome.model == expected["model"]
     assert outcome.response_id == expected["response_id"]
     if expected["usage"] is None:
