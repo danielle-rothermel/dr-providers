@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from _retry_fixtures import two_invocation_transient_retry_policy
 from pydantic import ValidationError
 
 from dr_providers import (
@@ -59,6 +60,14 @@ def _state() -> ProviderCallState:
     return ProviderCallState.initial(
         request=_request(),
         retry_policy=StandardProviderCallRetryPolicy(),
+        classifier_identifier=CLASSIFIER_ID,
+    )
+
+
+def _retry_state() -> ProviderCallState:
+    return ProviderCallState.initial(
+        request=_request(),
+        retry_policy=two_invocation_transient_retry_policy(),
         classifier_identifier=CLASSIFIER_ID,
     )
 
@@ -168,7 +177,7 @@ def test_initial_state_carries_full_identity_components() -> None:
 
 
 def test_two_round_restore_matches_uninterrupted_transition() -> None:
-    initial = _state()
+    initial = _retry_state()
     first = _observation(
         initial,
         ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
@@ -212,10 +221,10 @@ def test_two_round_restore_matches_uninterrupted_transition() -> None:
         ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
     ],
 )
-def test_standard_policy_retries_only_its_exact_eligible_outcomes(
+def test_custom_policy_retries_only_its_exact_eligible_outcomes(
     outcome: ProviderInvocationOutcome,
 ) -> None:
-    state = _state()
+    state = _retry_state()
     instruction = transition_provider_call(
         state,
         _observation(state, outcome),
@@ -249,7 +258,7 @@ def test_standard_policy_terminal_outcomes_start_no_successor(
 
 
 def test_final_eligible_invocation_is_policy_exhaustion() -> None:
-    state = _state()
+    state = _retry_state()
     first = transition_provider_call(
         state,
         _observation(
@@ -275,7 +284,7 @@ def test_final_eligible_invocation_is_policy_exhaustion() -> None:
 
 
 def test_transition_rejects_invalid_observation_sequence() -> None:
-    state = _state()
+    state = _retry_state()
     observation = _observation(
         state,
         ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
@@ -373,7 +382,7 @@ def test_evidence_identity_cache_is_protected_by_deep_freezing() -> None:
 
 
 def test_state_rejects_bad_record_hash_and_terminal_record() -> None:
-    state = _state()
+    state = _retry_state()
     instruction = transition_provider_call(
         state,
         _observation(
@@ -403,7 +412,7 @@ def test_state_rejects_bad_record_hash_and_terminal_record() -> None:
 
 
 def test_state_and_result_reject_history_beyond_policy_limit() -> None:
-    initial = _state()
+    initial = _retry_state()
     instruction = transition_provider_call(
         initial,
         _observation(
@@ -447,7 +456,7 @@ def test_state_and_result_reject_history_beyond_policy_limit() -> None:
 
 
 def test_result_rejects_retry_decision_at_maximum_ordinal() -> None:
-    initial = _state()
+    initial = _retry_state()
     instruction = transition_provider_call(
         initial,
         _observation(
@@ -489,7 +498,7 @@ def test_result_rejects_retry_decision_at_maximum_ordinal() -> None:
 
 
 def test_cancellation_terminalizes_idle_pending_and_active_states() -> None:
-    initial = _state()
+    initial = _retry_state()
     idle = cancel_provider_call(initial)
     assert idle.outcome.kind is ProviderCallOutcomeKind.DRAINING_CANCELLATION
     assert idle.completed_invocations == ()
@@ -517,7 +526,7 @@ def test_cancellation_terminalizes_idle_pending_and_active_states() -> None:
 
 
 def test_result_identity_payload_binds_ordered_decided_record_hashes() -> None:
-    initial = _state()
+    initial = _retry_state()
     instruction = transition_provider_call(
         initial,
         _observation(
@@ -544,7 +553,7 @@ def test_result_identity_payload_binds_ordered_decided_record_hashes() -> None:
 
 
 def test_persisted_state_instruction_and_result_keys_are_pinned() -> None:
-    state = _state()
+    state = _retry_state()
     instruction = transition_provider_call(
         state,
         _observation(

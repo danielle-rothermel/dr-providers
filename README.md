@@ -139,15 +139,15 @@ evidence is the sole owner of the constructed request-body mapping.
 
 `run_local_provider_call()` classifies each invocation, applies the selected
 serializable retry policy through the deterministic lifecycle transition, and
-returns the complete ordered `ProviderCallResult`. The standard policy permits
-at most two invocations with one one-second retry, only for contained transient
-network/provider failures and contained transport timeouts. The standard HTTP
-provider uses direct synchronous native phase timeouts, so it observes a timeout
-only after the local HTTP operation has ended. It owns and reuses one bounded
-client; closing stops admission, drains active invocations, and closes that
-client once. Connect, write, and pool phase timeouts and the response-read idle
-timeout do not bound the total wall-clock duration of a slow response that keeps
-producing bytes.
+returns the complete ordered `ProviderCallResult`. The standard policy permits exactly one invocation with no auto-retry.
+Transient network/provider failures and contained transport timeouts are
+terminal unless the caller selects an explicit custom retry policy. The
+standard HTTP provider uses direct synchronous native phase timeouts, so it
+observes a timeout only after the local HTTP operation has ended. It owns and
+reuses one bounded client; closing stops admission, drains active invocations,
+and closes that client once. Connect, write, and pool phase timeouts and the
+response-read idle timeout do not bound the total wall-clock duration of a slow
+response that keeps producing bytes.
 
 The public transport-policy defaults allow 10 open connections and retain 5
 idle connections. A caller that shares one `HttpProvider` across concurrent

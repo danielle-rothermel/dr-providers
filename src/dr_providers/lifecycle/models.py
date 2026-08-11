@@ -27,7 +27,8 @@ from dr_providers.lifecycle.outcomes import (
     ProviderCallOutcomeKind,
     ProviderInvocationOutcome,
 )
-from dr_providers.lifecycle.policy import (  # noqa: TC001 -- pydantic field
+from dr_providers.lifecycle.policy import (
+    CustomProviderCallRetryPolicy,
     ProviderCallRetryPolicy,
 )
 from dr_providers.modeling.request import (  # noqa: TC001 -- pydantic field
@@ -257,7 +258,7 @@ def _validate_records(
         decision = record.retry_decision
         if decision is None:
             continue
-        if observation.outcome not in retry_policy.eligible_outcomes:
+        if observation.outcome not in _retry_eligible_outcomes(retry_policy):
             msg = "retry decision follows an ineligible invocation outcome"
             raise ValueError(msg)
         if (
@@ -273,7 +274,7 @@ def _validate_records(
                 "retry decision is forbidden at the maximum permitted ordinal"
             )
             raise ValueError(msg)
-        expected_delay = retry_policy.retry_delay_after(expected_ordinal)
+        expected_delay = _retry_delay_after(retry_policy, expected_ordinal)
         if decision.delay_seconds != expected_delay:
             msg = "retry decision delay does not match retry policy"
             raise ValueError(msg)
@@ -449,7 +450,9 @@ class ProviderCallResult(BaseModel):
         if self.outcome.kind is ProviderCallOutcomeKind.ACCEPTED:
             return
         if self.outcome.kind is ProviderCallOutcomeKind.POLICY_EXHAUSTION:
-            if final_outcome not in self.retry_policy.eligible_outcomes:
+            if final_outcome not in _retry_eligible_outcomes(
+                self.retry_policy
+            ):
                 msg = "policy exhaustion requires an eligible final outcome"
                 raise ValueError(msg)
             if (
@@ -459,7 +462,7 @@ class ProviderCallResult(BaseModel):
                 msg = "policy exhaustion requires the invocation limit"
                 raise ValueError(msg)
             return
-        if final_outcome in self.retry_policy.eligible_outcomes:
+        if final_outcome in _retry_eligible_outcomes(self.retry_policy):
             msg = "policy-stopped outcome cannot be retry eligible"
             raise ValueError(msg)
 
@@ -498,3 +501,21 @@ class ProviderCallResult(BaseModel):
     @cached_property
     def identity_hash(self) -> str:
         return identity_document_hash(self.identity_document())
+
+
+def _retry_eligible_outcomes(
+    retry_policy: ProviderCallRetryPolicy,
+) -> frozenset[ProviderInvocationOutcome]:
+    if isinstance(retry_policy, CustomProviderCallRetryPolicy):
+        return retry_policy.eligible_outcomes
+    return frozenset()
+
+
+def _retry_delay_after(
+    retry_policy: ProviderCallRetryPolicy,
+    invocation_ordinal: int,
+) -> float:
+    if isinstance(retry_policy, CustomProviderCallRetryPolicy):
+        return retry_policy.retry_delay_after(invocation_ordinal)
+    msg = "standard retry policy declares no retry delays"
+    raise ValueError(msg)

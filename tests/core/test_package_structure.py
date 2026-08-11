@@ -16,7 +16,7 @@ FUNCTIONAL_AREAS = {
     "translation",
     "transport",
 }
-APPROVED_TEST_AREAS = FUNCTIONAL_AREAS | {"data"}
+APPROVED_TEST_AREAS = FUNCTIONAL_AREAS
 SURFACE_AREAS = {"cli", "testing"}
 
 

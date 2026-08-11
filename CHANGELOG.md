@@ -12,6 +12,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (FastAPI/uvicorn).
 - Remove post-build wheel install/smoke verification from CI and release
   workflows.
+- Remove the ponytail audit-corpus benchmark fixtures, generator script, and
+  tests.
+
+### Changed
+
+- Default the standard provider-call retry policy to one invocation with no
+  auto-retry; opt-in retry remains on `CustomProviderCallRetryPolicy`.
+- Record `Retry-After` hints as bounded invocation evidence only; remove
+  canonical-form re-validation on the hint model.
 
 ## [0.3.0] - 2026-08-08
 
