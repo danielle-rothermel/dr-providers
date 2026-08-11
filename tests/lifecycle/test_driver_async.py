@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event
@@ -268,6 +269,84 @@ def test_cancelling_the_task_does_not_interrupt_a_running_offload() -> None:
         provider.shutdown()
 
     assert len(provider.scripted.requests) == 1
+
+
+def test_cancelled_await_reports_an_orphaned_offload_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A driver defect after cancellation is reported, not swallowed.
+
+    Nobody awaits the shielded future once the task is cancelled, so the
+    offloaded exception would otherwise reach no output at all.
+    """
+    started = Event()
+    release = Event()
+    failure = RuntimeError("systematic driver defect")
+
+    class _RaisingProvider(_OffloadingScriptedProvider):
+        def __init__(self) -> None:
+            super().__init__()
+            self.offloaded_exceptions: list[
+                Callable[[float], BaseException | None]
+            ] = []
+
+        def invoke(
+            self, request: ProviderCallRequest
+        ) -> ProviderInvocationEvidence:
+            del request
+            started.set()
+            if not release.wait(WATCHDOG_SECONDS):
+                raise TimeoutError("offloaded call was not released")
+            raise failure
+
+        def offload[ResultT](
+            self, fn: Callable[[], ResultT]
+        ) -> Future[ResultT]:
+            future = super().offload(fn)
+            self.offloaded_exceptions.append(
+                lambda timeout: future.exception(timeout=timeout)
+            )
+            return future
+
+    provider = _RaisingProvider()
+
+    async def drive() -> None:
+        task = asyncio.create_task(
+            run_local_provider_call_async(
+                provider=provider,
+                state=_state(),
+                classifier=AcceptAllSemanticResponseClassifier(),
+                cancellation=Event(),
+            )
+        )
+        await asyncio.to_thread(started.wait, WATCHDOG_SECONDS)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    try:
+        with caplog.at_level(logging.ERROR, logger="dr_providers"):
+            asyncio.run(drive())
+            release.set()
+            # Synchronize on the offloaded call reaching its terminal
+            # state, then on the drain, never on elapsed time.
+            assert len(provider.offloaded_exceptions) == 1
+            assert isinstance(
+                provider.offloaded_exceptions[0](WATCHDOG_SECONDS),
+                RuntimeError,
+            )
+            provider.shutdown()
+    finally:
+        release.set()
+        provider.shutdown()
+
+    errors = [
+        record for record in caplog.records if record.levelno == logging.ERROR
+    ]
+    assert len(errors) == 1
+    assert errors[0].name == "dr_providers.lifecycle.driver"
+    assert errors[0].exc_info is not None
+    assert errors[0].exc_info[1] is failure
 
 
 def test_async_entry_returns_the_sync_cancelled_result_shape() -> None:

@@ -43,6 +43,18 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Advance Provider Invocation Evidence to schema version 7: `identity_payload()`
+  is an explicit projection that excludes transport-failure `traceback` and
+  `message` from the hash preimage. Both fields remain fully persisted on the
+  model; excluding them keeps one provider behavior's identity stable across
+  machines and lets a summary message be reworded without rehashing recorded
+  evidence.
+- Scrub the user home-directory prefix to `~` in captured transport-failure
+  tracebacks when evidence is built, mirroring header redaction: deserializing
+  third-party evidence does not re-scrub it.
+- Report an offloaded provider call that raises after its awaiting task was
+  cancelled, at `ERROR` on the `dr_providers.lifecycle.driver` logger, so a
+  systematic driver defect stays visible in an unattended run.
 - Depend on `dr-http` for the bounded HTTP client core. `HttpProvider` now
   composes `dr_http.BoundedHttpClient`, which owns the lifecycle state machine,
   the offload executor, connection-pool and byte bounds, native timeout phases,

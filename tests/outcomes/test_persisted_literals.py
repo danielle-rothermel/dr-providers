@@ -427,7 +427,7 @@ def test_identity_schema_names_are_pinned() -> None:
 
 
 def test_persisted_schema_versions_are_pinned() -> None:
-    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 6
+    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 7
     assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 2
     assert PROVIDER_CALL_CONFIG_SCHEMA_VERSION == 1
     assert PROVIDER_CALL_REQUEST_SCHEMA_VERSION == 1
