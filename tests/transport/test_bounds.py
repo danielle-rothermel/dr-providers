@@ -231,24 +231,43 @@ def test_bound_applies_to_decompressed_response_bytes() -> None:
     assert failure.response_body is None
 
 
+RETRY_AFTER_CASES = [
+    (
+        "00012",
+        {"kind": "delta_seconds", "value": 12},
+    ),
+    (
+        "Wed, 21 Oct 2015 07:28:00 GMT",
+        {
+            "kind": "http_date",
+            "value": "Wed, 21 Oct 2015 07:28:00 GMT",
+        },
+    ),
+    ("not a retry hint", None),
+    ("x" * (MAX_RETRY_AFTER_HEADER_BYTES + 1), None),
+    # Oversized headers that would otherwise parse: only the raw-header
+    # bound can refuse these, so they are what makes it observable.
+    (" " * MAX_RETRY_AFTER_HEADER_BYTES + "120", None),
+    (
+        "Wed, 21 Oct 2015 07:28:00 GMT"
+        + " " * (MAX_RETRY_AFTER_HEADER_BYTES + 1),
+        None,
+    ),
+]
+RETRY_AFTER_IDS = (
+    "delta-seconds",
+    "http-date",
+    "malformed",
+    "oversized-and-malformed",
+    "oversized-but-parseable-delta",
+    "oversized-but-parseable-date",
+)
+
+
 @pytest.mark.parametrize(
     ("header", "expected"),
-    [
-        (
-            "00012",
-            {"kind": "delta_seconds", "value": 12},
-        ),
-        (
-            "Wed, 21 Oct 2015 07:28:00 GMT",
-            {
-                "kind": "http_date",
-                "value": "Wed, 21 Oct 2015 07:28:00 GMT",
-            },
-        ),
-        ("not a retry hint", None),
-        ("x" * (MAX_RETRY_AFTER_HEADER_BYTES + 1), None),
-    ],
-    ids=("delta-seconds", "http-date", "malformed", "oversized"),
+    RETRY_AFTER_CASES,
+    ids=RETRY_AFTER_IDS,
 )
 def test_retry_after_is_bounded_and_normalized(
     header: str,
@@ -265,6 +284,41 @@ def test_retry_after_is_bounded_and_normalized(
 
     evidence = provider.invoke(REQUEST)
 
+    assert (
+        None
+        if evidence.retry_after is None
+        else evidence.retry_after.model_dump(mode="json")
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    RETRY_AFTER_CASES,
+    ids=RETRY_AFTER_IDS,
+)
+def test_retry_after_is_bounded_identically_when_the_body_is_refused(
+    header: str,
+    expected: dict[str, Any] | None,
+) -> None:
+    """A body refused for size bounds its hint exactly like a response.
+
+    The peer's headers arrived on this path too, so the same header must
+    yield the same retained hint whether or not the body was read.
+    """
+    provider = _provider(
+        lambda _request: httpx.Response(
+            429,
+            headers={"retry-after": header},
+            content=ENCODED_ERROR,
+        ),
+        policy=_policy(max_response_bytes=len(ENCODED_ERROR) - 1),
+    )
+
+    evidence = provider.invoke(REQUEST)
+
+    failure = evidence.failure
+    assert isinstance(failure, ProviderTransportFailure)
+    assert failure.code == RESPONSE_TOO_LARGE_CODE
     assert (
         None
         if evidence.retry_after is None

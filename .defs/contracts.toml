@@ -130,26 +130,30 @@ The wire client reports one closed set of failure kinds, none of which is \
 persisted. One exhaustive mapping turns each kind into this package's recorded \
 recoverability and code: connect and network failures are transient under one \
 transport code; a remote protocol error, the classic dropped-keepalive server \
-disconnect, is transient under its own code; local protocol, decoding, \
-unsupported-protocol, and redirect-limit failures are permanent under one \
-protocol code; an undispatchable URL is permanent and never sent; request and \
-response byte refusals are resource exhaustion; unrecognized kinds are unknown. \
-Every timeout kind is transient, keeps its phase-named code so pool starvation \
-stays distinguishable, and states its containment. HTTP status is data, not a \
-wire failure: statuses that name a new location are not followed and carry a \
-redirect code distinct from a provider status rejection; other 3xx statuses, \
-which answer the request rather than redirecting it, take the ordinary status \
-classification. HTTP 413 is resource exhaustion, matching the local request-size \
-bound. Wire-path summary messages stay static and name the exception type in \
-metadata.exception_type. A Retry-After hint is parsed at the wire boundary \
-without caps and bounded here before it is retained."""
+disconnect, is transient under its own code; a local protocol error is permanent \
+under its own protocol code; an undispatchable URL is permanent and never sent; \
+request and response byte refusals are resource exhaustion; unrecognized kinds \
+are unknown. Every timeout kind is transient, keeps its phase-named code so pool \
+starvation stays distinguishable, and states its containment. Which wire \
+condition produces which kind is the wire package's contract, not this one's. \
+HTTP status is data, not a wire failure: statuses that name a new location are \
+not followed and carry a redirect code distinct from a provider status \
+rejection; other 3xx statuses, which answer the request rather than redirecting \
+it, take the ordinary status classification. HTTP 413 is resource exhaustion, \
+matching the local request-size bound. Wire-path summary messages stay static \
+and name the exception type in metadata.exception_type. A Retry-After hint is \
+parsed at the wire boundary without caps and bounded here before it is retained, \
+by one rule applied wherever a hint arrives: an oversized raw header is refused \
+whether its body was read or refused for size."""
 rationale = """
 Keeping every persisted literal on this side of the boundary lets the wire \
 capability change its own vocabulary without rewriting recorded data, while an \
 exhaustive mapping stops a new wire condition from silently borrowing a code \
-that already means something else."""
+that already means something else. Every clause stays falsifiable by a command \
+in this repository, so the kind a given wire condition earns is left to the \
+package that decides it."""
 date = "2026-08-11"
-check = "uv run pytest -q tests/transport/test_status.py tests/transport/test_http.py tests/transport/test_timeout.py"
+check = "uv run pytest -q tests/transport/test_status.py tests/transport/test_http.py tests/transport/test_timeout.py tests/transport/test_wire_failure_mapping.py tests/transport/test_bounds.py"
 
 [[contracts]]
 title = "Invocation evidence is normalized and byte-bounded"

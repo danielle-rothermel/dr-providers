@@ -9,6 +9,7 @@ from dr_http import (
     BoundedHttpClient,
     HttpClientConfig,
     WireFailure,
+    WireFailureKind,
     WireRequest,
     WireResponse,
     is_dispatchable_url,
@@ -35,6 +36,9 @@ from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
 from dr_providers.transport.httpx_errors import (
+    INVALID_BASE_URL_CODE,
+    REQUEST_TOO_LARGE_CODE,
+    RESPONSE_TOO_LARGE_CODE,
     TIMEOUT_KINDS,
     classify_wire_failure_kind,
 )
@@ -61,11 +65,8 @@ CONTENT_TYPE_HEADER = "Content-Type"
 JSON_CONTENT_TYPE = "application/json"
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
-INVALID_BASE_URL_CODE = "invalid_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
 REDIRECT_STATUS_CODE_PREFIX = "http_redirect_"
-REQUEST_TOO_LARGE_CODE = "request_body_too_large"
-RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
@@ -108,17 +109,24 @@ def _is_never_sent_failure(outcome: ProviderTransportOutcome) -> bool:
     )
 
 
-def _bounded_retry_after_hint(
+def _retry_after_hint(
     parsed: ParsedRetryAfter | None,
+    raw_header_value: str | None,
 ) -> ProviderRetryAfterHint | None:
-    """Bound a parsed hint before it becomes retained evidence.
+    """Drop an oversized header outright, then bound what it parsed to.
 
-    Wire-boundary parsing is pure and uncapped, so the evidence caps are
-    applied here: a delta or rendered date reaching past the retained
-    bound names no hint this package is willing to store, and is dropped
-    rather than recorded.
+    Wire-boundary parsing is pure and uncapped, so every evidence cap is
+    applied here, and one function applies them wherever a hint arrives:
+    a header longer than the retained bound is not credible input and
+    yields no hint even when its prefix would have parsed, and a delta
+    or rendered date reaching past the retained bound names no hint this
+    package is willing to store.
     """
-    if parsed is None:
+    if (
+        parsed is None
+        or raw_header_value is None
+        or len(raw_header_value.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES
+    ):
         return None
     if parsed.kind == "delta_seconds":
         seconds = int(parsed.value)
@@ -129,23 +137,6 @@ def _bounded_retry_after_hint(
     if len(rendered.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES:
         return None
     return ProviderRetryAfterHint(kind="http_date", value=rendered)
-
-
-def _retry_after_hint(
-    parsed: ParsedRetryAfter | None,
-    raw_header_value: str | None,
-) -> ProviderRetryAfterHint | None:
-    """Drop an oversized header outright, then bound what it parsed to.
-
-    A header longer than the retained bound is not credible input, so it
-    yields no hint even when its prefix would have parsed.
-    """
-    if (
-        raw_header_value is None
-        or len(raw_header_value.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES
-    ):
-        return None
-    return _bounded_retry_after_hint(parsed)
 
 
 class HttpProvider:
@@ -342,15 +333,18 @@ class HttpProvider:
         than an exception the wire raised.
         """
         recoverability, code = classify_wire_failure_kind(failure.kind)
-        if code == RESPONSE_TOO_LARGE_CODE:
+        if failure.kind is WireFailureKind.RESPONSE_TOO_LARGE:
             return (
                 self._response_too_large_failure(failure.observed_bytes or 0),
                 failure.observed_bytes,
-                _bounded_retry_after_hint(failure.retry_after),
+                _retry_after_hint(
+                    failure.retry_after,
+                    failure.retry_after_header,
+                ),
             )
         if failure.kind in TIMEOUT_KINDS:
             return self._timeout_failure(code, failure, url), None, None
-        if code == INVALID_BASE_URL_CODE:
+        if failure.kind is WireFailureKind.INVALID_URL:
             return (
                 ProviderTransportFailure(
                     recoverability=recoverability,

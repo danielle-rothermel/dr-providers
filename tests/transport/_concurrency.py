@@ -52,6 +52,10 @@ class DaemonCall[ResultT]:
         if not self._entered.wait(timeout=WATCHDOG_SECONDS):
             raise TimeoutError("daemon call did not enter")
 
+    def has_returned(self) -> bool:
+        """Report whether the call already returned, without waiting."""
+        return self._done.is_set()
+
     def result(self) -> ResultT:
         if not self._done.wait(timeout=WATCHDOG_SECONDS):
             raise TimeoutError("event-gated call exceeded the test watchdog")

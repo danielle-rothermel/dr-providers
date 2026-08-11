@@ -52,8 +52,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   clean close drains complete invocations and their evidence.
 - Map `dr_http.WireFailureKind` to persisted recoverability and failure codes at
   one exhaustive boundary; every recorded literal is unchanged.
-- Bound `Retry-After` hints on top of the wire boundary's uncapped parse, so
-  retained `ProviderRetryAfterHint` values keep their existing bounds.
+- Bound `Retry-After` hints on top of the wire boundary's uncapped parse with
+  one rule applied wherever a hint arrives, so retained
+  `ProviderRetryAfterHint` values keep their existing bounds — an oversized raw
+  header is refused whether the body was read or refused for size.
 - Default the standard provider-call retry policy to one invocation with no
   auto-retry; opt-in retry remains on `CustomProviderCallRetryPolicy`.
 - Record `Retry-After` hints as bounded invocation evidence only; remove
