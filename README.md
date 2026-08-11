@@ -185,9 +185,11 @@ provider effects.
 The exact encoded request body and decompressed response body are bounded by
 identity-bearing transport policy limits. Complete in-limit response bodies are
 retained as JSON when possible or as text otherwise; over-limit responses retain
-no partial body. Original HTTP wire bytes are not retained. The standard HTTP
-path redacts known credential header names. Direct
-`ProviderHttpRequestEvidence` construction and deserialization remain
+no partial body. Failure summary messages are unbudgeted. Wire-path httpx
+exceptions retain the underlying exception traceback in invocation evidence;
+other transport failures leave `traceback` unset. Original HTTP wire bytes are
+not retained. The standard HTTP path redacts known credential header names.
+Direct `ProviderHttpRequestEvidence` construction and deserialization remain
 trusted-data paths.
 
 ## Repository validation
