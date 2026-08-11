@@ -6,14 +6,13 @@ from typing import Any
 import httpx
 import pytest
 from _concurrency import WATCHDOG_SECONDS, DaemonCall
+from _policy import make_transport_policy
 
 from dr_providers import (
-    ApiKeyEnv,
     GenerationControls,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
-    ProviderKind,
     ProviderTransportPolicy,
     ProviderTransportResponse,
     Transcript,
@@ -42,11 +41,7 @@ def _request() -> ProviderCallRequest:
 
 
 def _policy() -> ProviderTransportPolicy:
-    return ProviderTransportPolicy(
-        provider_kind=ProviderKind.OPENAI,
-        api_key_env=str(ApiKeyEnv.OPENAI),
-        base_url="https://example.test",
-    )
+    return make_transport_policy(base_url="https://example.test")
 
 
 def _wait_for(event: threading.Event, description: str) -> None:

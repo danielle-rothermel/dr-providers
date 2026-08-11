@@ -5,14 +5,13 @@ from typing import Any
 
 import httpx
 import pytest
+from _policy import make_transport_policy
 
 from dr_providers import (
-    ApiKeyEnv,
     GenerationControls,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
-    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     Transcript,
@@ -42,12 +41,16 @@ def _request() -> ProviderCallRequest:
 
 
 def _policy(**overrides: Any) -> ProviderTransportPolicy:
-    return ProviderTransportPolicy(
-        provider_kind=ProviderKind.OPENAI,
-        api_key_env=str(ApiKeyEnv.OPENAI),
+    return make_transport_policy(
         base_url="https://example.test",
         timeout_seconds=overrides.pop("timeout_seconds", 0.3),
         idle_timeout_seconds=overrides.pop("idle_timeout_seconds", 0.2),
+        max_connections=overrides.pop("max_connections", 1),
+        max_keepalive_connections=overrides.pop(
+            "max_keepalive_connections", 1
+        ),
+        max_request_bytes=overrides.pop("max_request_bytes", 1024),
+        max_response_bytes=overrides.pop("max_response_bytes", 1024),
         **overrides,
     )
 

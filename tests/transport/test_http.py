@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 import pytest
+from _policy import make_transport_policy
 
 from dr_providers import (
     ApiKeyEnv,
@@ -12,7 +13,6 @@ from dr_providers import (
     GenerationControls,
     MessageRole,
     PromptMessage,
-    ProviderBaseUrl,
     ProviderCallConfig,
     ProviderCallRequest,
     ProviderKind,
@@ -46,16 +46,8 @@ ANTHROPIC_BODY_OK: dict[str, Any] = {
     "usage": {"input_tokens": 1, "output_tokens": 1},
 }
 
-OPENAI_POLICY = ProviderTransportPolicy(
-    provider_kind=ProviderKind.OPENAI,
-    api_key_env=str(ApiKeyEnv.OPENAI),
-    base_url=str(ProviderBaseUrl.OPENAI),
-)
-ANTHROPIC_POLICY = ProviderTransportPolicy(
-    provider_kind=ProviderKind.ANTHROPIC,
-    api_key_env=str(ApiKeyEnv.ANTHROPIC),
-    base_url=str(ProviderBaseUrl.ANTHROPIC),
-)
+OPENAI_POLICY = make_transport_policy(provider_kind=ProviderKind.OPENAI)
+ANTHROPIC_POLICY = make_transport_policy(provider_kind=ProviderKind.ANTHROPIC)
 
 
 def request_for(
@@ -150,7 +142,7 @@ class TestHttpProvider:
             "_headers",
             record_credential_resolution,
         )
-        policy = ProviderTransportPolicy(
+        policy = make_transport_policy(
             provider_kind=policy_kind,
             api_key_env=secret_env,
             base_url=endpoint,
@@ -378,6 +370,12 @@ class TestHttpProvider:
             provider_kind=ProviderKind.OPENAI,
             api_key_env=str(ApiKeyEnv.OPENAI),
             base_url=None,
+            timeout_seconds=120.0,
+            idle_timeout_seconds=90.0,
+            max_connections=10,
+            max_keepalive_connections=5,
+            max_request_bytes=1024 * 1024,
+            max_response_bytes=8 * 1024 * 1024,
         )
         provider = mock_provider(
             lambda _req: httpx.Response(200, json=CHAT_BODY_OK),

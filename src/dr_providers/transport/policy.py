@@ -15,13 +15,6 @@ from pydantic import (
 
 from dr_providers.modeling.route import ProviderKind
 
-DEFAULT_TIMEOUT_SECONDS = 120.0
-DEFAULT_IDLE_TIMEOUT_SECONDS = 90.0
-DEFAULT_MAX_CONNECTIONS = 10
-DEFAULT_MAX_KEEPALIVE_CONNECTIONS = 5
-DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
-DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-
 
 class ApiKeyEnv(StrEnum):
     OPENROUTER = "OPENROUTER_API_KEY"
@@ -62,39 +55,33 @@ class ProviderTransportPolicy(BaseModel):
     base_url: StrictStr | None = None
     """Retained verbatim in evidence after URL userinfo is rejected."""
     timeout_seconds: float = Field(
-        default=DEFAULT_TIMEOUT_SECONDS,
         gt=0,
         allow_inf_nan=False,
         strict=True,
     )
     """Native connect, write, and pool timeout bound."""
     idle_timeout_seconds: float = Field(
-        default=DEFAULT_IDLE_TIMEOUT_SECONDS,
         gt=0,
         allow_inf_nan=False,
         strict=True,
     )
     """Native response-read idle bound, clamped to ``timeout_seconds``."""
     max_connections: int = Field(
-        default=DEFAULT_MAX_CONNECTIONS,
         gt=0,
         strict=True,
     )
     """Maximum open connections in the provider-owned client pool."""
     max_keepalive_connections: int = Field(
-        default=DEFAULT_MAX_KEEPALIVE_CONNECTIONS,
         gt=0,
         strict=True,
     )
     """Maximum idle connections retained by the provider-owned client."""
     max_request_bytes: int = Field(
-        default=DEFAULT_MAX_REQUEST_BYTES,
         gt=0,
         strict=True,
     )
     """Maximum exact UTF-8 JSON request-body bytes dispatched."""
     max_response_bytes: int = Field(
-        default=DEFAULT_MAX_RESPONSE_BYTES,
         gt=0,
         strict=True,
     )
@@ -145,12 +132,12 @@ def policy_for(  # noqa: PLR0913 -- one explicit transport policy surface
     *,
     api_key_env: ApiKeyEnv | str | None = None,
     base_url: str | None = None,
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-    idle_timeout_seconds: float = DEFAULT_IDLE_TIMEOUT_SECONDS,
-    max_connections: int = DEFAULT_MAX_CONNECTIONS,
-    max_keepalive_connections: int = DEFAULT_MAX_KEEPALIVE_CONNECTIONS,
-    max_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
-    max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+    timeout_seconds: float,
+    idle_timeout_seconds: float,
+    max_connections: int,
+    max_keepalive_connections: int,
+    max_request_bytes: int,
+    max_response_bytes: int,
 ) -> ProviderTransportPolicy:
     resolved_key_env = (
         DEFAULT_API_KEY_ENVS[kind] if api_key_env is None else api_key_env
