@@ -6,6 +6,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Add `run_local_provider_call_async` and the `OffloadingProvider` structural
+  type: the async entry point offloads the synchronous driver onto
+  `HttpProvider.offload()`.
+- Add `HttpProvider.offload()`, backed by a provider-owned executor created on
+  first use with `policy.max_connections` workers; `close()` drains offloaded
+  work before draining active invocations and closing the client.
+
 ### Removed
 
 - Remove `dr_providers.surfaces.serve` and the `[serve]` optional extra

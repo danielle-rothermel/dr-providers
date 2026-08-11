@@ -28,6 +28,7 @@ from dr_providers.lifecycle import (
     CustomProviderCallRetryPolicy,
     DecidedProviderInvocationRecord,
     EventProviderRetryWait,
+    OffloadingProvider,
     ProviderCallOutcome,
     ProviderCallOutcomeKind,
     ProviderCallResult,
@@ -47,6 +48,7 @@ from dr_providers.lifecycle import (
     provider_call_identity_document,
     provider_call_identity_hash,
     run_local_provider_call,
+    run_local_provider_call_async,
     transition_provider_call,
 )
 from dr_providers.modeling.call import (
@@ -184,6 +186,7 @@ __all__ = [
     "HttpProvider",
     "MessageRole",
     "ModelRoute",
+    "OffloadingProvider",
     "PromptMessage",
     "Protocol",
     "Provider",
@@ -255,6 +258,7 @@ __all__ = [
     "provider_call_identity_document",
     "provider_call_identity_hash",
     "run_local_provider_call",
+    "run_local_provider_call_async",
     "sanitize_headers",
     "sanitize_kwargs",
     "token_usage_from_body",

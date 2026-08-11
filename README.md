@@ -155,8 +155,9 @@ Transient network/provider failures and contained transport timeouts are
 terminal unless the caller selects an explicit custom retry policy. The
 standard HTTP provider uses direct synchronous native phase timeouts, so it
 observes a timeout only after the local HTTP operation has ended. It owns and
-reuses one bounded client; closing stops admission, drains active invocations,
-and closes that client once. Connect, write, and pool phase timeouts and the
+reuses one bounded client; closing stops offload admission, drains offloaded
+work, stops invocation admission, drains active invocations, and closes that
+client once. Connect, write, and pool phase timeouts and the
 response-read idle timeout are each declared explicitly on transport policy and
 do not bound the total wall-clock duration of a slow response that keeps
 producing bytes.
@@ -169,6 +170,15 @@ repository configure one open and one keep-alive connection because each run
 admits a single invocation. A caller that shares one `HttpProvider` across
 concurrent work must size both connection limits to its own maximum concurrent
 `invoke()` calls.
+
+`run_local_provider_call_async()` is the asynchronous entry point. It submits
+the same synchronous driver to the provider's own executor through
+`HttpProvider.offload()` and awaits the result, so the transport stays one
+bounded synchronous client. That executor is created on first offload and sized
+from `max_connections`, which also bounds the client connection pool, so thread
+count and pool size cannot disagree. Cancelling the awaiting asyncio task does
+not interrupt the offloaded call: cancellation flows through the cancellation
+event, and admitted offloaded work drains during `close()`.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared
