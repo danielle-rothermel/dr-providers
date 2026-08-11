@@ -2,12 +2,17 @@ import httpx
 import pytest
 
 from dr_providers import RecoverabilityClass
-from dr_providers.outcomes.models import STALLED_RESPONSE_CODE, TIMEOUT_CODE
+from dr_providers.outcomes.models import (
+    POOL_TIMEOUT_CODE,
+    STALLED_RESPONSE_CODE,
+    TIMEOUT_CODE,
+)
 from dr_providers.transport.httpx_errors import (
     REMOTE_PROTOCOL_ERROR_CODE,
     TRANSPORT_ERROR_CODE,
     TRANSPORT_PROTOCOL_ERROR_CODE,
     classify_httpx_error,
+    timeout_code,
 )
 
 
@@ -79,7 +84,7 @@ def test_classify_httpx_error_uses_status_code_for_http_status_error() -> None:
     ("error", "expected_code"),
     [
         (httpx.ConnectTimeout("slow"), TIMEOUT_CODE),
-        (httpx.PoolTimeout("slow"), TIMEOUT_CODE),
+        (httpx.PoolTimeout("slow"), POOL_TIMEOUT_CODE),
         (httpx.WriteTimeout("slow"), TIMEOUT_CODE),
         (httpx.ReadTimeout("slow"), STALLED_RESPONSE_CODE),
     ],
@@ -92,4 +97,17 @@ def test_classify_httpx_error_classifies_a_directly_passed_timeout(
     assert classify_httpx_error(error) == (
         RecoverabilityClass.TRANSIENT,
         expected_code,
+    )
+
+
+def test_exported_classifier_names_the_same_timeout_phases_as_the_wire() -> (
+    None
+):
+    """Pool starvation keeps its own code through the exported classifier."""
+    error = httpx.PoolTimeout("no connection available")
+
+    assert timeout_code(error) == POOL_TIMEOUT_CODE
+    assert classify_httpx_error(error) == (
+        RecoverabilityClass.TRANSIENT,
+        timeout_code(error),
     )

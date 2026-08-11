@@ -3,13 +3,31 @@ from __future__ import annotations
 import httpx
 
 from dr_providers.core.failures import RecoverabilityClass
-from dr_providers.outcomes.models import STALLED_RESPONSE_CODE, TIMEOUT_CODE
+from dr_providers.outcomes.models import (
+    POOL_TIMEOUT_CODE,
+    STALLED_RESPONSE_CODE,
+    TIMEOUT_CODE,
+)
 from dr_providers.transport.status import classify_status_code
 
 TRANSPORT_ERROR_CODE = "transport_error"
 TRANSPORT_PROTOCOL_ERROR_CODE = "transport_protocol_error"
 REMOTE_PROTOCOL_ERROR_CODE = "transport_remote_protocol_error"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
+
+
+def timeout_code(error: httpx.TimeoutException) -> str:
+    """Name the timeout phase so local contention stays distinguishable.
+
+    Every caller that classifies a timeout uses this one mapping, so the
+    wire path and the exported classifier cannot disagree about which
+    phase a timeout names.
+    """
+    if isinstance(error, httpx.PoolTimeout):
+        return POOL_TIMEOUT_CODE
+    if isinstance(error, httpx.ReadTimeout):
+        return STALLED_RESPONSE_CODE
+    return TIMEOUT_CODE
 
 
 def classify_httpx_error(
@@ -21,12 +39,7 @@ def classify_httpx_error(
     earlier with containment evidence this function cannot supply.
     """
     if isinstance(error, httpx.TimeoutException):
-        code = (
-            STALLED_RESPONSE_CODE
-            if isinstance(error, httpx.ReadTimeout)
-            else TIMEOUT_CODE
-        )
-        return RecoverabilityClass.TRANSIENT, code
+        return RecoverabilityClass.TRANSIENT, timeout_code(error)
     if isinstance(error, httpx.HTTPStatusError):
         status_code = error.response.status_code
         return (

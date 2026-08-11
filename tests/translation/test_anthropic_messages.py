@@ -1,3 +1,5 @@
+import pytest
+
 from dr_providers import (
     GenerationControls,
     ProviderStopReason,
@@ -159,6 +161,34 @@ def test_error_envelope_without_content_is_provider_rejection() -> None:
         _classify(ERROR_ENVELOPE_BODY)
         is ProviderInvocationOutcome.PROVIDER_REJECTION
     )
+
+
+def test_error_envelope_with_empty_content_is_provider_rejection() -> None:
+    """An empty content list carries no more text than an absent one."""
+    body = {**ERROR_ENVELOPE_BODY, "content": []}
+
+    outcome = parse_anthropic_messages_body(body, config=_config())
+
+    assert isinstance(outcome, ProviderTransportFailure)
+    assert outcome.code == PROVIDER_ERROR_ENVELOPE_CODE
+    assert _classify(body) is ProviderInvocationOutcome.PROVIDER_REJECTION
+
+
+@pytest.mark.parametrize("stop_reason", ["end_turn", "max_tokens", None])
+def test_error_envelope_with_blank_text_outranks_the_stop_reason(
+    stop_reason: str | None,
+) -> None:
+    body = {
+        **ERROR_ENVELOPE_BODY,
+        "stop_reason": stop_reason,
+        "content": [{"type": "text", "text": "   "}],
+    }
+
+    outcome = parse_anthropic_messages_body(body, config=_config())
+
+    assert isinstance(outcome, ProviderTransportFailure)
+    assert outcome.code == PROVIDER_ERROR_ENVELOPE_CODE
+    assert _classify(body) is ProviderInvocationOutcome.PROVIDER_REJECTION
 
 
 def test_error_envelope_beside_text_content_stays_success() -> None:

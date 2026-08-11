@@ -26,9 +26,6 @@ from dr_providers.outcomes.evidence import (
 )
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
-    POOL_TIMEOUT_CODE,
-    STALLED_RESPONSE_CODE,
-    TIMEOUT_CODE,
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
@@ -37,7 +34,10 @@ from dr_providers.outcomes.models import (
 from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
-from dr_providers.transport.httpx_errors import classify_httpx_error
+from dr_providers.transport.httpx_errors import (
+    classify_httpx_error,
+    timeout_code,
+)
 from dr_providers.transport.status import (
     classify_status_code,
     is_redirect_status,
@@ -116,13 +116,16 @@ def _is_dispatchable_url(url: str) -> bool:
     return parsed.scheme in DISPATCH_URL_SCHEMES and bool(parsed.host)
 
 
-def _timeout_code(error: httpx.TimeoutException) -> str:
-    """Name the timeout phase so local contention stays distinguishable."""
-    if isinstance(error, httpx.PoolTimeout):
-        return POOL_TIMEOUT_CODE
-    if isinstance(error, httpx.ReadTimeout):
-        return STALLED_RESPONSE_CODE
-    return TIMEOUT_CODE
+def _is_never_sent_failure(outcome: ProviderTransportOutcome) -> bool:
+    """Report whether an outcome names a request that never reached the wire.
+
+    A never-sent outcome carries no HTTP request evidence, so the request
+    the transport had prepared is dropped rather than recorded as sent.
+    """
+    return (
+        isinstance(outcome, ProviderTransportFailure)
+        and outcome.code == INVALID_BASE_URL_CODE
+    )
 
 
 def _exception_traceback(error: BaseException) -> str:
@@ -411,7 +414,9 @@ class HttpProvider:
         return ProviderInvocationEvidence.build(
             request=request,
             policy=self._policy,
-            http_request=http_request,
+            http_request=(
+                None if _is_never_sent_failure(outcome) else http_request
+            ),
             outcome=outcome,
             response_bytes=response_bytes,
             retry_after=retry_after,
@@ -459,9 +464,13 @@ class HttpProvider:
                 )
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url), None, None
-        except (httpx.InvalidURL, ValueError) as error:
+        except httpx.InvalidURL as error:
             # httpx.InvalidURL is not an httpx.HTTPError, so without this
             # guard a URL problem escapes invoke() with no typed evidence.
+            # The catch stays this narrow on purpose: InvalidURL is raised
+            # while httpx builds the request, so nothing reached the wire,
+            # whereas any other post-dispatch error is a defect of ours and
+            # must crash loudly rather than claim the request was never sent.
             return (
                 ProviderTransportFailure(
                     recoverability=RecoverabilityClass.PERMANENT,
@@ -524,7 +533,7 @@ class HttpProvider:
         """
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.TRANSIENT,
-            code=_timeout_code(error),
+            code=timeout_code(error),
             message="provider transport timeout",
             traceback=_exception_traceback(error),
             containment=TransportTimeoutContainment.CONTAINED,

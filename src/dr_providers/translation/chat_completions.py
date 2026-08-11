@@ -36,10 +36,13 @@ def parse_chat_completions_body(
     A body carrying an error envelope alongside a text-bearing choice remains
     a success: the provider produced the generation the caller asked for, and
     the envelope describes a partial upstream condition rather than a refusal
-    to answer.
+    to answer. An error envelope with no usable generation text, whether the
+    choices are absent, empty, or blank, is the envelope's own failure and
+    outranks any stop reason the body also carries.
     """
     choices = body.get("choices")
-    if _is_error_envelope(body, choices):
+    envelope = _has_error_envelope(body)
+    if envelope and not choices:
         return parse_failure(
             "provider returned an error envelope and no choices",
             body,
@@ -59,6 +62,13 @@ def parse_chat_completions_body(
         optional_str(get_value(choice, "finish_reason"))
     )
     if text is None or not text.strip():
+        if envelope:
+            return parse_failure(
+                "provider returned an error envelope and no generation text",
+                body,
+                config,
+                code=PROVIDER_ERROR_ENVELOPE_CODE,
+            )
         blank = _blank_text_failure(body, config, stop_reason)
         if blank is not None:
             return blank
@@ -101,6 +111,6 @@ def _blank_text_failure(
     )
 
 
-def _is_error_envelope(body: Mapping[str, Any], choices: Any) -> bool:
+def _has_error_envelope(body: Mapping[str, Any]) -> bool:
     """Detect an upstream error delivered inside a success status code."""
-    return isinstance(body.get("error"), Mapping) and choices is None
+    return isinstance(body.get("error"), Mapping)

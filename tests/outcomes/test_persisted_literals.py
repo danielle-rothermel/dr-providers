@@ -12,6 +12,10 @@ expectations in the same change that edits the literal.
 The expectations are hand-written raw strings on purpose. Deriving them from
 the enums or constants under test would make the pin restate whatever the
 code currently says and catch nothing.
+
+A literal defined in more than one module is pinned once per definition,
+under an aliased import naming the module that defines it, so drift in the
+producing copy fails here even when the consuming copy still agrees.
 """
 
 from __future__ import annotations
@@ -20,9 +24,15 @@ from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle.classifier import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
     HTTP_STATUS_402_CODE,
-    INVALID_BASE_URL_CODE,
-    MISSING_API_KEY_CODE,
-    MISSING_BASE_URL_CODE,
+)
+from dr_providers.lifecycle.classifier import (
+    INVALID_BASE_URL_CODE as CLASSIFIER_INVALID_BASE_URL_CODE,
+)
+from dr_providers.lifecycle.classifier import (
+    MISSING_API_KEY_CODE as CLASSIFIER_MISSING_API_KEY_CODE,
+)
+from dr_providers.lifecycle.classifier import (
+    MISSING_BASE_URL_CODE as CLASSIFIER_MISSING_BASE_URL_CODE,
 )
 from dr_providers.lifecycle.models import (
     COMPLETED_INVOCATION_OBSERVATION_SCHEMA,
@@ -103,12 +113,26 @@ from dr_providers.translation.responses import (
     UNKNOWN_DIAGNOSTIC_CATEGORY,
 )
 from dr_providers.transport.http import (
+    HTTP_STATUS_CODE_PREFIX as TRANSPORT_HTTP_STATUS_CODE_PREFIX,
+)
+from dr_providers.transport.http import (
+    INVALID_BASE_URL_CODE as TRANSPORT_INVALID_BASE_URL_CODE,
+)
+from dr_providers.transport.http import (
+    MISSING_API_KEY_CODE as TRANSPORT_MISSING_API_KEY_CODE,
+)
+from dr_providers.transport.http import (
+    MISSING_BASE_URL_CODE as TRANSPORT_MISSING_BASE_URL_CODE,
+)
+from dr_providers.transport.http import (
     REDIRECT_STATUS_CODE_PREFIX,
     REQUEST_TOO_LARGE_CODE,
     RESPONSE_TOO_LARGE_CODE,
 )
 from dr_providers.transport.httpx_errors import (
-    HTTP_STATUS_CODE_PREFIX,
+    HTTP_STATUS_CODE_PREFIX as HTTPX_ERRORS_HTTP_STATUS_CODE_PREFIX,
+)
+from dr_providers.transport.httpx_errors import (
     REMOTE_PROTOCOL_ERROR_CODE,
     TRANSPORT_ERROR_CODE,
     TRANSPORT_PROTOCOL_ERROR_CODE,
@@ -279,9 +303,12 @@ def test_transport_failure_codes_are_pinned() -> None:
     assert TRANSPORT_ERROR_CODE == "transport_error"
     assert TRANSPORT_PROTOCOL_ERROR_CODE == "transport_protocol_error"
     assert REMOTE_PROTOCOL_ERROR_CODE == "transport_remote_protocol_error"
-    assert MISSING_API_KEY_CODE == "missing_api_key"
-    assert MISSING_BASE_URL_CODE == "missing_base_url"
-    assert INVALID_BASE_URL_CODE == "invalid_base_url"
+    assert CLASSIFIER_MISSING_API_KEY_CODE == "missing_api_key"
+    assert TRANSPORT_MISSING_API_KEY_CODE == "missing_api_key"
+    assert CLASSIFIER_MISSING_BASE_URL_CODE == "missing_base_url"
+    assert TRANSPORT_MISSING_BASE_URL_CODE == "missing_base_url"
+    assert CLASSIFIER_INVALID_BASE_URL_CODE == "invalid_base_url"
+    assert TRANSPORT_INVALID_BASE_URL_CODE == "invalid_base_url"
 
 
 def test_protocol_failure_codes_are_pinned() -> None:
@@ -299,8 +326,10 @@ def test_conformance_warning_codes_are_pinned() -> None:
 
 
 def test_http_status_code_format_is_pinned() -> None:
-    assert HTTP_STATUS_CODE_PREFIX == "http_status_"
-    assert f"{HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
+    assert HTTPX_ERRORS_HTTP_STATUS_CODE_PREFIX == "http_status_"
+    assert TRANSPORT_HTTP_STATUS_CODE_PREFIX == "http_status_"
+    assert f"{HTTPX_ERRORS_HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
+    assert f"{TRANSPORT_HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
     assert HTTP_STATUS_402_CODE == "http_status_402"
     assert REDIRECT_STATUS_CODE_PREFIX == "http_redirect_"
     assert f"{REDIRECT_STATUS_CODE_PREFIX}302" == "http_redirect_302"

@@ -189,6 +189,43 @@ def test_error_envelope_without_choices_is_provider_rejection() -> None:
     )
 
 
+def test_error_envelope_with_empty_choices_is_provider_rejection() -> None:
+    """An empty choices list carries no more text than an absent one."""
+    body = {**ERROR_ENVELOPE_BODY, "choices": []}
+
+    outcome = parse_chat_completions_body(
+        body, config=openai_chat_config(model="m")
+    )
+
+    assert isinstance(outcome, ProviderTransportFailure)
+    assert outcome.code == PROVIDER_ERROR_ENVELOPE_CODE
+    assert _classify(body) is ProviderInvocationOutcome.PROVIDER_REJECTION
+
+
+@pytest.mark.parametrize("finish_reason", ["stop", "length", None])
+def test_error_envelope_with_blank_text_outranks_the_stop_reason(
+    finish_reason: str | None,
+) -> None:
+    body = {
+        **ERROR_ENVELOPE_BODY,
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": finish_reason,
+                "message": {"role": "assistant", "content": "   "},
+            }
+        ],
+    }
+
+    outcome = parse_chat_completions_body(
+        body, config=openai_chat_config(model="m")
+    )
+
+    assert isinstance(outcome, ProviderTransportFailure)
+    assert outcome.code == PROVIDER_ERROR_ENVELOPE_CODE
+    assert _classify(body) is ProviderInvocationOutcome.PROVIDER_REJECTION
+
+
 def test_error_envelope_beside_text_bearing_choice_stays_success() -> None:
     body = {
         "id": "gen-partial",

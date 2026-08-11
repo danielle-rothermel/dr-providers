@@ -38,10 +38,13 @@ def parse_anthropic_messages_body(
     A body carrying an error envelope alongside text content remains a
     success: the provider produced the generation the caller asked for, and
     the envelope describes a partial upstream condition rather than a
-    refusal to answer.
+    refusal to answer. An error envelope with no usable generation text,
+    whether the content is absent, empty, or blank, is the envelope's own
+    failure and outranks any stop reason the body also carries.
     """
     content = body.get("content")
-    if _is_error_envelope(body, content):
+    envelope = _has_error_envelope(body)
+    if envelope and not content:
         return parse_failure(
             "anthropic returned an error envelope and no content",
             body,
@@ -59,6 +62,13 @@ def parse_anthropic_messages_body(
         optional_str(body.get("stop_reason"))
     )
     if text is None or not text.strip():
+        if envelope:
+            return parse_failure(
+                "anthropic returned an error envelope and no generation text",
+                body,
+                config,
+                code=PROVIDER_ERROR_ENVELOPE_CODE,
+            )
         blank = _blank_text_failure(body, config, stop_reason)
         if blank is not None:
             return blank
@@ -101,12 +111,10 @@ def _blank_text_failure(
     )
 
 
-def _is_error_envelope(body: Mapping[str, Any], content: Any) -> bool:
+def _has_error_envelope(body: Mapping[str, Any]) -> bool:
     """Detect an upstream error delivered inside a success status code."""
-    return (
-        body.get("type") == ANTHROPIC_ERROR_MESSAGE_TYPE
-        and isinstance(body.get("error"), Mapping)
-        and content is None
+    return body.get("type") == ANTHROPIC_ERROR_MESSAGE_TYPE and isinstance(
+        body.get("error"), Mapping
     )
 
 

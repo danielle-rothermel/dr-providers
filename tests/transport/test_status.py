@@ -32,7 +32,7 @@ def test_payload_too_large_matches_the_local_request_bound() -> None:
     assert classify_status_code(413) is RecoverabilityClass.RESOURCE_EXHAUSTION
 
 
-@pytest.mark.parametrize("status", [300, 302, 307, 399])
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
 def test_redirect_statuses_are_redirects(status: int) -> None:
     assert is_redirect_status(status)
 
@@ -40,3 +40,10 @@ def test_redirect_statuses_are_redirects(status: int) -> None:
 @pytest.mark.parametrize("status", [200, 299, 400, 404, 500])
 def test_non_redirect_statuses_are_not_redirects(status: int) -> None:
     assert not is_redirect_status(status)
+
+
+@pytest.mark.parametrize("status", [300, 304, 305, 306, 399])
+def test_non_redirecting_3xx_statuses_are_not_redirects(status: int) -> None:
+    """304 answers the request rather than naming a new location."""
+    assert not is_redirect_status(status)
+    assert classify_status_code(status) is RecoverabilityClass.PERMANENT

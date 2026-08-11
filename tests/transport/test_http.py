@@ -241,7 +241,7 @@ class TestHttpProvider:
             is ProviderInvocationOutcome.RESOURCE_EXHAUSTION
         )
 
-    @pytest.mark.parametrize("status", [300, 302, 399])
+    @pytest.mark.parametrize("status", [301, 302, 307, 308])
     def test_redirect_status_is_distinguishable_from_a_rejection(
         self, status: int
     ) -> None:
@@ -263,6 +263,22 @@ class TestHttpProvider:
         ) is (
             ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
         )
+
+    @pytest.mark.parametrize("status", [300, 304])
+    def test_non_redirecting_3xx_is_an_ordinary_status_failure(
+        self, status: int
+    ) -> None:
+        """A 3xx that names no location is not transport misconfiguration."""
+        provider = mock_provider(
+            lambda _req: httpx.Response(status, json=CHAT_BODY_OK)
+        )
+
+        outcome = provider.invoke(openai_request()).outcome
+
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.code == f"http_status_{status}"
+        assert outcome.recoverability is RecoverabilityClass.PERMANENT
+        assert outcome.status_code == status
 
     def test_redirect_is_not_followed_even_when_client_default_follows(
         self,
@@ -544,12 +560,67 @@ class TestHttpProvider:
         assert outcome.code == "invalid_base_url"
         assert outcome.metadata["exception_type"] == "InvalidURL"
         assert outcome.traceback is not None
+        assert evidence.http_request is None
         assert (
             classify_provider_invocation(
                 evidence, AcceptAllSemanticResponseClassifier()
             )
             is ProviderInvocationOutcome.NEVER_SENT
         )
+
+    def test_a_never_sent_outcome_carries_no_http_request_evidence(
+        self,
+    ) -> None:
+        """Never-sent evidence records no request, whichever path names it."""
+
+        def handler(_req: httpx.Request) -> httpx.Response:
+            raise httpx.InvalidURL("rejected at dispatch")
+
+        provider = mock_provider(handler)
+
+        boundary_evidence = provider.invoke(openai_request())
+
+        unsendable = mock_provider(
+            lambda _req: httpx.Response(200, json=CHAT_BODY_OK),
+            policy=make_transport_policy(
+                provider_kind=ProviderKind.OPENAI, base_url="not-a-url"
+            ),
+        )
+        pre_dispatch_evidence = unsendable.invoke(openai_request())
+
+        for evidence in (boundary_evidence, pre_dispatch_evidence):
+            assert (
+                classify_provider_invocation(
+                    evidence, AcceptAllSemanticResponseClassifier()
+                )
+                is ProviderInvocationOutcome.NEVER_SENT
+            )
+            assert evidence.http_request is None
+
+    def test_a_post_dispatch_value_error_is_not_labeled_never_sent(
+        self,
+    ) -> None:
+        """Our own defect crashes loudly rather than claiming never-sent."""
+
+        class BrokenReadClient(httpx.Client):
+            def stream(self, *_args: Any, **_kwargs: Any) -> Any:
+                msg = "defect while reading the sent response"
+                raise ValueError(msg)
+
+        provider = HttpProvider(
+            policy=OPENAI_POLICY,
+            api_key="test-key",
+            _client_factory=lambda **_kwargs: BrokenReadClient(
+                transport=httpx.MockTransport(
+                    lambda _req: httpx.Response(200, json=CHAT_BODY_OK)
+                )
+            ),
+        )
+
+        with pytest.raises(
+            ValueError, match="defect while reading the sent response"
+        ):
+            provider.invoke(openai_request())
 
 
 class TestInvocationWireBoundary:
