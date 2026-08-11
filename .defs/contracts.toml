@@ -240,16 +240,22 @@ title = "HttpProvider owns one bounded reusable client lifecycle"
 statement = """
 Each HttpProvider owns one long-lived synchronous HTTP client with explicit \
 identity-bearing connection and keep-alive limits and reuses it across \
-invocations. Closing stops offload admission, drains offloaded work, stops \
-invocation admission, drains active invocations, shuts down any created \
-executor, closes the client exactly once, rejects new invocations, and leaves \
-the provider terminal. Invocation admission stays open to every caller, on \
-any thread, until the offload drain finishes, so draining work can complete \
-its invocations."""
+invocations. A clean close is two-phase: it stops offload admission, drains \
+offloaded work, stops invocation admission, drains active invocations, shuts \
+down any created executor, closes the client exactly once, rejects new \
+invocations, and leaves the provider terminal. Invocation admission stays open \
+to every caller, on any thread, until the offload drain finishes, so draining \
+work can complete its invocations. An exception escaping either drain wait \
+aborts the close: the provider still becomes terminal, admission stays \
+permanently refused so no later caller blocks on a closer that no longer \
+exists, and the executor and client are released without joining workers. An \
+aborted close makes no claim that the drain completed."""
 rationale = """
 One bounded owned lifecycle preserves pooling and makes shutdown and ownership \
 auditable. Draining offloaded work before invocations lets work admitted \
-through the provider's own executor finish rather than fail at shutdown."""
+through the provider's own executor finish rather than fail at shutdown. A \
+terminal aborted close keeps an interrupt from stranding sockets, worker \
+threads, and every subsequent closer."""
 date = "2026-08-11"
 check = "uv run pytest -q tests/transport/test_http.py tests/transport/test_concurrency.py tests/transport/test_offload.py tests/transport/test_async_entry.py"
 
@@ -263,14 +269,21 @@ created on first offload and sized from the transport policy's \
 ``max_connections``, the same value bounding the client connection pool, and \
 there is no separate worker-count knob. The awaited future is shielded, so \
 cancelling the awaiting asyncio task does not interrupt an offloaded call; \
-cancellation flows through the cancellation event and admitted offloaded work \
-always drains. There is no native asynchronous transport, asynchronous \
-client, or asynchronous driver loop."""
+cancellation flows through the cancellation event and a clean provider close \
+drains admitted offloaded work, while an aborted close releases resources \
+without completing that drain. Offloaded work must not close or offload on the \
+provider running it: closing from inside offloaded work waits on that same \
+work, and offloaded work blocking on a nested offload starves once every \
+worker is held that way. Honoring that restriction is the caller's obligation. \
+There is no native asynchronous transport, asynchronous client, or \
+asynchronous driver loop."""
 rationale = """
 Blocking syscalls on provider-owned threads keep one verified synchronous \
 transport and one retry model instead of duplicating transport and lifecycle \
 semantics across a second execution style. Deriving worker count from the \
-connection limit makes thread count and pool size unable to disagree."""
+connection limit makes thread count and pool size unable to disagree. Naming \
+the reentrancy restriction keeps a bounded executor from being read as a \
+general-purpose reentrant work queue."""
 date = "2026-08-11"
 check = "uv run pytest -q tests/lifecycle/test_driver_async.py tests/transport/test_offload.py tests/transport/test_async_entry.py"
 

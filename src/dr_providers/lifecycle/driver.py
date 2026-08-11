@@ -117,8 +117,11 @@ async def run_local_provider_call_async(
     The synchronous driver runs unchanged on a provider-owned thread.
     Cancelling the awaiting asyncio task does not interrupt the offloaded
     call: the offloaded future is shielded, so cancellation flows through
-    the cancellation event, and admitted offloaded work always drains
-    through the provider's close.
+    the cancellation event, and a clean provider close drains admitted
+    offloaded work. An aborted close releases resources without
+    completing that drain. The caller must not await this entry point
+    from work already offloaded onto the same provider, which starves
+    once every worker is held that way.
     """
     future = provider.offload(
         lambda: run_local_provider_call(

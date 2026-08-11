@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 import httpx
 import pytest
@@ -24,6 +24,9 @@ from dr_providers.transport.http import (
     HttpProvider,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="hi"),)
 CHAT_BODY_OK: dict[str, Any] = {
     "id": "chatcmpl-1",
@@ -40,6 +43,7 @@ OFFLOADED_WORK_NOT_RELEASED = "offloaded work was not released"
 OFFLOADED_WORK_DID_NOT_START = "offloaded work did not start"
 DRAINED_OFFLOAD_RESULT = "drained"
 SHUTDOWN_FAILED_MSG = "shutdown failed"
+CLOSE_WAIT_NOT_REACHED = "close did not reach the drain wait"
 
 
 def _request() -> ProviderCallRequest:
@@ -72,6 +76,38 @@ def _provider(**policy_overrides: Any) -> HttpProvider:
 def _wait_for(event: threading.Event, description: str) -> None:
     if not event.wait(timeout=WATCHDOG_SECONDS):
         raise TimeoutError(description)
+
+
+class _InterruptingCondition(threading.Condition):
+    """Raise out of the drain wait taken in one named provider state.
+
+    This stands in for a keyboard interrupt delivered to the closing
+    thread, which CPython raises out of exactly this wait.
+    """
+
+    def __init__(self, interrupt_in_state: str) -> None:
+        super().__init__()
+        self._interrupt_in_state = interrupt_in_state
+        self.state_name: Callable[[], str] = lambda: ""
+        self.interrupted = threading.Event()
+
+    @override
+    def wait(self, timeout: float | None = None) -> bool:
+        if self.state_name() == self._interrupt_in_state:
+            self.interrupted.set()
+            raise KeyboardInterrupt(self._interrupt_in_state)
+        return super().wait(timeout)
+
+
+def _provider_interrupted_in(
+    state_name: str,
+) -> tuple[HttpProvider, _InterruptingCondition]:
+    """Build a provider whose close aborts while waiting in ``state_name``."""
+    provider = _provider()
+    condition = _InterruptingCondition(state_name)
+    condition.state_name = lambda: provider._state.name
+    provider._condition = condition
+    return provider, condition
 
 
 def test_sync_only_use_never_creates_the_executor() -> None:
@@ -377,3 +413,74 @@ def test_offload_after_close_raises_and_concurrent_closers_return() -> None:
         provider.offload(lambda: None)
     with pytest.raises(RuntimeError, match="closing or closed"):
         provider.invoke(_request())
+
+
+def _assert_aborted_close_released_everything(
+    provider: HttpProvider,
+    executor: ThreadPoolExecutor,
+) -> None:
+    """An aborted close is terminal, released, and refuses admission."""
+    assert provider._state.name == "CLOSED"
+    assert provider._client.is_closed is True
+    assert executor._shutdown is True
+
+    second = DaemonCall.start(provider.close)
+    second.result()
+
+    with pytest.raises(RuntimeError, match="closing or closed"):
+        provider.offload(lambda: None)
+    with pytest.raises(RuntimeError, match="closing or closed"):
+        provider.invoke(_request())
+
+
+def test_interrupted_offload_drain_leaves_the_provider_terminal() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    provider, condition = _provider_interrupted_in("DRAINING_OFFLOADS")
+
+    def gated() -> None:
+        started.set()
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
+
+    future = provider.offload(gated)
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
+    executor = provider._executor
+    assert executor is not None
+
+    closer = DaemonCall.start(provider.close)
+    _wait_for(condition.interrupted, CLOSE_WAIT_NOT_REACHED)
+    with pytest.raises(KeyboardInterrupt, match="DRAINING_OFFLOADS"):
+        closer.result()
+
+    release.set()
+    future.result(timeout=WATCHDOG_SECONDS)
+    _assert_aborted_close_released_everything(provider, executor)
+
+
+def test_interrupted_invocation_drain_leaves_the_provider_terminal() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    provider, condition = _provider_interrupted_in("CLOSING")
+    provider.offload(lambda: None).result(timeout=WATCHDOG_SECONDS)
+    executor = provider._executor
+    assert executor is not None
+
+    def gated_invocation() -> Any:
+        provider._begin_invocation()
+        try:
+            started.set()
+            _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
+        finally:
+            provider._end_invocation()
+
+    invoker = DaemonCall.start(gated_invocation)
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
+
+    closer = DaemonCall.start(provider.close)
+    _wait_for(condition.interrupted, CLOSE_WAIT_NOT_REACHED)
+    with pytest.raises(KeyboardInterrupt, match="CLOSING"):
+        closer.result()
+
+    release.set()
+    invoker.result()
+    _assert_aborted_close_released_everything(provider, executor)

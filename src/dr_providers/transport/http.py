@@ -166,23 +166,34 @@ class HttpProvider:
 
         Offloaded work keeps invoking the provider while it drains, so
         invocation admission stays open until the offload drain finishes.
+
+        An exception escaping either drain wait, such as a keyboard
+        interrupt delivered to the closing thread, aborts the close: the
+        provider becomes terminal, admission stays refused, the executor
+        and client are released without joining workers, and the original
+        exception propagates. An aborted close does not complete the
+        drain.
         """
-        with self._condition:
-            if self._state is _ProviderState.CLOSED:
-                return
-            if self._state in _CLOSING_STATES:
-                while self._state is not _ProviderState.CLOSED:
+        try:
+            with self._condition:
+                if self._state is _ProviderState.CLOSED:
+                    return
+                if self._state in _CLOSING_STATES:
+                    while self._state is not _ProviderState.CLOSED:
+                        self._condition.wait()
+                    return
+                self._state = _ProviderState.DRAINING_OFFLOADS
+                self._condition.notify_all()
+                while self._active_offloads:
                     self._condition.wait()
-                return
-            self._state = _ProviderState.DRAINING_OFFLOADS
-            self._condition.notify_all()
-            while self._active_offloads:
-                self._condition.wait()
-            self._state = _ProviderState.CLOSING
-            self._condition.notify_all()
-            while self._active_invocations:
-                self._condition.wait()
-            executor = self._executor
+                self._state = _ProviderState.CLOSING
+                self._condition.notify_all()
+                while self._active_invocations:
+                    self._condition.wait()
+                executor = self._executor
+        except BaseException:
+            self._abort_close()
+            raise
 
         try:
             if executor is not None:
@@ -194,6 +205,24 @@ class HttpProvider:
                 with self._condition:
                     self._state = _ProviderState.CLOSED
                     self._condition.notify_all()
+
+    def _abort_close(self) -> None:
+        """Make an interrupted close terminal and release OS resources.
+
+        The provider becomes terminal so no later caller blocks waiting on
+        a closer that no longer exists. Executor shutdown does not join
+        workers because the abort means the operator asked to stop.
+        """
+        with self._condition:
+            self._state = _ProviderState.CLOSED
+            self._condition.notify_all()
+            executor = self._executor
+
+        try:
+            if executor is not None:
+                executor.shutdown(wait=False)
+        finally:
+            self._client.close()
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -214,8 +243,15 @@ class HttpProvider:
         """Run ``fn`` on the provider-owned executor until closing begins.
 
         The executor is created on first use with
-        ``policy.max_connections`` workers. Admitted work always drains
-        before ``close`` shuts the executor down and closes the client.
+        ``policy.max_connections`` workers. A clean ``close`` drains
+        admitted work before it shuts the executor down and closes the
+        client; an aborted ``close`` releases resources without completing
+        that drain.
+
+        Offloaded work must not call ``close`` or ``offload`` on the
+        provider that runs it: closing from inside offloaded work waits
+        forever on that same work, and offloaded work that blocks on a
+        nested offload starves once every worker is held that way.
         """
         with self._condition:
             if self._state is not _ProviderState.OPEN:
