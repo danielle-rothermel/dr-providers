@@ -157,7 +157,8 @@ standard HTTP provider uses direct synchronous native phase timeouts, so it
 observes a timeout only after the local HTTP operation has ended. It owns and
 reuses one bounded client; closing stops offload admission, drains offloaded
 work, stops invocation admission, drains active invocations, and closes that
-client once. Connect, write, and pool phase timeouts and the
+client once. Invocation admission stays open to every caller, on any thread,
+until the offload drain finishes. Connect, write, and pool phase timeouts and the
 response-read idle timeout are each declared explicitly on transport policy and
 do not bound the total wall-clock duration of a slow response that keeps
 producing bytes.
@@ -177,8 +178,9 @@ the same synchronous driver to the provider's own executor through
 bounded synchronous client. That executor is created on first offload and sized
 from `max_connections`, which also bounds the client connection pool, so thread
 count and pool size cannot disagree. Cancelling the awaiting asyncio task does
-not interrupt the offloaded call: cancellation flows through the cancellation
-event, and admitted offloaded work drains during `close()`.
+not interrupt the offloaded call: the offloaded future is shielded, so
+cancellation flows through the cancellation event, and admitted offloaded work
+drains during `close()`.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared

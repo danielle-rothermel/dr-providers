@@ -6,6 +6,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event
 from typing import TYPE_CHECKING
 
+import pytest
+
 from dr_providers import (
     MessageRole,
     PromptMessage,
@@ -21,6 +23,7 @@ from dr_providers.lifecycle import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
     AcceptAllSemanticResponseClassifier,
     ProviderCallOutcomeKind,
+    ProviderCallResult,
     ProviderCallState,
     StandardProviderCallRetryPolicy,
     run_local_provider_call,
@@ -31,6 +34,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from dr_providers.outcomes.evidence import ProviderInvocationEvidence
+
+WATCHDOG_SECONDS = 5.0
 
 
 def _request() -> ProviderCallRequest:
@@ -180,6 +185,89 @@ def test_async_entry_follows_retry_instructions_like_the_sync_driver() -> None:
     assert result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
     assert wait.delays == [1.0]
     assert len(provider.scripted.requests) == 2
+
+
+def test_async_entry_does_not_block_the_event_loop() -> None:
+    offload_started = Event()
+    loop_ran = Event()
+
+    class _LoopGatedProvider(_OffloadingScriptedProvider):
+        def invoke(
+            self, request: ProviderCallRequest
+        ) -> ProviderInvocationEvidence:
+            offload_started.set()
+            if not loop_ran.wait(WATCHDOG_SECONDS):
+                raise TimeoutError("event loop never progressed")
+            return super().invoke(request)
+
+    provider = _LoopGatedProvider()
+
+    async def drive() -> ProviderCallResult:
+        async def unblock() -> None:
+            await asyncio.to_thread(offload_started.wait, WATCHDOG_SECONDS)
+            loop_ran.set()
+
+        task = asyncio.create_task(
+            run_local_provider_call_async(
+                provider=provider,
+                state=_state(),
+                classifier=AcceptAllSemanticResponseClassifier(),
+                cancellation=Event(),
+            )
+        )
+        await unblock()
+        return await task
+
+    try:
+        result = asyncio.run(drive())
+    finally:
+        provider.shutdown()
+
+    assert loop_ran.is_set()
+    assert result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
+
+
+def test_cancelling_the_task_does_not_interrupt_a_running_offload() -> None:
+    started = Event()
+    release = Event()
+    completed = Event()
+
+    class _GatedProvider(_OffloadingScriptedProvider):
+        def invoke(
+            self, request: ProviderCallRequest
+        ) -> ProviderInvocationEvidence:
+            started.set()
+            if not release.wait(WATCHDOG_SECONDS):
+                raise TimeoutError("offloaded call was not released")
+            evidence = super().invoke(request)
+            completed.set()
+            return evidence
+
+    provider = _GatedProvider()
+
+    async def drive() -> None:
+        task = asyncio.create_task(
+            run_local_provider_call_async(
+                provider=provider,
+                state=_state(),
+                classifier=AcceptAllSemanticResponseClassifier(),
+                cancellation=Event(),
+            )
+        )
+        await asyncio.to_thread(started.wait, WATCHDOG_SECONDS)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    try:
+        asyncio.run(drive())
+        release.set()
+        assert completed.wait(WATCHDOG_SECONDS)
+    finally:
+        release.set()
+        provider.shutdown()
+
+    assert len(provider.scripted.requests) == 1
 
 
 def test_async_entry_returns_the_sync_cancelled_result_shape() -> None:

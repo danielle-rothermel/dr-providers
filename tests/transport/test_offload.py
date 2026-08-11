@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, override
 
 import httpx
 import pytest
@@ -18,7 +19,10 @@ from dr_providers import (
     Transcript,
     openai_chat_config,
 )
-from dr_providers.transport.http import HttpProvider
+from dr_providers.transport.http import (
+    OFFLOAD_THREAD_NAME_PREFIX,
+    HttpProvider,
+)
 
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="hi"),)
 CHAT_BODY_OK: dict[str, Any] = {
@@ -91,6 +95,17 @@ def test_first_offload_creates_executor_sized_from_max_connections() -> None:
     assert executor._max_workers == TEST_MAX_CONNECTIONS
 
 
+def test_executor_size_follows_max_connections() -> None:
+    provider = _provider(max_connections=3, max_keepalive_connections=1)
+
+    with provider:
+        provider.offload(lambda: None).result(timeout=WATCHDOG_SECONDS)
+        executor = provider._executor
+
+    assert executor is not None
+    assert executor._max_workers == 3
+
+
 def test_offload_reuses_one_executor() -> None:
     provider = _provider()
 
@@ -114,6 +129,115 @@ def test_failing_offloaded_work_releases_the_drain() -> None:
             future.result(timeout=WATCHDOG_SECONDS)
 
         assert provider._active_offloads == 0
+
+
+def test_cancelling_a_queued_offload_releases_the_drain() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    provider = _provider(max_connections=1, max_keepalive_connections=1)
+
+    def gated() -> None:
+        started.set()
+        _wait_for(release, "offloaded work was not released")
+
+    running = provider.offload(gated)
+    _wait_for(started, "offloaded work did not start")
+    queued = provider.offload(lambda: "never runs")
+
+    assert queued.cancel()
+    assert queued.cancelled()
+
+    release.set()
+    running.result(timeout=WATCHDOG_SECONDS)
+
+    with provider._condition:
+        drained = provider._condition.wait_for(
+            lambda: provider._active_offloads == 0,
+            timeout=WATCHDOG_SECONDS,
+        )
+    assert drained
+
+    closer = DaemonCall.start(provider.close)
+    closer.result()
+    assert provider._state.name == "CLOSED"
+
+
+def test_failed_submit_releases_the_drain_and_close_completes() -> None:
+    provider = _provider()
+
+    provider.offload(lambda: None).result(timeout=WATCHDOG_SECONDS)
+    executor = provider._executor
+    assert executor is not None
+    executor.shutdown(wait=True)
+
+    with pytest.raises(RuntimeError, match="cannot schedule new futures"):
+        provider.offload(lambda: None)
+    assert provider._active_offloads == 0
+
+    closer = DaemonCall.start(provider.close)
+    closer.result()
+    assert provider._state.name == "CLOSED"
+
+
+def test_close_shuts_down_the_executor() -> None:
+    provider = _provider()
+
+    provider.offload(lambda: None).result(timeout=WATCHDOG_SECONDS)
+    executor = provider._executor
+    assert executor is not None
+
+    provider.close()
+
+    assert executor._shutdown is True
+    assert not [
+        thread
+        for thread in threading.enumerate()
+        if thread.name.startswith(OFFLOAD_THREAD_NAME_PREFIX)
+        and thread.is_alive()
+    ]
+
+
+class _RaisingShutdownExecutor(ThreadPoolExecutor):
+    """Fail shutdown so close must still reach the client."""
+
+    @override
+    def shutdown(
+        self, wait: bool = True, *, cancel_futures: bool = False
+    ) -> None:
+        super().shutdown(wait=wait, cancel_futures=cancel_futures)
+        msg = "shutdown failed"
+        raise RuntimeError(msg)
+
+
+class _CloseCountingClient(httpx.Client):
+    """Count how many times the transport client is closed."""
+
+    close_count: int = 0
+
+    @override
+    def close(self) -> None:
+        self.close_count += 1
+        super().close()
+
+
+def test_failing_executor_shutdown_still_closes_the_client_once() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=CHAT_BODY_OK)
+
+    client = _CloseCountingClient(transport=httpx.MockTransport(handler))
+    provider = HttpProvider(
+        policy=_policy(),
+        api_key="test-key",
+        _client_factory=lambda **_kwargs: client,
+    )
+    provider._executor = _RaisingShutdownExecutor(max_workers=1)
+
+    with pytest.raises(RuntimeError, match="shutdown failed"):
+        provider.close()
+
+    assert client.close_count == 1
+    assert client.is_closed is True
+    assert provider._state.name == "CLOSED"
 
 
 def test_close_drains_offloaded_work_before_completing() -> None:
@@ -140,11 +264,46 @@ def test_close_drains_offloaded_work_before_completing() -> None:
     with pytest.raises(RuntimeError, match="closing or closed"):
         provider.offload(lambda: None)
     assert not closer._done.is_set()
+    executor = provider._executor
+    assert executor is not None
 
     release.set()
     assert future.result(timeout=WATCHDOG_SECONDS) == "drained"
     closer.result()
 
+    assert provider._state.name == "CLOSED"
+    assert executor._shutdown is True
+
+
+def test_any_caller_may_invoke_while_offloaded_work_drains() -> None:
+    started = threading.Event()
+    release = threading.Event()
+    provider = _provider()
+
+    def gated() -> None:
+        started.set()
+        _wait_for(release, "offloaded work was not released")
+
+    future = provider.offload(gated)
+    _wait_for(started, "offloaded work did not start")
+
+    closer = DaemonCall.start(provider.close)
+    closer.wait_until_entered()
+    with provider._condition:
+        reached_draining = provider._condition.wait_for(
+            lambda: provider._state.name == "DRAINING_OFFLOADS",
+            timeout=WATCHDOG_SECONDS,
+        )
+    assert reached_draining
+
+    external = DaemonCall.start(lambda: provider.invoke(_request()))
+    evidence = external.result()
+
+    release.set()
+    future.result(timeout=WATCHDOG_SECONDS)
+    closer.result()
+
+    assert isinstance(evidence.outcome, ProviderTransportResponse)
     assert provider._state.name == "CLOSED"
 
 
@@ -156,6 +315,7 @@ def test_draining_offload_can_still_invoke_the_provider() -> None:
     def gated() -> Any:
         started.set()
         _wait_for(release, "offloaded work was not released")
+        assert provider._client.is_closed is False
         return provider.invoke(_request())
 
     future = provider.offload(gated)
@@ -178,6 +338,7 @@ def test_draining_offload_can_still_invoke_the_provider() -> None:
 
     assert isinstance(evidence.outcome, ProviderTransportResponse)
     assert provider._state.name == "CLOSED"
+    assert provider._client.is_closed is True
 
 
 def test_offload_after_close_raises_and_concurrent_closers_return() -> None:

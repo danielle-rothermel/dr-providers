@@ -188,11 +188,13 @@ class HttpProvider:
         try:
             if executor is not None:
                 executor.shutdown(wait=True)
-            self._client.close()
         finally:
-            with self._condition:
-                self._state = _ProviderState.CLOSED
-                self._condition.notify_all()
+            try:
+                self._client.close()
+            finally:
+                with self._condition:
+                    self._state = _ProviderState.CLOSED
+                    self._condition.notify_all()
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -228,17 +230,26 @@ class HttpProvider:
             self._active_offloads += 1
             executor = self._executor
 
+        released = threading.Lock()
+
+        def release() -> None:
+            """Release this offload's hold on the drain exactly once."""
+            if released.acquire(blocking=False):
+                self._end_offload()
+
         def run() -> ResultT:
             try:
                 return fn()
             finally:
-                self._end_offload()
+                release()
 
         try:
-            return executor.submit(run)
+            future = executor.submit(run)
         except BaseException:
-            self._end_offload()
+            release()
             raise
+        future.add_done_callback(lambda _future: release())
+        return future
 
     def _end_offload(self) -> None:
         with self._condition:
