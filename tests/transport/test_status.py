@@ -1,6 +1,7 @@
 import pytest
 
 from dr_providers import RecoverabilityClass, classify_status_code
+from dr_providers.transport.status import is_redirect_status
 
 
 @pytest.mark.parametrize(
@@ -16,6 +17,7 @@ from dr_providers import RecoverabilityClass, classify_status_code
         (401, RecoverabilityClass.PERMANENT),
         (402, RecoverabilityClass.PERMANENT),
         (404, RecoverabilityClass.PERMANENT),
+        (413, RecoverabilityClass.RESOURCE_EXHAUSTION),
     ],
 )
 def test_classify_status_code(
@@ -23,3 +25,18 @@ def test_classify_status_code(
     expected: RecoverabilityClass,
 ) -> None:
     assert classify_status_code(status) is expected
+
+
+def test_payload_too_large_matches_the_local_request_bound() -> None:
+    """413 is the server detecting what max_request_bytes detects locally."""
+    assert classify_status_code(413) is RecoverabilityClass.RESOURCE_EXHAUSTION
+
+
+@pytest.mark.parametrize("status", [300, 302, 307, 399])
+def test_redirect_statuses_are_redirects(status: int) -> None:
+    assert is_redirect_status(status)
+
+
+@pytest.mark.parametrize("status", [200, 299, 400, 404, 500])
+def test_non_redirect_statuses_are_not_redirects(status: int) -> None:
+    assert not is_redirect_status(status)

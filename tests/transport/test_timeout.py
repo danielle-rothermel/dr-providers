@@ -24,6 +24,7 @@ from dr_providers.lifecycle.classifier import (
 )
 from dr_providers.lifecycle.outcomes import ProviderInvocationOutcome
 from dr_providers.transport.http import (
+    POOL_TIMEOUT_CODE,
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
     HttpProvider,
@@ -94,7 +95,7 @@ def test_connect_timeout_comes_from_policy() -> None:
             STALLED_RESPONSE_CODE,
         ),
         (httpx.WriteTimeout("unbounded provider detail"), TIMEOUT_CODE),
-        (httpx.PoolTimeout("unbounded provider detail"), TIMEOUT_CODE),
+        (httpx.PoolTimeout("unbounded provider detail"), POOL_TIMEOUT_CODE),
     ],
     ids=("connect", "read", "write", "pool"),
 )

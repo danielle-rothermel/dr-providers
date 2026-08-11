@@ -132,10 +132,12 @@ def _observation(
             ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION,
         }:
             code = STALLED_RESPONSE_CODE
-            if outcome is (
-                ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
-            ):
-                containment = TransportTimeoutContainment.CONTAINED
+            containment = (
+                TransportTimeoutContainment.CONTAINED
+                if outcome
+                is ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
+                else TransportTimeoutContainment.UNCONTAINED
+            )
         elif outcome is ProviderInvocationOutcome.PROVIDER_REJECTION:
             code = RESPONSE_REFUSAL_CODE
         evidence = ProviderInvocationEvidence(

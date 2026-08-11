@@ -15,6 +15,7 @@ from dr_providers.outcomes.models import (
 )
 from dr_providers.translation.common import (
     PARSE_ERROR_CODE,
+    RESPONSE_INCOMPLETE_NO_TEXT_CODE,
     RESPONSE_NO_TEXT_CODE,
     ParseOutcome,
     cost_from_body,
@@ -33,7 +34,6 @@ RESPONSES_INCOMPLETE_REASON_CONTENT_FILTER = "content_filter"
 RESPONSES_STATUS_COMPLETED = "completed"
 RESPONSES_STATUS_FAILED = "failed"
 RESPONSE_REFUSAL_CODE = "response_refusal"
-RESPONSE_INCOMPLETE_NO_TEXT_CODE = "response_incomplete_no_text"
 RESPONSE_FAILED_CODE = "response_failed"
 RESPONSE_ID_HASH_LENGTH = 16
 UNKNOWN_DIAGNOSTIC_CATEGORY = "unknown"

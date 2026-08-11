@@ -20,6 +20,7 @@ from dr_providers import (
     ScriptedOutcome,
     ScriptedProvider,
     Transcript,
+    TransportTimeoutContainment,
     openai_chat_config,
 )
 from dr_providers.lifecycle import (
@@ -436,6 +437,7 @@ def test_terminal_history_cannot_be_restored_as_continuable_state(
                 recoverability=RecoverabilityClass.TRANSIENT,
                 code="stalled_response",
                 message="local work may remain active",
+                containment=TransportTimeoutContainment.UNCONTAINED,
             ),
         )
     observation = CompletedProviderInvocationObservation(

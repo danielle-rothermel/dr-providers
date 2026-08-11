@@ -3,7 +3,14 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, TypeGuard
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
 from dr_providers.core.failures import (  # noqa: TC001 -- pydantic field
     RecoverabilityClass,
@@ -13,6 +20,11 @@ from dr_providers.core.frozen import _freeze_json
 INVALID_JSON_CODE = "invalid_response_json"
 TIMEOUT_CODE = "timeout"
 STALLED_RESPONSE_CODE = "stalled_response"
+POOL_TIMEOUT_CODE = "pool_timeout"
+
+TIMEOUT_CODES = frozenset(
+    {TIMEOUT_CODE, STALLED_RESPONSE_CODE, POOL_TIMEOUT_CODE}
+)
 
 
 class ProviderStopReason(StrEnum):
@@ -131,6 +143,11 @@ class ProviderTransportFailure(BaseModel):
     """Expected provider transport or protocol failure.
 
     Response evidence is decoded as JSON when possible or retained as text.
+
+    A timeout code must state its containment explicitly, because
+    containment decides whether the timeout is classified as contained or
+    as an uncontained deadline expiration, and those two outcomes carry
+    opposite retryability.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -143,6 +160,16 @@ class ProviderTransportFailure(BaseModel):
     status_code: StrictInt | None = None
     containment: TransportTimeoutContainment | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_timeout_containment(self) -> ProviderTransportFailure:
+        if self.code in TIMEOUT_CODES and self.containment is None:
+            msg = (
+                f"transport failure code {self.code!r} requires an explicit "
+                "containment"
+            )
+            raise ValueError(msg)
+        return self
 
     def model_post_init(self, _context: Any) -> None:
         object.__setattr__(

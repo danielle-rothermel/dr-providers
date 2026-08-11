@@ -20,6 +20,7 @@ from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle.classifier import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
     HTTP_STATUS_402_CODE,
+    INVALID_BASE_URL_CODE,
     MISSING_API_KEY_CODE,
     MISSING_BASE_URL_CODE,
 )
@@ -35,6 +36,10 @@ from dr_providers.lifecycle.models import (
     PROVIDER_CALL_STATE_SCHEMA_VERSION,
     PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION,
     ProviderRetryDelaySource,
+)
+from dr_providers.lifecycle.outcomes import (
+    ProviderCallOutcomeKind,
+    ProviderInvocationOutcome,
 )
 from dr_providers.lifecycle.policy import (
     PROVIDER_CALL_RETRY_POLICY_SCHEMA,
@@ -73,8 +78,10 @@ from dr_providers.outcomes.evidence import (
 )
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
+    POOL_TIMEOUT_CODE,
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
+    TIMEOUT_CODES,
     ProviderStopReason,
     TransportTimeoutContainment,
     WarningSeverity,
@@ -82,11 +89,12 @@ from dr_providers.outcomes.models import (
 from dr_providers.surfaces.testing.scripted import SCRIPTED_RESPONSE_ID_PREFIX
 from dr_providers.translation.common import (
     PARSE_ERROR_CODE,
+    PROVIDER_ERROR_ENVELOPE_CODE,
+    RESPONSE_INCOMPLETE_NO_TEXT_CODE,
     RESPONSE_NO_TEXT_CODE,
 )
 from dr_providers.translation.responses import (
     RESPONSE_FAILED_CODE,
-    RESPONSE_INCOMPLETE_NO_TEXT_CODE,
     RESPONSE_REFUSAL_CODE,
     RESPONSES_CONTENT_PART_TYPE_VALUES,
     RESPONSES_INCOMPLETE_REASON_VALUES,
@@ -95,11 +103,13 @@ from dr_providers.translation.responses import (
     UNKNOWN_DIAGNOSTIC_CATEGORY,
 )
 from dr_providers.transport.http import (
+    REDIRECT_STATUS_CODE_PREFIX,
     REQUEST_TOO_LARGE_CODE,
     RESPONSE_TOO_LARGE_CODE,
 )
 from dr_providers.transport.httpx_errors import (
     HTTP_STATUS_CODE_PREFIX,
+    REMOTE_PROTOCOL_ERROR_CODE,
     TRANSPORT_ERROR_CODE,
     TRANSPORT_PROTOCOL_ERROR_CODE,
 )
@@ -151,6 +161,32 @@ EXPECTED_REASONING_SHAPE_LITERALS = [
     "reasoning_object",
 ]
 EXPECTED_RETRY_DELAY_SOURCE_LITERALS = ["provider_call_retry_policy"]
+EXPECTED_INVOCATION_OUTCOME_LITERALS = [
+    "success",
+    "empty_generation",
+    "truncated_no_text",
+    "missing_generation_text",
+    "budget_exhausted",
+    "missing_credential",
+    "missing_transport_config",
+    "never_sent",
+    "malformed_response",
+    "provider_rejection",
+    "semantic_rejection",
+    "permanent_provider_or_transport_failure",
+    "transient_provider_or_network_failure",
+    "rate_limiting",
+    "resource_exhaustion",
+    "contained_transport_timeout",
+    "uncontained_deadline_expiration",
+    "unknown_transport_failure",
+]
+EXPECTED_CALL_OUTCOME_KIND_LITERALS = [
+    "accepted",
+    "invocation_outcome",
+    "draining_cancellation",
+    "policy_exhaustion",
+]
 
 
 def test_recoverability_class_literals_are_pinned() -> None:
@@ -210,6 +246,17 @@ def test_control_literals_are_pinned() -> None:
     assert len(ReasoningRequestShape) == 3
 
 
+def test_outcome_literals_are_pinned() -> None:
+    assert [member.value for member in ProviderInvocationOutcome] == (
+        EXPECTED_INVOCATION_OUTCOME_LITERALS
+    )
+    assert len(ProviderInvocationOutcome) == 18
+    assert [member.value for member in ProviderCallOutcomeKind] == (
+        EXPECTED_CALL_OUTCOME_KIND_LITERALS
+    )
+    assert len(ProviderCallOutcomeKind) == 4
+
+
 def test_retry_delay_source_literals_are_pinned() -> None:
     assert [member.value for member in ProviderRetryDelaySource] == (
         EXPECTED_RETRY_DELAY_SOURCE_LITERALS
@@ -220,13 +267,21 @@ def test_retry_delay_source_literals_are_pinned() -> None:
 def test_transport_failure_codes_are_pinned() -> None:
     assert TIMEOUT_CODE == "timeout"
     assert STALLED_RESPONSE_CODE == "stalled_response"
+    assert POOL_TIMEOUT_CODE == "pool_timeout"
+    assert sorted(TIMEOUT_CODES) == [
+        "pool_timeout",
+        "stalled_response",
+        "timeout",
+    ]
     assert INVALID_JSON_CODE == "invalid_response_json"
     assert REQUEST_TOO_LARGE_CODE == "request_body_too_large"
     assert RESPONSE_TOO_LARGE_CODE == "response_body_too_large"
     assert TRANSPORT_ERROR_CODE == "transport_error"
     assert TRANSPORT_PROTOCOL_ERROR_CODE == "transport_protocol_error"
+    assert REMOTE_PROTOCOL_ERROR_CODE == "transport_remote_protocol_error"
     assert MISSING_API_KEY_CODE == "missing_api_key"
     assert MISSING_BASE_URL_CODE == "missing_base_url"
+    assert INVALID_BASE_URL_CODE == "invalid_base_url"
 
 
 def test_protocol_failure_codes_are_pinned() -> None:
@@ -235,6 +290,7 @@ def test_protocol_failure_codes_are_pinned() -> None:
     assert RESPONSE_REFUSAL_CODE == "response_refusal"
     assert RESPONSE_INCOMPLETE_NO_TEXT_CODE == "response_incomplete_no_text"
     assert RESPONSE_FAILED_CODE == "response_failed"
+    assert PROVIDER_ERROR_ENVELOPE_CODE == "provider_error_envelope"
 
 
 def test_conformance_warning_codes_are_pinned() -> None:
@@ -246,6 +302,8 @@ def test_http_status_code_format_is_pinned() -> None:
     assert HTTP_STATUS_CODE_PREFIX == "http_status_"
     assert f"{HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
     assert HTTP_STATUS_402_CODE == "http_status_402"
+    assert REDIRECT_STATUS_CODE_PREFIX == "http_redirect_"
+    assert f"{REDIRECT_STATUS_CODE_PREFIX}302" == "http_redirect_302"
 
 
 def test_responses_diagnostic_literals_are_pinned() -> None:

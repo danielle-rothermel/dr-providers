@@ -9,19 +9,19 @@ from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle.outcomes import ProviderInvocationOutcome
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
-    STALLED_RESPONSE_CODE,
-    TIMEOUT_CODE,
+    TIMEOUT_CODES,
     ProviderTransportFailure,
     ProviderTransportResponse,
     TransportTimeoutContainment,
 )
 from dr_providers.translation.common import (
     PARSE_ERROR_CODE,
+    PROVIDER_ERROR_ENVELOPE_CODE,
+    RESPONSE_INCOMPLETE_NO_TEXT_CODE,
     RESPONSE_NO_TEXT_CODE,
 )
 from dr_providers.translation.responses import (
     RESPONSE_FAILED_CODE,
-    RESPONSE_INCOMPLETE_NO_TEXT_CODE,
     RESPONSE_REFUSAL_CODE,
 )
 
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
+INVALID_BASE_URL_CODE = "invalid_base_url"
 HTTP_STATUS_402_CODE = "http_status_402"
 
 CODE_TO_OUTCOME = {
@@ -39,11 +40,15 @@ CODE_TO_OUTCOME = {
     RESPONSE_NO_TEXT_CODE: ProviderInvocationOutcome.MISSING_GENERATION_TEXT,
     MISSING_API_KEY_CODE: ProviderInvocationOutcome.MISSING_CREDENTIAL,
     MISSING_BASE_URL_CODE: ProviderInvocationOutcome.MISSING_TRANSPORT_CONFIG,
+    INVALID_BASE_URL_CODE: ProviderInvocationOutcome.NEVER_SENT,
     HTTP_STATUS_402_CODE: ProviderInvocationOutcome.BUDGET_EXHAUSTED,
     PARSE_ERROR_CODE: ProviderInvocationOutcome.MALFORMED_RESPONSE,
     INVALID_JSON_CODE: ProviderInvocationOutcome.MALFORMED_RESPONSE,
     RESPONSE_REFUSAL_CODE: ProviderInvocationOutcome.PROVIDER_REJECTION,
     RESPONSE_FAILED_CODE: ProviderInvocationOutcome.PROVIDER_REJECTION,
+    PROVIDER_ERROR_ENVELOPE_CODE: (
+        ProviderInvocationOutcome.PROVIDER_REJECTION
+    ),
 }
 
 
@@ -125,7 +130,7 @@ def classify_provider_failure(
     """Deterministically classify provider failure evidence."""
     if failure.code in CODE_TO_OUTCOME:
         return CODE_TO_OUTCOME[failure.code]
-    if failure.code in {TIMEOUT_CODE, STALLED_RESPONSE_CODE}:
+    if failure.code in TIMEOUT_CODES:
         if failure.containment is TransportTimeoutContainment.CONTAINED:
             return ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
         return ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION

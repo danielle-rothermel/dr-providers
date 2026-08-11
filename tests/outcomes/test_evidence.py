@@ -29,6 +29,12 @@ from dr_providers import (
     openai_chat_config,
     sanitize_kwargs,
 )
+from dr_providers.outcomes.models import (
+    POOL_TIMEOUT_CODE,
+    STALLED_RESPONSE_CODE,
+    TIMEOUT_CODE,
+    TransportTimeoutContainment,
+)
 from dr_providers.transport.http import HttpProvider
 
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="write add"),)
@@ -370,3 +376,25 @@ def test_retry_after_hint_accepts_bounded_http_date_evidence() -> None:
         "kind": "http_date",
         "value": "Wed, 21 Oct 2015 07:28:00 GMT",
     }
+
+
+@pytest.mark.parametrize(
+    "code", [TIMEOUT_CODE, STALLED_RESPONSE_CODE, POOL_TIMEOUT_CODE]
+)
+def test_timeout_failure_requires_explicit_containment(code: str) -> None:
+    """Containment decides retryability, so a timeout may not omit it."""
+    with pytest.raises(ValidationError, match="requires an explicit"):
+        ProviderTransportFailure(
+            recoverability=RecoverabilityClass.TRANSIENT,
+            code=code,
+            message="provider transport timeout",
+        )
+
+    for containment in TransportTimeoutContainment:
+        failure = ProviderTransportFailure(
+            recoverability=RecoverabilityClass.TRANSIENT,
+            code=code,
+            message="provider transport timeout",
+            containment=containment,
+        )
+        assert failure.containment is containment

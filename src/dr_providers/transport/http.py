@@ -26,6 +26,7 @@ from dr_providers.outcomes.evidence import (
 )
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
+    POOL_TIMEOUT_CODE,
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
     ProviderTransportFailure,
@@ -37,7 +38,10 @@ from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
 from dr_providers.transport.httpx_errors import classify_httpx_error
-from dr_providers.transport.status import classify_status_code
+from dr_providers.transport.status import (
+    classify_status_code,
+    is_redirect_status,
+)
 
 if TYPE_CHECKING:
     from dr_providers.modeling.call import ProviderCallConfig
@@ -52,9 +56,12 @@ CONTENT_TYPE_HEADER = "Content-Type"
 JSON_CONTENT_TYPE = "application/json"
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
+INVALID_BASE_URL_CODE = "invalid_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
+REDIRECT_STATUS_CODE_PREFIX = "http_redirect_"
 REQUEST_TOO_LARGE_CODE = "request_body_too_large"
 RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
+DISPATCH_URL_SCHEMES = frozenset({"http", "https"})
 
 RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
@@ -92,6 +99,30 @@ def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
         write=operation_timeout,
         pool=operation_timeout,
     )
+
+
+def _is_dispatchable_url(url: str) -> bool:
+    """Report whether httpx can dispatch this URL to a network peer.
+
+    A URL that fails this check never reaches the wire, so validating it
+    before dispatch keeps a malformed ``base_url`` inside typed evidence
+    instead of raising ``httpx.InvalidURL``, which is not an
+    ``httpx.HTTPError`` and would otherwise escape the invocation.
+    """
+    try:
+        parsed = httpx.URL(url)
+    except (httpx.InvalidURL, ValueError):
+        return False
+    return parsed.scheme in DISPATCH_URL_SCHEMES and bool(parsed.host)
+
+
+def _timeout_code(error: httpx.TimeoutException) -> str:
+    """Name the timeout phase so local contention stays distinguishable."""
+    if isinstance(error, httpx.PoolTimeout):
+        return POOL_TIMEOUT_CODE
+    if isinstance(error, httpx.ReadTimeout):
+        return STALLED_RESPONSE_CODE
+    return TIMEOUT_CODE
 
 
 def _exception_traceback(error: BaseException) -> str:
@@ -341,6 +372,13 @@ class HttpProvider:
                 http_request=None,
                 outcome=self._missing_base_url_failure(request.config),
             )
+        if not _is_dispatchable_url(url):
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=self._policy,
+                http_request=None,
+                outcome=self._invalid_base_url_failure(url),
+            )
         headers = self._headers(request.config)
         if headers is None:
             return ProviderInvocationEvidence.build(
@@ -421,6 +459,26 @@ class HttpProvider:
                 )
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url), None, None
+        except (httpx.InvalidURL, ValueError) as error:
+            # httpx.InvalidURL is not an httpx.HTTPError, so without this
+            # guard a URL problem escapes invoke() with no typed evidence.
+            return (
+                ProviderTransportFailure(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code=INVALID_BASE_URL_CODE,
+                    message=(
+                        "transport policy base_url does not form a "
+                        "dispatchable http or https URL"
+                    ),
+                    traceback=_exception_traceback(error),
+                    metadata={
+                        "url": url,
+                        "exception_type": type(error).__name__,
+                    },
+                ),
+                None,
+                None,
+            )
         except httpx.HTTPError as error:
             recoverability, code = classify_httpx_error(error)
             return (
@@ -458,11 +516,15 @@ class HttpProvider:
         error: httpx.TimeoutException,
         url: str,
     ) -> ProviderTransportFailure:
-        """Every native timeout is contained because the HTTP call returned."""
-        is_idle_stall = isinstance(error, httpx.ReadTimeout)
+        """Every native timeout is contained because the HTTP call returned.
+
+        Pool starvation is local contention for this provider's own
+        connection pool, so it carries its own code rather than reporting
+        provider slowness.
+        """
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.TRANSIENT,
-            code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
+            code=_timeout_code(error),
             message="provider transport timeout",
             traceback=_exception_traceback(error),
             containment=TransportTimeoutContainment.CONTAINED,
@@ -525,6 +587,17 @@ class HttpProvider:
             response_body: Any = json.loads(response_bytes)
         except ValueError:
             response_body = response_bytes.decode("utf-8", errors="replace")
+        if is_redirect_status(status_code):
+            # Redirects are not followed, so a redirecting base_url is a
+            # transport misconfiguration rather than a provider rejection.
+            return ProviderTransportFailure(
+                recoverability=RecoverabilityClass.PERMANENT,
+                code=f"{REDIRECT_STATUS_CODE_PREFIX}{status_code}",
+                message=f"provider redirected with HTTP status {status_code}",
+                response_body=response_body,
+                status_code=status_code,
+                metadata={"url": url},
+            )
         return ProviderTransportFailure(
             recoverability=classify_status_code(status_code),
             code=f"{HTTP_STATUS_CODE_PREFIX}{status_code}",
@@ -591,6 +664,17 @@ class HttpProvider:
         if not base_url:
             return None
         return base_url.rstrip("/") + protocol_path(config)
+
+    def _invalid_base_url_failure(self, url: str) -> ProviderTransportFailure:
+        return ProviderTransportFailure(
+            recoverability=RecoverabilityClass.PERMANENT,
+            code=INVALID_BASE_URL_CODE,
+            message=(
+                "transport policy base_url does not form a dispatchable "
+                "http or https URL"
+            ),
+            metadata={"url": url},
+        )
 
     def _headers(self, config: ProviderCallConfig) -> dict[str, str] | None:
         api_key = self._api_key or os.environ.get(self._policy.api_key_env)
