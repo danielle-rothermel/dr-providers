@@ -378,6 +378,9 @@ class HttpProvider:
                 | WireFailureKind.UNKNOWN
             ):
                 message = TRANSPORT_ERROR_MESSAGE
+            case _:
+                msg = f"unmapped wire failure kind: {failure.kind}"
+                raise ValueError(msg)
         return (
             ProviderTransportFailure(
                 recoverability=recoverability,

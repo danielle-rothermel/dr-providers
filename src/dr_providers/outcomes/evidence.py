@@ -310,11 +310,15 @@ class ProviderInvocationEvidence(BaseModel):
         appears in a typed field beside it — ``code``, ``recoverability``,
         ``status_code``, ``containment``, and ``metadata``. Excluding it
         is a decision, not an oversight: a summary message may be
-        reworded without rehashing already-recorded evidence.
+        reworded without rehashing already-recorded evidence. Every
+        failure this package builds sets a typed ``code``; a directly
+        constructed failure that relies on ``message`` alone to
+        distinguish itself from another shares that other's identity.
 
-        Every other persisted field is identity-bearing, so the
-        projection removes exactly these two keys rather than listing
-        the ones it keeps.
+        The projection is scoped to ``failure``: every other persisted
+        field is identity-bearing, including ``response.warnings[]``
+        messages, which this package generates deterministically and
+        which therefore discriminate rather than fork identity.
         """
         payload = self.model_dump(mode="json")
         failure = payload.get("failure")
