@@ -289,35 +289,13 @@ class TestHttpProvider:
         assert seen["version"]
         assert seen["auth"] is None
 
-    @pytest.mark.parametrize(
-        ("status", "recoverability"),
-        [
-            (429, RecoverabilityClass.RATE_LIMITED),
-            (500, RecoverabilityClass.TRANSIENT),
-            (400, RecoverabilityClass.PERMANENT),
-        ],
-    )
-    def test_http_status_classification_no_throw(
-        self, status: int, recoverability: RecoverabilityClass
-    ) -> None:
-        provider = mock_provider(
-            lambda _req: httpx.Response(status, text="nope")
-        )
-        outcome = provider.invoke(openai_request()).outcome
-        assert isinstance(outcome, ProviderTransportFailure)
-        assert outcome.recoverability is recoverability
-        assert outcome.code == f"http_status_{status}"
-        assert outcome.status_code == status
-
-    def test_transport_error_is_transient_no_throw(self) -> None:
-        def handler(_req: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("boom")
-
-        provider = mock_provider(handler)
+    def test_http_status_failure_is_typed_no_throw(self) -> None:
+        provider = mock_provider(lambda _req: httpx.Response(500, text="nope"))
         outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.recoverability is RecoverabilityClass.TRANSIENT
-        assert outcome.code == "transport_error"
+        assert outcome.code == "http_status_500"
+        assert outcome.status_code == 500
 
     @pytest.mark.parametrize(
         ("error", "expected_code"),

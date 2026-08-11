@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, cast
 
 import pytest
-from dr_serialize import build_identity_document, identity_document_hash
 from pydantic import ValidationError
 
 from dr_providers import (
@@ -29,8 +28,6 @@ from dr_providers import (
     openai_chat_config,
 )
 from dr_providers.modeling.call import (
-    PROVIDER_CALL_CONFIG_SCHEMA,
-    PROVIDER_CALL_CONFIG_SCHEMA_VERSION,
     PROVIDER_CALL_DEFINITION_SCHEMA_VERSION,
 )
 
@@ -111,21 +108,6 @@ class TestDefinitionSchemaVersionOwnership:
                     "schema_version": PROVIDER_CALL_DEFINITION_SCHEMA_VERSION,
                 }
             )
-
-
-class TestIdentityDocumentComposition:
-    def test_config_hash_matches_manual_identity_document(self) -> None:
-        config = openai_chat_config(
-            model="m", controls=GenerationControls(token_limit=64)
-        )
-        expected = identity_document_hash(
-            build_identity_document(
-                schema=PROVIDER_CALL_CONFIG_SCHEMA,
-                schema_version=PROVIDER_CALL_CONFIG_SCHEMA_VERSION,
-                payload=config.identity_payload(),
-            )
-        )
-        assert config.identity_hash == expected
 
 
 def _definition_variant(

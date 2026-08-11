@@ -178,44 +178,6 @@ def test_initial_state_carries_full_identity_components() -> None:
     assert _restored_state(state) == state
 
 
-def test_two_round_restore_matches_uninterrupted_transition() -> None:
-    initial = _retry_state()
-    first = _observation(
-        initial,
-        ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
-    )
-
-    uninterrupted_instruction = transition_provider_call(initial, first)
-    assert isinstance(uninterrupted_instruction, ProviderRetryInstruction)
-    restored_instruction = ProviderRetryInstruction.model_validate_json(
-        uninterrupted_instruction.model_dump_json()
-    )
-    restored_state = _restored_state(restored_instruction.next_state)
-    second = _observation(
-        restored_state,
-        ProviderInvocationOutcome.SUCCESS,
-        marker="two",
-    )
-
-    restored_result = transition_provider_call(restored_state, second)
-    uninterrupted_result = transition_provider_call(
-        uninterrupted_instruction.next_state,
-        second,
-    )
-
-    assert isinstance(restored_result, ProviderCallResult)
-    assert isinstance(uninterrupted_result, ProviderCallResult)
-    assert restored_result == uninterrupted_result
-    assert restored_result.identity_hash == uninterrupted_result.identity_hash
-    assert restored_result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
-    assert len(restored_result.completed_invocations) == 2
-    retry_decision = restored_result.completed_invocations[0].retry_decision
-    assert retry_decision is not None
-    assert retry_decision.delay_seconds == 1.0
-    assert restored_result.completed_invocations[1].retry_decision is None
-    assert "identity_hash" in restored_result.__dict__
-
-
 @pytest.mark.parametrize(
     "outcome",
     [

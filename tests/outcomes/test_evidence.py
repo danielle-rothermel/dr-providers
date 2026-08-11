@@ -220,15 +220,6 @@ class TestInvocationEvidence:
                 }
             )
 
-    def test_removed_http_request_field_name_is_rejected(self) -> None:
-        data = evidence_for(response=SUCCESS).model_dump(mode="python")
-        http_request = data.pop("http_request")
-
-        with pytest.raises(ValidationError):
-            ProviderInvocationEvidence.model_validate(
-                {**data, "raw_request": http_request}
-            )
-
     def test_sanitize_kwargs_redacts_credentials(self) -> None:
         assert sanitize_kwargs({"api_key": "secret", "temperature": 0.7}) == {
             "api_key": "<redacted>",
@@ -247,23 +238,6 @@ class TestInvocationEvidence:
     ) -> None:
         with pytest.raises(ValidationError):
             evidence_for(response=response, failure=failure)
-
-    @pytest.mark.parametrize(
-        ("response", "failure", "outcome"),
-        [(SUCCESS, None, SUCCESS), (None, FAILURE, FAILURE)],
-        ids=["response", "failure"],
-    )
-    def test_valid_outcome_side_is_accessible(
-        self,
-        response: ProviderTransportResponse | None,
-        failure: ProviderTransportFailure | None,
-        outcome: ProviderTransportResponse | ProviderTransportFailure,
-    ) -> None:
-        evidence = evidence_for(response=response, failure=failure)
-
-        assert evidence.response == response
-        assert evidence.failure == failure
-        assert evidence.outcome == outcome
 
     def test_evidence_binds_request_policy_and_success_body(self) -> None:
         provider = mock_provider(

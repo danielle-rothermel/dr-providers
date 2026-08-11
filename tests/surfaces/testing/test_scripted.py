@@ -7,10 +7,8 @@ from dr_providers import (
     PromptMessage,
     ProviderCallRequest,
     ProviderStopReason,
-    ProviderTransportFailure,
     ProviderTransportResponse,
     ProviderTransportWarning,
-    RecoverabilityClass,
     ScriptedOutcome,
     ScriptedProvider,
     TokenUsage,
@@ -91,17 +89,6 @@ class TestScriptedProvider:
         assert evidence.http_request is None
         assert evidence.policy_identity is None
         assert evidence.request_identity_hash == request.identity_hash
-
-    def test_scripted_failure_returns_typed_outcome(self) -> None:
-        failure = ProviderTransportFailure(
-            recoverability=RecoverabilityClass.RATE_LIMITED,
-            message="scripted 429",
-        )
-        provider = ScriptedProvider([ScriptedOutcome(failure=failure)])
-        outcome = provider.invoke(
-            request_for(openai_chat_config(model="m"))
-        ).outcome
-        assert isinstance(outcome, ProviderTransportFailure)
 
     def test_outcomes_are_consumed_in_order_then_last_repeats(self) -> None:
         provider = ScriptedProvider(

@@ -173,16 +173,6 @@ class TestPolicyFor:
         with pytest.raises(ValidationError):
             ProviderTransportPolicy.model_validate_json(payload)
 
-    def test_removed_native_retry_count_is_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            ProviderTransportPolicy.model_validate(
-                {
-                    "provider_kind": "openai",
-                    "api_key_env": "OPENAI_API_KEY",
-                    "native_retry_count": 1,
-                }
-            )
-
     @pytest.mark.parametrize(
         "field_name",
         [

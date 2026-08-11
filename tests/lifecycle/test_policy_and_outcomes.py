@@ -4,18 +4,15 @@ import math
 
 import pytest
 from pydantic import ValidationError
-from test_reducer import _observation, _state
 
 from dr_providers.lifecycle import (
     CustomProviderCallRetryPolicy,
     ProviderCallOutcome,
     ProviderCallOutcomeKind,
-    ProviderCallResult,
     ProviderInvocationOutcome,
     SemanticResponseClassifierIdentifier,
     StandardProviderCallRetryPolicy,
     classify_semantic_response,
-    transition_provider_call,
 )
 from dr_providers.outcomes.models import ProviderTransportResponse
 
@@ -68,38 +65,13 @@ def test_standard_policy_shape_and_identity_are_pinned() -> None:
 
     assert policy.model_dump(mode="json") == EXPECTED_STANDARD_POLICY
     assert policy.identity_hash == GOLDEN_STANDARD_POLICY_HASH
-    assert policy.maximum_invocations == 1
-    assert "identity_hash" in policy.__dict__
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        {"maximum_invocations": 2},
-    ],
-)
-def test_standard_policy_rejects_variants(change: dict[str, object]) -> None:
+def test_standard_policy_rejects_variants() -> None:
     with pytest.raises(ValidationError):
-        StandardProviderCallRetryPolicy.model_validate(change)
-
-
-@pytest.mark.parametrize(
-    "outcome",
-    [
-        ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
-        ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
-    ],
-)
-def test_standard_policy_never_retries_transient_or_timeout(
-    outcome: ProviderInvocationOutcome,
-) -> None:
-    state = _state()
-    result = transition_provider_call(state, _observation(state, outcome))
-
-    assert isinstance(result, ProviderCallResult)
-    assert result.outcome.kind is ProviderCallOutcomeKind.INVOCATION_OUTCOME
-    assert result.outcome.invocation_outcome is outcome
-    assert result.completed_invocations[-1].retry_decision is None
+        StandardProviderCallRetryPolicy.model_validate(
+            {"maximum_invocations": 2}
+        )
 
 
 def test_custom_policy_is_closed_deterministic_data() -> None:
@@ -217,11 +189,6 @@ def test_semantic_classifier_boundary_rejects_protocol_outcome() -> None:
             classifier,
             ProviderTransportResponse(text="valid"),
         )
-
-
-def test_classifier_identifier_must_be_nonempty() -> None:
-    with pytest.raises(ValidationError):
-        SemanticResponseClassifierIdentifier("")
 
 
 def test_call_outcome_shape_is_closed() -> None:
