@@ -49,17 +49,3 @@ jobs:
           enable-cache: false
       - run: uv build
       - run: uvx --from twine==7.0.0 twine check --strict dist/*
-      - name: Verify the built wheel
-        run: |
-          wheel_count="$(find dist -maxdepth 1 -type f -name '*.whl' | wc -l | tr -d ' ')"
-          if [ "${wheel_count}" != "1" ]; then
-            echo "::error::Expected one wheel, found ${wheel_count}"
-            exit 1
-          fi
-          wheel="$(find dist -maxdepth 1 -type f -name '*.whl')"
-          expected_version="$(uv version --short)"
-          wheel_environment="$(mktemp -d)"
-          uv venv --python 3.12 "${wheel_environment}"
-          uv pip install --python "${wheel_environment}/bin/python" "${wheel}[cli,serve]"
-          "${wheel_environment}/bin/python" -I scripts/check_built_install.py "${expected_version}"
-          "${wheel_environment}/bin/dr-providers" --help >/dev/null

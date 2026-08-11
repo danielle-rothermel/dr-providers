@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 import pytest
-from click import unstyle
 from typer.testing import CliRunner
 
 from dr_providers.modeling.controls import ReasoningEffort
@@ -19,6 +19,11 @@ if TYPE_CHECKING:
     from dr_providers.modeling.request import ProviderCallRequest
 
 runner = CliRunner()
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE.sub("", text)
 
 
 class ScriptedHttpProvider:
@@ -291,5 +296,5 @@ def test_removed_retries_flag_is_rejected(
     )
 
     assert result.exit_code == 2
-    assert "--retries" in unstyle(result.output)
+    assert "--retries" in _strip_ansi(result.output)
     assert stub.requests == []
