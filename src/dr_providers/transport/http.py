@@ -35,16 +35,15 @@ from dr_providers.outcomes.models import (
 from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
-from dr_providers.transport.httpx_errors import (
-    INVALID_BASE_URL_CODE,
-    REQUEST_TOO_LARGE_CODE,
-    RESPONSE_TOO_LARGE_CODE,
-    TIMEOUT_KINDS,
-    classify_wire_failure_kind,
-)
 from dr_providers.transport.status import (
     classify_status_code,
     is_redirect_status,
+)
+from dr_providers.transport.wire_failures import (
+    INVALID_BASE_URL_CODE,
+    REQUEST_TOO_LARGE_CODE,
+    RESPONSE_TOO_LARGE_CODE,
+    classify_wire_failure_kind,
 )
 
 if TYPE_CHECKING:
@@ -328,42 +327,62 @@ class HttpProvider:
     ]:
         """Record one wire failure in this package's own vocabulary.
 
+        Dispatch is on the structured ``WireFailureKind``, never on the
+        persisted code string: the code is recorded-data format and is
+        deliberately shared by more than one kind, so matching on it
+        would conflate conditions the wire client reports separately.
+
         Byte-bound refusals are this provider's own sizing decision, so
         they report the configured limit and the bytes observed rather
         than an exception the wire raised.
         """
         recoverability, code = classify_wire_failure_kind(failure.kind)
-        if failure.kind is WireFailureKind.RESPONSE_TOO_LARGE:
-            return (
-                self._response_too_large_failure(failure.observed_bytes or 0),
-                failure.observed_bytes,
-                _retry_after_hint(
-                    failure.retry_after,
-                    failure.retry_after_header,
-                ),
-            )
-        if failure.kind in TIMEOUT_KINDS:
-            return self._timeout_failure(code, failure, url), None, None
-        if failure.kind is WireFailureKind.INVALID_URL:
-            return (
-                ProviderTransportFailure(
-                    recoverability=recoverability,
-                    code=code,
-                    message=INVALID_BASE_URL_MESSAGE,
-                    traceback=failure.traceback,
-                    metadata={
-                        "url": url,
-                        "exception_type": failure.exception_type,
-                    },
-                ),
-                None,
-                None,
-            )
+        match failure.kind:
+            case WireFailureKind.RESPONSE_TOO_LARGE:
+                return (
+                    self._response_too_large_failure(
+                        failure.observed_bytes or 0
+                    ),
+                    failure.observed_bytes,
+                    _retry_after_hint(
+                        failure.retry_after,
+                        failure.retry_after_header,
+                    ),
+                )
+            case WireFailureKind.REQUEST_TOO_LARGE:
+                # Latent: the provider's own pre-check refuses an
+                # oversized body before dispatch, so the wire client
+                # has no request left to refuse. Shaped symmetrically
+                # with the response branch so the wire client gaining
+                # its own request bound records the same evidence.
+                return (
+                    self._request_too_large_failure(
+                        failure.observed_bytes or 0
+                    ),
+                    None,
+                    None,
+                )
+            case (
+                WireFailureKind.TIMEOUT
+                | WireFailureKind.STALLED_RESPONSE
+                | WireFailureKind.POOL_TIMEOUT
+            ):
+                return self._timeout_failure(code, failure, url), None, None
+            case WireFailureKind.INVALID_URL:
+                message = INVALID_BASE_URL_MESSAGE
+            case (
+                WireFailureKind.CONNECT_ERROR
+                | WireFailureKind.NETWORK_ERROR
+                | WireFailureKind.REMOTE_PROTOCOL_ERROR
+                | WireFailureKind.LOCAL_PROTOCOL_ERROR
+                | WireFailureKind.UNKNOWN
+            ):
+                message = TRANSPORT_ERROR_MESSAGE
         return (
             ProviderTransportFailure(
                 recoverability=recoverability,
                 code=code,
-                message=TRANSPORT_ERROR_MESSAGE,
+                message=message,
                 traceback=failure.traceback,
                 metadata={
                     "url": url,

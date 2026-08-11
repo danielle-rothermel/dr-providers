@@ -19,11 +19,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Pin every persisted enum value, failure code, wire-format prefix, identity
   schema name, and schema version with golden tests against hand-written
   literals, and record the pinning rule as a standing contract.
+- Add `ScriptedProvider.offload()` and `close()`, so the shipped network-free
+  testing surface satisfies the `OffloadingProvider` surface and drives the
+  asynchronous entry point directly. The executor is a single owned worker
+  created on first offload, keeping scripted offloaded calls serial.
+- Add `docs/future-features.md`, recording directions this package
+  deliberately does not build today, linked from the README.
 
 ### Removed
 
 - Remove the public `classify_httpx_error` export; wire-error classification is
   now the internal kind-to-code boundary mapping.
+- Remove the unused `httpx2` development dependency.
+- Remove `TIMEOUT_KINDS`; the wire-failure boundary matches timeout kinds
+  structurally instead.
 - Remove `httpx` as a runtime dependency; it remains a dev dependency for
   `MockTransport`-based tests.
 - Remove `dr_providers.surfaces.serve` and the `[serve]` optional extra
@@ -43,6 +52,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Rename `dr_providers.transport.httpx_errors` to
+  `dr_providers.transport.wire_failures`; the module maps wire failure kinds and
+  no longer touches httpx. Every literal it defines is unchanged.
+- Dispatch the wire-failure boundary on the structured `WireFailureKind` rather
+  than on persisted code strings, and record an explicit `REQUEST_TOO_LARGE`
+  branch shaped like the response-size one.
+- Record in the boundary map and its contract that `CONNECT_ERROR` and
+  `NETWORK_ERROR` both map to the single literal `transport_error` with
+  `TRANSIENT` recoverability, and `UNKNOWN` maps to `transport_error` with
+  `UNKNOWN` recoverability, so the collapse is a standing obligation.
+- Cap `pydantic` below 3, matching the frozen-package convention.
+- Correct the `provider call retry policy`, `provider HTTP request evidence`,
+  and `provider transport policy` terms: the standard retry policy declares only
+  a one-invocation limit, header redaction is a `build()` step rather than a
+  type invariant, and transport policy records connect and idle timeouts after
+  clamping them to the general timeout.
 - Advance Provider Invocation Evidence to schema version 7: `identity_payload()`
   is an explicit projection that excludes transport-failure `traceback` and
   `message` from the hash preimage. Both fields remain fully persisted on the

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+from typing import TYPE_CHECKING
+
 from dr_providers import (
     CostInfo,
     GenerationControls,
@@ -15,6 +18,9 @@ from dr_providers import (
     Transcript,
     openai_chat_config,
 )
+
+if TYPE_CHECKING:
+    from dr_providers.lifecycle.driver import OffloadingProvider
 
 MESSAGES = (
     PromptMessage(role=MessageRole.SYSTEM, content="be brief"),
@@ -148,3 +154,39 @@ class TestScriptedProvider:
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome.stop_reason is ProviderStopReason.STOP
         assert outcome.warnings == ()
+
+    def test_scripted_provider_satisfies_the_offloading_surface(self) -> None:
+        """The shipped testing surface drives the async entry point too."""
+        provider: OffloadingProvider = ScriptedProvider()
+        assert isinstance(provider, ScriptedProvider)
+
+        with provider:
+            worker = provider.offload(threading.get_ident).result()
+            evidence = provider.offload(
+                lambda: provider.invoke(
+                    request_for(openai_chat_config(model="m"))
+                )
+            ).result()
+
+        assert worker != threading.get_ident()
+        assert isinstance(evidence.outcome, ProviderTransportResponse)
+
+    def test_closing_releases_the_offload_worker_and_allows_reuse(
+        self,
+    ) -> None:
+        """Close releases the executor; a later offload builds a new one.
+
+        Thread identities are recycled after shutdown, so the released
+        executor object, not its worker's ident, is the sound signal.
+        """
+        provider = ScriptedProvider()
+
+        assert provider.offload(lambda: "first").result() == "first"
+        first_executor = provider._executor
+        provider.close()
+        assert provider._executor is None
+
+        assert provider.offload(lambda: "second").result() == "second"
+        assert provider._executor is not None
+        assert provider._executor is not first_executor
+        provider.close()

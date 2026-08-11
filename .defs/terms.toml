@@ -88,8 +88,10 @@ is_a = ["provider"]
 [[terms]]
 name = "offloading provider"
 definition = """
-A provider that also runs caller work on its own executor, sized from the \
-transport policy's connection limit and drained before the provider closes."""
+A provider that also runs caller work on its own executor. The HTTP provider \
+sizes that executor from the transport policy's connection limit and drains it \
+before the provider closes; the scripted provider owns a single ungated worker, \
+because it models provider responses rather than the wire client's bounds."""
 exported_symbols = ["OffloadingProvider"]
 is_a = ["provider"]
 
@@ -97,7 +99,9 @@ is_a = ["provider"]
 name = "scripted provider"
 definition = """
 A deterministic network-free provider that consumes scripted outcomes in \
-order and repeats the last available outcome."""
+order and repeats the last available outcome. It offloads as well as invokes, \
+so the shipped testing surface drives the asynchronous entry point without a \
+local wrapper."""
 exported_symbols = ["ScriptedProvider", "ScriptedOutcome"]
 is_a = ["provider"]
 
@@ -172,9 +176,12 @@ exported_symbols = [
 name = "provider transport policy"
 definition = """
 An identity-bearing declaration binding one provider service to its credentials \
-location, endpoint, caller-declared native connect, write/pool, and response-read \
-idle timeouts, connection-pool limits, and request and response byte limits. It is \
-excluded from provider-call request identity."""
+location, endpoint, native connect, write/pool, and response-read idle timeouts, \
+connection-pool limits, and request and response byte limits. The connect and \
+idle timeouts are clamped down to the general timeout at construction, before \
+identity is taken, so the policy records the effective bound rather than the \
+caller's declaration and two different declarations can share one identity. It \
+is excluded from provider-call request identity."""
 exported_symbols = [
   "ProviderTransportPolicy",
   "ApiKeyEnv",
@@ -265,8 +272,11 @@ part_of = ["provider transport response"]
 [[terms]]
 name = "provider HTTP request evidence"
 definition = """
-The retained method, URL, redacted headers, constructed body, and exact encoded \
-body size for one provider wire request."""
+The retained method, URL, headers, constructed body, and exact encoded body size \
+for one provider wire request. Redaction of known credential header names is a \
+step in ``build()``, not a type invariant: direct construction and \
+deserialization retain whatever headers they are given, so evidence restored \
+from a third party is not re-redacted."""
 exported_symbols = [
   "ProviderHttpRequestEvidence",
   "SANITIZE_KEYS",
@@ -325,9 +335,13 @@ part_of = ["provider call result"]
 [[terms]]
 name = "provider call retry policy"
 definition = """
-A frozen identity-bearing declaration of a finite invocation limit, eligible \
-provider invocation outcomes, finite nonnegative individual delays, and a \
-finite maximum cumulative delay."""
+A frozen identity-bearing declaration of how many invocations one provider call \
+may make, in one of two closed shapes. The standard policy declares only its \
+type and a fixed limit of one invocation: it names no eligible outcomes and no \
+delays, so it never retries. The custom policy declares a finite invocation \
+limit, the eligible provider invocation outcomes, one finite nonnegative delay \
+between each permitted invocation, and the finite maximum cumulative delay \
+those delays sum to."""
 exported_symbols = [
   "PROVIDER_CALL_RETRY_POLICY_SCHEMA",
   "PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION",

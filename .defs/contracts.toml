@@ -128,12 +128,18 @@ title = "Wire results are mapped to persisted vocabulary at one boundary"
 statement = """
 The wire client reports one closed set of failure kinds, none of which is \
 persisted. One exhaustive mapping turns each kind into this package's recorded \
-recoverability and code: connect and network failures are transient under one \
-transport code; a remote protocol error, the classic dropped-keepalive server \
-disconnect, is transient under its own code; a local protocol error is permanent \
-under its own protocol code; an undispatchable URL is permanent and never sent; \
-request and response byte refusals are resource exhaustion; unrecognized kinds \
-are unknown. Every timeout kind is transient, keeps its phase-named code so pool \
+recoverability and code, and dispatch is on the structured kind, never on the \
+persisted code string. The mapping is deliberately not injective, and its \
+collapses are standing obligations: CONNECT_ERROR and NETWORK_ERROR both map to \
+the single literal "transport_error" with TRANSIENT recoverability, and UNKNOWN \
+maps to that same "transport_error" literal with UNKNOWN recoverability, so a \
+recorded code alone does not identify the kind that produced it and splitting \
+either collapse is a recorded-data format change. A remote protocol error, the \
+classic dropped-keepalive server disconnect, is transient under its own code; a \
+local protocol error is permanent under its own protocol code; an undispatchable \
+URL is permanent and never sent; request and response byte refusals are resource \
+exhaustion under their own codes, each recording the configured limit and the \
+bytes observed. Every timeout kind is transient, keeps its phase-named code so pool \
 starvation stays distinguishable, and states its containment. Which wire \
 condition produces which kind is the wire package's contract, not this one's. \
 HTTP status is data, not a wire failure: statuses that name a new location are \
@@ -149,9 +155,14 @@ rationale = """
 Keeping every persisted literal on this side of the boundary lets the wire \
 capability change its own vocabulary without rewriting recorded data, while an \
 exhaustive mapping stops a new wire condition from silently borrowing a code \
-that already means something else. Every clause stays falsifiable by a command \
-in this repository, so the kind a given wire condition earns is left to the \
-package that decides it."""
+that already means something else. Recording the collapses explicitly keeps \
+them a decision rather than an accident of the current table: a consumer \
+needing more than the collapsed code reads metadata.exception_type, and \
+recoverability, not the code, is what states that a condition went \
+unclassified. Dispatching on the kind rather than the code keeps that sharing \
+of literals from conflating conditions the wire client reports separately. \
+Every clause stays falsifiable by a command in this repository, so the kind a \
+given wire condition earns is left to the package that decides it."""
 date = "2026-08-11"
 check = "uv run pytest -q tests/transport/test_status.py tests/transport/test_http.py tests/transport/test_timeout.py tests/transport/test_wire_failure_mapping.py tests/transport/test_bounds.py"
 

@@ -27,6 +27,16 @@ The top-level `dr_providers` exports are the stable general import surface.
 Functional-area module paths primarily make ownership discoverable; they are
 not a second compatibility surface.
 
+[`.defs/terms.toml`](.defs/terms.toml) and its
+[rendered defs site](https://danielle-rothermel.github.io/dr-providers/) are the
+authoritative reference for that public surface: every export is mapped to a
+term there and checked by `scripts/check_defs.py`. This README illustrates
+common paths rather than enumerating them, so an export it does not mention is
+supported, not unsupported.
+
+[Potential future features](docs/future-features.md) records directions this
+package deliberately does not build today.
+
 ## Install
 
 dr-providers requires Python 3.12 or newer.

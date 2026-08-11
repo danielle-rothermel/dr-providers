@@ -9,6 +9,24 @@ evidence, so each one is a recorded-data format pinned in
 The mapping is exhaustive over ``WireFailureKind`` so a new wire
 condition cannot silently acquire a code that already means something
 else in recorded data.
+
+The mapping is not injective, and the collapses below are recorded
+obligations rather than accidents of the current table:
+
+``CONNECT_ERROR`` and ``NETWORK_ERROR`` both map to the single literal
+``"transport_error"`` with ``TRANSIENT`` recoverability. Both name an
+exchange that never completed against a reachable peer, and recorded
+data does not distinguish them; a consumer that needs the distinction
+reads ``metadata.exception_type``, not the code.
+
+``UNKNOWN`` maps to that same ``"transport_error"`` literal with
+``UNKNOWN`` recoverability. The code is shared deliberately, so an
+unrecognized wire condition is recorded as a transport failure whose
+recoverability, not whose code, states that it was not classified.
+
+Because the code alone does not identify the kind that produced it,
+splitting either collapse later is a recorded-data format change, not a
+refinement.
 """
 
 from __future__ import annotations
@@ -29,15 +47,6 @@ HTTP_STATUS_CODE_PREFIX = "http_status_"
 INVALID_BASE_URL_CODE = "invalid_base_url"
 REQUEST_TOO_LARGE_CODE = "request_body_too_large"
 RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
-
-TIMEOUT_KINDS = frozenset(
-    {
-        WireFailureKind.TIMEOUT,
-        WireFailureKind.STALLED_RESPONSE,
-        WireFailureKind.POOL_TIMEOUT,
-    }
-)
-"""Kinds whose failure states timeout containment explicitly."""
 
 WIRE_FAILURE_CLASSIFICATION: dict[
     WireFailureKind, tuple[RecoverabilityClass, str]

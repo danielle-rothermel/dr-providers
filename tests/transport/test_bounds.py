@@ -175,6 +175,10 @@ def test_streamed_response_exact_limit_boundaries(
         )
         assert failure.code == RESPONSE_TOO_LARGE_CODE
         assert failure.response_body is None
+        # Exact because ``ByteChunks`` yields one byte at a time: the
+        # bound is crossed on the first byte past it, so counting stops
+        # at exactly ``limit + 1``. A coarser chunking would stop
+        # anywhere in ``(limit, limit + chunk]``.
         assert failure.metadata == {
             "limit_bytes": limit,
             "observed_bytes": limit + 1,

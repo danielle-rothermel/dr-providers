@@ -8,10 +8,16 @@ here instead of restating whatever the code currently says.
 from __future__ import annotations
 
 import pytest
-from dr_http import WireFailureKind
+from _policy import (
+    TEST_MAX_REQUEST_BYTES,
+    TEST_MAX_RESPONSE_BYTES,
+    make_transport_policy,
+)
+from dr_http import WireFailure, WireFailureKind
 
-from dr_providers import RecoverabilityClass
-from dr_providers.transport.httpx_errors import (
+from dr_providers import ProviderTransportFailure, RecoverabilityClass
+from dr_providers.transport.http import HttpProvider
+from dr_providers.transport.wire_failures import (
     WIRE_FAILURE_CLASSIFICATION,
     classify_wire_failure_kind,
 )
@@ -77,3 +83,133 @@ def test_unmapped_kind_raises_rather_than_borrowing_a_code() -> None:
 
     with pytest.raises(ValueError, match="unmapped wire failure kind"):
         classify_wire_failure_kind(unmapped)
+
+
+URL = "https://example.test/v1/chat/completions"
+OBSERVED_BYTES = 4096
+
+TRANSPORT_ERROR_METADATA_KEYS = {"url", "exception_type"}
+TIMEOUT_METADATA_KEYS = {
+    "url",
+    "exception_type",
+    "timeout_seconds",
+    "connect_timeout_seconds",
+    "idle_timeout_seconds",
+}
+BYTE_BOUND_METADATA_KEYS = {"limit_bytes", "observed_bytes"}
+
+EXPECTED_EVIDENCE_SHAPE: dict[WireFailureKind, tuple[str, set[str]]] = {
+    WireFailureKind.TIMEOUT: (
+        "provider transport timeout",
+        TIMEOUT_METADATA_KEYS,
+    ),
+    WireFailureKind.STALLED_RESPONSE: (
+        "provider transport timeout",
+        TIMEOUT_METADATA_KEYS,
+    ),
+    WireFailureKind.POOL_TIMEOUT: (
+        "provider transport timeout",
+        TIMEOUT_METADATA_KEYS,
+    ),
+    WireFailureKind.INVALID_URL: (
+        "transport policy base_url does not form a dispatchable http or "
+        "https URL",
+        TRANSPORT_ERROR_METADATA_KEYS,
+    ),
+    WireFailureKind.CONNECT_ERROR: (
+        "provider transport error",
+        TRANSPORT_ERROR_METADATA_KEYS,
+    ),
+    WireFailureKind.NETWORK_ERROR: (
+        "provider transport error",
+        TRANSPORT_ERROR_METADATA_KEYS,
+    ),
+    WireFailureKind.REMOTE_PROTOCOL_ERROR: (
+        "provider transport error",
+        TRANSPORT_ERROR_METADATA_KEYS,
+    ),
+    WireFailureKind.LOCAL_PROTOCOL_ERROR: (
+        "provider transport error",
+        TRANSPORT_ERROR_METADATA_KEYS,
+    ),
+    WireFailureKind.UNKNOWN: (
+        "provider transport error",
+        TRANSPORT_ERROR_METADATA_KEYS,
+    ),
+    WireFailureKind.REQUEST_TOO_LARGE: (
+        f"request body exceeds {TEST_MAX_REQUEST_BYTES} byte limit",
+        BYTE_BOUND_METADATA_KEYS,
+    ),
+    WireFailureKind.RESPONSE_TOO_LARGE: (
+        f"response body exceeds {TEST_MAX_RESPONSE_BYTES} byte limit",
+        BYTE_BOUND_METADATA_KEYS,
+    ),
+}
+
+
+def _wire_failure(kind: WireFailureKind) -> WireFailure:
+    """Build the wire failure the client reports for one kind.
+
+    Byte-bound refusals are detected by the client rather than caught,
+    so they carry no exception detail and do carry ``observed_bytes``.
+    """
+    if kind in {
+        WireFailureKind.REQUEST_TOO_LARGE,
+        WireFailureKind.RESPONSE_TOO_LARGE,
+    }:
+        return WireFailure(
+            kind=kind,
+            exception_type="",
+            message="",
+            traceback="",
+            observed_bytes=OBSERVED_BYTES,
+        )
+    return WireFailure(
+        kind=kind,
+        exception_type="ExampleWireError",
+        message="wire detail",
+        traceback="Traceback (most recent call last):\n",
+    )
+
+
+@pytest.mark.parametrize(
+    "kind",
+    sorted(WireFailureKind, key=lambda kind: kind.name),
+    ids=lambda kind: kind.name,
+)
+def test_wire_failure_evidence_shape_is_pinned_per_kind(
+    kind: WireFailureKind,
+) -> None:
+    """Each kind's recorded message and metadata keys are pinned.
+
+    Recoverability and code alone would not catch a branch recording the
+    wrong summary or dropping the metadata a consumer reads instead of
+    the collapsed code.
+    """
+    expected_message, expected_metadata_keys = EXPECTED_EVIDENCE_SHAPE[kind]
+    provider = HttpProvider(
+        policy=make_transport_policy(base_url="https://example.test/v1"),
+        api_key="test-key",
+        _client_factory=lambda **_kwargs: None,
+    )
+
+    outcome, _response_bytes, _retry_after = (
+        provider._outcome_from_wire_failure(
+            _wire_failure(kind),
+            URL,
+        )
+    )
+
+    expected_recoverability, expected_code = EXPECTED_CLASSIFICATION[kind]
+    assert isinstance(outcome, ProviderTransportFailure)
+    assert outcome.recoverability.value == expected_recoverability
+    assert outcome.code == expected_code
+    assert outcome.message == expected_message
+    assert set(outcome.metadata) == expected_metadata_keys
+    if expected_metadata_keys is BYTE_BOUND_METADATA_KEYS:
+        assert outcome.metadata["observed_bytes"] == OBSERVED_BYTES
+
+
+def test_every_wire_failure_kind_has_a_pinned_evidence_shape() -> None:
+    """A new kind must fail here rather than fall through a branch."""
+    assert set(EXPECTED_EVIDENCE_SHAPE) == set(WireFailureKind)

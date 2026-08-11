@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Event
 from typing import TYPE_CHECKING
 
@@ -33,6 +32,7 @@ from dr_providers.lifecycle import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from concurrent.futures import Future
 
     from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 
@@ -56,28 +56,9 @@ def _state() -> ProviderCallState:
     )
 
 
-class _OffloadingScriptedProvider:
-    """Give a scripted provider the offload half of the async surface."""
-
-    def __init__(self, outcomes: list[ScriptedOutcome] | None = None) -> None:
-        self.scripted = ScriptedProvider(outcomes)
-        self._executor = ThreadPoolExecutor(max_workers=1)
-
-    def invoke(
-        self, request: ProviderCallRequest
-    ) -> ProviderInvocationEvidence:
-        return self.scripted.invoke(request)
-
-    def offload[ResultT](self, fn: Callable[[], ResultT]) -> Future[ResultT]:
-        return self._executor.submit(fn)
-
-    @property
-    def executor_thread_ident(self) -> int:
-        """Identify the single worker thread backing this offload seam."""
-        return self._executor.submit(threading.get_ident).result()
-
-    def shutdown(self) -> None:
-        self._executor.shutdown(wait=True)
+def _executor_thread_ident(provider: ScriptedProvider) -> int:
+    """Identify the single worker thread backing the offload seam."""
+    return provider.offload(threading.get_ident).result()
 
 
 def test_async_entry_matches_sync_driver_for_one_scripted_exchange() -> None:
@@ -91,7 +72,7 @@ def test_async_entry_matches_sync_driver_for_one_scripted_exchange() -> None:
         cancellation=Event(),
     )
 
-    provider = _OffloadingScriptedProvider(list(outcomes))
+    provider = ScriptedProvider(list(outcomes))
     try:
         async_result = asyncio.run(
             run_local_provider_call_async(
@@ -102,15 +83,15 @@ def test_async_entry_matches_sync_driver_for_one_scripted_exchange() -> None:
             )
         )
     finally:
-        provider.shutdown()
+        provider.close()
 
     assert async_result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
     assert async_result.identity_hash == sync_result.identity_hash
-    assert len(provider.scripted.requests) == 1
+    assert len(provider.requests) == 1
 
 
 def test_async_entry_runs_the_driver_off_the_awaiting_thread() -> None:
-    class _ThreadRecordingProvider(_OffloadingScriptedProvider):
+    class _ThreadRecordingProvider(ScriptedProvider):
         def __init__(self) -> None:
             super().__init__()
             self.invoked_on: list[int] = []
@@ -122,7 +103,7 @@ def test_async_entry_runs_the_driver_off_the_awaiting_thread() -> None:
             return super().invoke(request)
 
     provider = _ThreadRecordingProvider()
-    worker_thread = provider.executor_thread_ident
+    worker_thread = _executor_thread_ident(provider)
 
     async def drive() -> int:
         await run_local_provider_call_async(
@@ -136,7 +117,7 @@ def test_async_entry_runs_the_driver_off_the_awaiting_thread() -> None:
     try:
         awaiting_thread = asyncio.run(drive())
     finally:
-        provider.shutdown()
+        provider.close()
 
     assert provider.invoked_on == [worker_thread]
     assert worker_thread != awaiting_thread
@@ -167,7 +148,7 @@ def test_async_entry_follows_retry_instructions_like_the_sync_driver() -> None:
         retry_policy=two_invocation_transient_retry_policy(),
         classifier_identifier=ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
     )
-    provider = _OffloadingScriptedProvider(outcomes)
+    provider = ScriptedProvider(outcomes)
     wait = _RecordingWait()
 
     try:
@@ -181,18 +162,18 @@ def test_async_entry_follows_retry_instructions_like_the_sync_driver() -> None:
             )
         )
     finally:
-        provider.shutdown()
+        provider.close()
 
     assert result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
     assert wait.delays == [1.0]
-    assert len(provider.scripted.requests) == 2
+    assert len(provider.requests) == 2
 
 
 def test_async_entry_does_not_block_the_event_loop() -> None:
     offload_started = Event()
     loop_ran = Event()
 
-    class _LoopGatedProvider(_OffloadingScriptedProvider):
+    class _LoopGatedProvider(ScriptedProvider):
         def invoke(
             self, request: ProviderCallRequest
         ) -> ProviderInvocationEvidence:
@@ -222,7 +203,7 @@ def test_async_entry_does_not_block_the_event_loop() -> None:
     try:
         result = asyncio.run(drive())
     finally:
-        provider.shutdown()
+        provider.close()
 
     assert loop_ran.is_set()
     assert result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
@@ -233,7 +214,7 @@ def test_cancelling_the_task_does_not_interrupt_a_running_offload() -> None:
     release = Event()
     completed = Event()
 
-    class _GatedProvider(_OffloadingScriptedProvider):
+    class _GatedProvider(ScriptedProvider):
         def invoke(
             self, request: ProviderCallRequest
         ) -> ProviderInvocationEvidence:
@@ -266,9 +247,9 @@ def test_cancelling_the_task_does_not_interrupt_a_running_offload() -> None:
         assert completed.wait(WATCHDOG_SECONDS)
     finally:
         release.set()
-        provider.shutdown()
+        provider.close()
 
-    assert len(provider.scripted.requests) == 1
+    assert len(provider.requests) == 1
 
 
 def test_cancelled_await_reports_an_orphaned_offload_failure(
@@ -283,7 +264,7 @@ def test_cancelled_await_reports_an_orphaned_offload_failure(
     release = Event()
     failure = RuntimeError("systematic driver defect")
 
-    class _RaisingProvider(_OffloadingScriptedProvider):
+    class _RaisingProvider(ScriptedProvider):
         def __init__(self) -> None:
             super().__init__()
             self.offloaded_exceptions: list[
@@ -335,10 +316,10 @@ def test_cancelled_await_reports_an_orphaned_offload_failure(
                 provider.offloaded_exceptions[0](WATCHDOG_SECONDS),
                 RuntimeError,
             )
-            provider.shutdown()
+            provider.close()
     finally:
         release.set()
-        provider.shutdown()
+        provider.close()
 
     errors = [
         record for record in caplog.records if record.levelno == logging.ERROR
@@ -361,7 +342,7 @@ def test_async_entry_returns_the_sync_cancelled_result_shape() -> None:
         cancellation=cancellation,
     )
 
-    provider = _OffloadingScriptedProvider()
+    provider = ScriptedProvider()
     try:
         async_result = asyncio.run(
             run_local_provider_call_async(
@@ -372,11 +353,11 @@ def test_async_entry_returns_the_sync_cancelled_result_shape() -> None:
             )
         )
     finally:
-        provider.shutdown()
+        provider.close()
 
     assert async_result.outcome.kind is (
         ProviderCallOutcomeKind.DRAINING_CANCELLATION
     )
     assert async_result.completed_invocations == ()
-    assert provider.scripted.requests == []
+    assert provider.requests == []
     assert async_result.identity_hash == sync_result.identity_hash
