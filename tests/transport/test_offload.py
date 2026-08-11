@@ -35,6 +35,11 @@ CHAT_BODY_OK: dict[str, Any] = {
         }
     ],
 }
+OFFLOADED_FAILURE_MSG = "offloaded failure"
+OFFLOADED_WORK_NOT_RELEASED = "offloaded work was not released"
+OFFLOADED_WORK_DID_NOT_START = "offloaded work did not start"
+DRAINED_OFFLOAD_RESULT = "drained"
+SHUTDOWN_FAILED_MSG = "shutdown failed"
 
 
 def _request() -> ProviderCallRequest:
@@ -121,11 +126,11 @@ def test_failing_offloaded_work_releases_the_drain() -> None:
     provider = _provider()
 
     def boom() -> None:
-        raise ValueError("offloaded failure")
+        raise ValueError(OFFLOADED_FAILURE_MSG)
 
     with provider:
         future = provider.offload(boom)
-        with pytest.raises(ValueError, match="offloaded failure"):
+        with pytest.raises(ValueError, match=OFFLOADED_FAILURE_MSG):
             future.result(timeout=WATCHDOG_SECONDS)
 
         assert provider._active_offloads == 0
@@ -138,10 +143,10 @@ def test_cancelling_a_queued_offload_releases_the_drain() -> None:
 
     def gated() -> None:
         started.set()
-        _wait_for(release, "offloaded work was not released")
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
 
     running = provider.offload(gated)
-    _wait_for(started, "offloaded work did not start")
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
     queued = provider.offload(lambda: "never runs")
 
     assert queued.cancel()
@@ -205,8 +210,7 @@ class _RaisingShutdownExecutor(ThreadPoolExecutor):
         self, wait: bool = True, *, cancel_futures: bool = False
     ) -> None:
         super().shutdown(wait=wait, cancel_futures=cancel_futures)
-        msg = "shutdown failed"
-        raise RuntimeError(msg)
+        raise RuntimeError(SHUTDOWN_FAILED_MSG)
 
 
 class _CloseCountingClient(httpx.Client):
@@ -232,7 +236,7 @@ def test_failing_executor_shutdown_still_closes_the_client_once() -> None:
     )
     provider._executor = _RaisingShutdownExecutor(max_workers=1)
 
-    with pytest.raises(RuntimeError, match="shutdown failed"):
+    with pytest.raises(RuntimeError, match=SHUTDOWN_FAILED_MSG):
         provider.close()
 
     assert client.close_count == 1
@@ -247,11 +251,11 @@ def test_close_drains_offloaded_work_before_completing() -> None:
 
     def gated() -> str:
         started.set()
-        _wait_for(release, "offloaded work was not released")
-        return "drained"
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
+        return DRAINED_OFFLOAD_RESULT
 
     future = provider.offload(gated)
-    _wait_for(started, "offloaded work did not start")
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
 
     closer = DaemonCall.start(provider.close)
     closer.wait_until_entered()
@@ -268,7 +272,7 @@ def test_close_drains_offloaded_work_before_completing() -> None:
     assert executor is not None
 
     release.set()
-    assert future.result(timeout=WATCHDOG_SECONDS) == "drained"
+    assert future.result(timeout=WATCHDOG_SECONDS) == DRAINED_OFFLOAD_RESULT
     closer.result()
 
     assert provider._state.name == "CLOSED"
@@ -282,10 +286,10 @@ def test_any_caller_may_invoke_while_offloaded_work_drains() -> None:
 
     def gated() -> None:
         started.set()
-        _wait_for(release, "offloaded work was not released")
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
 
     future = provider.offload(gated)
-    _wait_for(started, "offloaded work did not start")
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
 
     closer = DaemonCall.start(provider.close)
     closer.wait_until_entered()
@@ -314,12 +318,12 @@ def test_draining_offload_can_still_invoke_the_provider() -> None:
 
     def gated() -> Any:
         started.set()
-        _wait_for(release, "offloaded work was not released")
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
         assert provider._client.is_closed is False
         return provider.invoke(_request())
 
     future = provider.offload(gated)
-    _wait_for(started, "offloaded work did not start")
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
 
     closer = DaemonCall.start(provider.close)
     closer.wait_until_entered()
@@ -348,10 +352,10 @@ def test_offload_after_close_raises_and_concurrent_closers_return() -> None:
 
     def gated() -> None:
         started.set()
-        _wait_for(release, "offloaded work was not released")
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
 
     future = provider.offload(gated)
-    _wait_for(started, "offloaded work did not start")
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
 
     closers = [DaemonCall.start(provider.close) for _ in range(2)]
     for closer in closers:

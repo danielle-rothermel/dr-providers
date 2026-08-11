@@ -58,6 +58,8 @@ RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
+OFFLOAD_THREAD_NAME_PREFIX = "dr-providers-offload"
+_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG = "HttpProvider is closing or closed"
 
 
 class _ProviderState(Enum):
@@ -122,9 +124,6 @@ def _normalize_retry_after(value: str | None) -> ProviderRetryAfterHint | None:
         kind="http_date",
         value=format_datetime(parsed.astimezone(UTC), usegmt=True),
     )
-
-
-OFFLOAD_THREAD_NAME_PREFIX = "dr-providers-offload"
 
 
 class HttpProvider:
@@ -220,8 +219,7 @@ class HttpProvider:
         """
         with self._condition:
             if self._state is not _ProviderState.OPEN:
-                msg = "HttpProvider is closing or closed"
-                raise RuntimeError(msg)
+                raise RuntimeError(_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG)
             if self._executor is None:
                 self._executor = ThreadPoolExecutor(
                     max_workers=self._policy.max_connections,
@@ -263,8 +261,7 @@ class HttpProvider:
                 _ProviderState.OPEN,
                 _ProviderState.DRAINING_OFFLOADS,
             ):
-                msg = "HttpProvider is closing or closed"
-                raise RuntimeError(msg)
+                raise RuntimeError(_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG)
             self._active_invocations += 1
 
     def _end_invocation(self) -> None:
