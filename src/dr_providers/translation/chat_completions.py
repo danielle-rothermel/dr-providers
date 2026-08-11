@@ -11,6 +11,7 @@ from dr_providers.translation.common import (
     get_value,
     optional_str,
     parse_failure,
+    stop_reason_from_chat_completions,
     token_usage_from_body,
 )
 
@@ -42,7 +43,9 @@ def parse_chat_completions_body(
         response_body=dict(body),
         usage=token_usage_from_body(body),
         cost=cost_from_body(body),
-        finish_reason=optional_str(get_value(choice, "finish_reason")),
+        stop_reason=stop_reason_from_chat_completions(
+            optional_str(get_value(choice, "finish_reason"))
+        ),
         response_id=optional_str(body.get("id")),
         model=optional_str(body.get("model")) or config.route.model,
     )

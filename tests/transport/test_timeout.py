@@ -16,6 +16,7 @@ from dr_providers import (
     ProviderTransportFailure,
     ProviderTransportPolicy,
     Transcript,
+    TransportTimeoutContainment,
     openai_chat_config,
 )
 from dr_providers.lifecycle.classifier import (
@@ -100,7 +101,8 @@ def test_native_timeout_phases_are_contained(
 
     assert isinstance(failure, ProviderTransportFailure)
     assert failure.code == expected_code
-    assert failure.metadata["phase"] == type(error).__name__
+    assert failure.containment is TransportTimeoutContainment.CONTAINED
+    assert "phase" not in failure.metadata
     assert "unbounded provider detail" not in failure.message
     assert (
         classify_provider_invocation(

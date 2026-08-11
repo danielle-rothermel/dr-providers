@@ -20,7 +20,13 @@ from dr_providers.outcomes.models import ProviderTransportResponse
 
 EXPECTED_INVOCATION_OUTCOME_LITERALS = [
     "success",
-    "blank_response",
+    "empty_generation",
+    "truncated_no_text",
+    "missing_generation_text",
+    "budget_exhausted",
+    "missing_credential",
+    "missing_transport_config",
+    "never_sent",
     "malformed_response",
     "provider_rejection",
     "semantic_rejection",
@@ -93,7 +99,7 @@ def test_custom_policy_is_closed_deterministic_data() -> None:
         maximum_invocations=3,
         eligible_outcomes=frozenset(
             {
-                ProviderInvocationOutcome.BLANK_RESPONSE,
+                ProviderInvocationOutcome.TRUNCATED_NO_TEXT,
                 ProviderInvocationOutcome.RATE_LIMITING,
             }
         ),
@@ -104,8 +110,8 @@ def test_custom_policy_is_closed_deterministic_data() -> None:
     assert policy.retry_delay_after(1) == 0.0
     assert policy.retry_delay_after(2) == 2.5
     assert policy.identity_payload()["eligible_outcomes"] == [
-        "blank_response",
         "rate_limiting",
+        "truncated_no_text",
     ]
 
 

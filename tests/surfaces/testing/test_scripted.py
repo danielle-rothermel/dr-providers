@@ -7,6 +7,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     ProviderTransportWarning,
@@ -55,7 +56,7 @@ class TestScriptedProvider:
                     usage=usage,
                     cost=cost,
                     warnings=(warning,),
-                    finish_reason="length",
+                    stop_reason=ProviderStopReason.LENGTH,
                 )
             ]
         )
@@ -73,7 +74,7 @@ class TestScriptedProvider:
             usage=usage,
             cost=cost,
             warnings=(warning,),
-            finish_reason="length",
+            stop_reason=ProviderStopReason.LENGTH,
             response_id="scripted-response-1",
             model="full-model",
         )
@@ -140,7 +141,9 @@ class TestScriptedProvider:
             "model-3",
         ]
 
-    def test_response_carries_conformance_warnings(self) -> None:
+    def test_high_usage_without_wire_length_has_no_truncation_signal(
+        self,
+    ) -> None:
         provider = ScriptedProvider(
             [
                 ScriptedOutcome(
@@ -156,5 +159,5 @@ class TestScriptedProvider:
         )
         outcome = provider.invoke(request).outcome
         assert isinstance(outcome, ProviderTransportResponse)
-        codes = [warning.code for warning in outcome.warnings]
-        assert "token_limit_exceeded" in codes
+        assert outcome.stop_reason is ProviderStopReason.STOP
+        assert outcome.warnings == ()

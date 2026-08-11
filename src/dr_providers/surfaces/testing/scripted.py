@@ -8,6 +8,7 @@ from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 from dr_providers.outcomes.models import (
     CostInfo,
+    ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
     ProviderTransportWarning,
@@ -34,7 +35,7 @@ class ScriptedOutcome(BaseModel):
     usage: TokenUsage | None = None
     cost: CostInfo | None = None
     warnings: tuple[ProviderTransportWarning, ...] = ()
-    finish_reason: StrictStr | None = "stop"
+    stop_reason: ProviderStopReason | None = ProviderStopReason.STOP
     failure: ProviderTransportFailure | None = None
     response_body: dict[str, Any] = Field(default_factory=dict)
 
@@ -74,7 +75,7 @@ class ScriptedProvider:
             usage=outcome.usage,
             cost=outcome.cost,
             warnings=outcome.warnings,
-            finish_reason=outcome.finish_reason,
+            stop_reason=outcome.stop_reason,
             response_id=response_id,
             model=request.config.route.model,
         )

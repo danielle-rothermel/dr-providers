@@ -31,7 +31,10 @@ from dr_providers.lifecycle import (
     cancel_provider_call,
     transition_provider_call,
 )
-from dr_providers.outcomes.models import STALLED_RESPONSE_CODE
+from dr_providers.outcomes.models import (
+    STALLED_RESPONSE_CODE,
+    TransportTimeoutContainment,
+)
 from dr_providers.translation.responses import RESPONSE_REFUSAL_CODE
 
 CLASSIFIER_ID = SemanticResponseClassifierIdentifier("semantic-v1")
@@ -68,7 +71,7 @@ def _observation(
 ) -> CompletedProviderInvocationObservation:
     response_outcomes = {
         ProviderInvocationOutcome.SUCCESS,
-        ProviderInvocationOutcome.BLANK_RESPONSE,
+        ProviderInvocationOutcome.EMPTY_GENERATION,
         ProviderInvocationOutcome.SEMANTIC_REJECTION,
     }
     if outcome in response_outcomes:
@@ -82,7 +85,7 @@ def _observation(
             response=ProviderTransportResponse(
                 text=(
                     ""
-                    if outcome is ProviderInvocationOutcome.BLANK_RESPONSE
+                    if outcome is ProviderInvocationOutcome.EMPTY_GENERATION
                     else marker
                 ),
                 response_body={"id": marker},
@@ -112,6 +115,7 @@ def _observation(
         }[outcome]
         code = outcome.value
         metadata = {"marker": marker}
+        containment = None
         if outcome in {
             ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
             ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION,
@@ -120,7 +124,7 @@ def _observation(
             if outcome is (
                 ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
             ):
-                metadata["phase"] = "ReadTimeout"
+                containment = TransportTimeoutContainment.CONTAINED
         elif outcome is ProviderInvocationOutcome.PROVIDER_REJECTION:
             code = RESPONSE_REFUSAL_CODE
         evidence = ProviderInvocationEvidence(
@@ -134,6 +138,7 @@ def _observation(
                 failure_class=failure_class,
                 code=code,
                 message=marker,
+                containment=containment,
                 metadata=metadata,
             ),
         )
@@ -329,9 +334,7 @@ def test_failure_outcome_is_recomputed_during_json_restore() -> None:
         request_identity_hash=state.request_identity_hash,
         evidence=evidence,
         evidence_identity_hash=evidence.identity_hash,
-        outcome=(
-            ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
-        ),
+        outcome=ProviderInvocationOutcome.MISSING_CREDENTIAL,
     )
     payload = json.loads(observation.model_dump_json())
     payload["outcome"] = (
@@ -349,7 +352,7 @@ def test_failure_outcome_is_recomputed_during_json_restore() -> None:
     result = transition_provider_call(state, observation)
     assert isinstance(result, ProviderCallResult)
     assert result.outcome.invocation_outcome is (
-        ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+        ProviderInvocationOutcome.MISSING_CREDENTIAL
     )
 
 

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
+from dr_providers import ProviderStopReason
 from dr_providers.modeling.controls import ReasoningEffort
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.surfaces.cli import app as cli
@@ -63,7 +64,11 @@ def test_query_prints_response_and_metadata(
 ) -> None:
     patch_http_provider(
         monkeypatch,
-        [ScriptedOutcome(text="hello from scripted", finish_reason="stop")],
+        [
+            ScriptedOutcome(
+                text="hello from scripted", stop_reason=ProviderStopReason.STOP
+            )
+        ],
     )
 
     result = runner.invoke(
@@ -80,7 +85,7 @@ def test_query_prints_response_and_metadata(
 
     assert result.exit_code == 0
     assert result.stdout == "hello from scripted\n"
-    assert result.stderr == ("model: test/model\nfinish_reason: stop\n")
+    assert result.stderr == ("model: test/model\nstop_reason: stop\n")
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from dr_providers.outcomes.models import (
     STALLED_RESPONSE_CODE,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    TransportTimeoutContainment,
 )
 from dr_providers.translation.common import (
     PARSE_ERROR_CODE,
@@ -23,6 +24,7 @@ from dr_providers.translation.common import (
 )
 from dr_providers.translation.responses import (
     RESPONSE_FAILED_CODE,
+    RESPONSE_INCOMPLETE_NO_TEXT_CODE,
     RESPONSE_REFUSAL_CODE,
 )
 
@@ -35,6 +37,7 @@ def _failure_evidence(
     failure_class: FailureClass,
     code: str | None = None,
     metadata: dict[str, object] | None = None,
+    containment: TransportTimeoutContainment | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
         request_identity_hash=REQUEST_HASH,
@@ -42,6 +45,7 @@ def _failure_evidence(
             failure_class=failure_class,
             code=code,
             message="classified failure",
+            containment=containment,
             metadata=metadata or {},
         ),
     )
@@ -50,7 +54,14 @@ def _failure_evidence(
 @pytest.mark.parametrize(
     ("code", "expected"),
     [
-        (RESPONSE_NO_TEXT_CODE, ProviderInvocationOutcome.BLANK_RESPONSE),
+        (
+            RESPONSE_NO_TEXT_CODE,
+            ProviderInvocationOutcome.MISSING_GENERATION_TEXT,
+        ),
+        (
+            RESPONSE_INCOMPLETE_NO_TEXT_CODE,
+            ProviderInvocationOutcome.TRUNCATED_NO_TEXT,
+        ),
         (PARSE_ERROR_CODE, ProviderInvocationOutcome.MALFORMED_RESPONSE),
         (INVALID_JSON_CODE, ProviderInvocationOutcome.MALFORMED_RESPONSE),
         (
@@ -61,6 +72,12 @@ def _failure_evidence(
             RESPONSE_FAILED_CODE,
             ProviderInvocationOutcome.PROVIDER_REJECTION,
         ),
+        ("missing_api_key", ProviderInvocationOutcome.MISSING_CREDENTIAL),
+        (
+            "missing_base_url",
+            ProviderInvocationOutcome.MISSING_TRANSPORT_CONFIG,
+        ),
+        ("http_status_402", ProviderInvocationOutcome.BUDGET_EXHAUSTED),
     ],
 )
 def test_protocol_outcome_precedes_failure_class(
@@ -110,7 +127,7 @@ def test_timeout_classification_exposes_containment() -> None:
     contained = _failure_evidence(
         failure_class=FailureClass.TRANSIENT,
         code=STALLED_RESPONSE_CODE,
-        metadata={"phase": "ReadTimeout"},
+        containment=TransportTimeoutContainment.CONTAINED,
     )
     uncontained = _failure_evidence(
         failure_class=FailureClass.TRANSIENT,
@@ -128,7 +145,7 @@ def test_timeout_classification_exposes_containment() -> None:
     )
 
 
-def test_blank_response_precedes_semantic_classifier() -> None:
+def test_empty_generation_precedes_semantic_classifier() -> None:
     class RejectingClassifier:
         identifier = SemanticResponseClassifierIdentifier("rejecting-v1")
 
@@ -136,7 +153,9 @@ def test_blank_response_precedes_semantic_classifier() -> None:
             self, response: ProviderTransportResponse
         ) -> ProviderInvocationOutcome:
             del response
-            raise AssertionError("blank response reached semantic classifier")
+            raise AssertionError(
+                "empty generation reached semantic classifier"
+            )
 
     evidence = ProviderInvocationEvidence(
         request_identity_hash=REQUEST_HASH,
@@ -145,7 +164,7 @@ def test_blank_response_precedes_semantic_classifier() -> None:
 
     assert (
         classify_provider_invocation(evidence, RejectingClassifier())
-        is ProviderInvocationOutcome.BLANK_RESPONSE
+        is ProviderInvocationOutcome.EMPTY_GENERATION
     )
 
 

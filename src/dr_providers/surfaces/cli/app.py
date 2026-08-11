@@ -135,7 +135,7 @@ def query(  # noqa: PLR0913
     assert response is not None
     typer.echo(response.text)
     typer.echo(f"model: {response.model}", err=True)
-    typer.echo(f"finish_reason: {response.finish_reason}", err=True)
+    typer.echo(f"stop_reason: {response.stop_reason}", err=True)
     if response.usage is not None:
         typer.echo(f"usage: {response.usage.model_dump()}", err=True)
     for warning in response.warnings:
