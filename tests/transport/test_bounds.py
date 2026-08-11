@@ -24,7 +24,6 @@ from dr_providers import (
     openai_chat_config,
 )
 from dr_providers.transport.http import (
-    MAX_FAILURE_MESSAGE_CHARS,
     MAX_RETRY_AFTER_HEADER_BYTES,
     REQUEST_TOO_LARGE_CODE,
     RESPONSE_TOO_LARGE_CODE,
@@ -182,7 +181,6 @@ def test_streamed_response_exact_limit_boundaries(
         }
         assert evidence.response_bytes == limit + 1
         assert stream.yielded == limit + 1
-        assert len(failure.message) <= MAX_FAILURE_MESSAGE_CHARS
         assert "provider-controlled detail" not in failure.message
     elif status_code == 200:
         assert isinstance(evidence.outcome, ProviderTransportResponse)

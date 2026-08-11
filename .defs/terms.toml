@@ -164,9 +164,9 @@ exported_symbols = [
 name = "provider transport policy"
 definition = """
 An identity-bearing declaration binding one provider service to its credentials \
-location, endpoint, caller-declared native phase timeouts, connection-pool \
-limits, and request and response byte limits. It is excluded from provider-call \
-request identity."""
+location, endpoint, caller-declared native connect, write/pool, and response-read \
+idle timeouts, connection-pool limits, and request and response byte limits. It is \
+excluded from provider-call request identity."""
 exported_symbols = [
   "ProviderTransportPolicy",
   "ApiKeyEnv",
@@ -202,13 +202,14 @@ part_of = ["provider invocation evidence"]
 name = "provider transport failure"
 definition = """
 A typed expected transport or protocol failure containing recoverability \
-classification, a bounded summary, optional decoded response evidence, status, \
-typed timeout containment, and diagnostics. It does not own provider HTTP \
-request evidence."""
+classification, an unbudgeted summary message, optional wire-path exception \
+traceback, optional decoded response evidence, status, typed timeout \
+containment, and diagnostics. It does not own provider HTTP request evidence."""
 exported_symbols = [
   "ProviderTransportFailure",
   "TransportTimeoutContainment",
   "classify_status_code",
+  "classify_httpx_error",
 ]
 is_a = ["provider transport outcome"]
 part_of = ["provider invocation evidence"]

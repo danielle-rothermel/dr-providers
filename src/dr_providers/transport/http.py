@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import traceback
 from collections.abc import Callable, Mapping
 from datetime import UTC
 from email.utils import format_datetime, parsedate_to_datetime
@@ -33,6 +34,7 @@ from dr_providers.outcomes.models import (
 from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
+from dr_providers.transport.httpx_errors import classify_httpx_error
 from dr_providers.transport.status import classify_status_code
 
 if TYPE_CHECKING:
@@ -49,13 +51,9 @@ JSON_CONTENT_TYPE = "application/json"
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
-TRANSPORT_ERROR_CODE = "transport_error"
 REQUEST_TOO_LARGE_CODE = "request_body_too_large"
 RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 
-# Bound TCP/TLS setup independently of the response-read idle budget.
-MAX_CONNECT_TIMEOUT_SECONDS = 30.0
-MAX_FAILURE_MESSAGE_CHARS = 256
 RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
@@ -74,17 +72,22 @@ def _operational_timeout_seconds(timeout_seconds: float) -> float:
 def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
     """Use direct native phase timeouts for the synchronous HTTP operation."""
     operation_timeout = _operational_timeout_seconds(policy.timeout_seconds)
+    connect_timeout = _operational_timeout_seconds(
+        policy.connect_timeout_seconds
+    )
     read_timeout = _operational_timeout_seconds(policy.idle_timeout_seconds)
     return httpx.Timeout(
-        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, operation_timeout),
+        connect=connect_timeout,
         read=read_timeout,
         write=operation_timeout,
         pool=operation_timeout,
     )
 
 
-def _bounded_message(message: str) -> str:
-    return message[:MAX_FAILURE_MESSAGE_CHARS]
+def _exception_traceback(error: BaseException) -> str:
+    return "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )
 
 
 def _normalize_retry_after(value: str | None) -> ProviderRetryAfterHint | None:
@@ -296,15 +299,17 @@ class HttpProvider:
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url), None, None
         except httpx.HTTPError as error:
-            error_type = type(error).__name__[:64]
+            recoverability, code = classify_httpx_error(error)
             return (
                 ProviderTransportFailure(
-                    recoverability=RecoverabilityClass.TRANSIENT,
-                    code=TRANSPORT_ERROR_CODE,
-                    message=_bounded_message(
-                        f"provider transport error ({error_type})"
-                    ),
-                    metadata={"url": url},
+                    recoverability=recoverability,
+                    code=code,
+                    message="provider transport error",
+                    traceback=_exception_traceback(error),
+                    metadata={
+                        "url": url,
+                        "exception_type": type(error).__name__,
+                    },
                 ),
                 None,
                 None,
@@ -332,17 +337,19 @@ class HttpProvider:
     ) -> ProviderTransportFailure:
         """Every native timeout is contained because the HTTP call returned."""
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
-        error_type = type(error).__name__[:64]
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
-            message=_bounded_message(
-                f"provider transport timeout ({error_type})"
-            ),
+            message="provider transport timeout",
+            traceback=_exception_traceback(error),
             containment=TransportTimeoutContainment.CONTAINED,
             metadata={
                 "url": url,
+                "exception_type": type(error).__name__,
                 "timeout_seconds": self._policy.timeout_seconds,
+                "connect_timeout_seconds": (
+                    self._policy.connect_timeout_seconds
+                ),
                 "idle_timeout_seconds": self._policy.idle_timeout_seconds,
             },
         )
@@ -412,9 +419,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.RESOURCE_EXHAUSTION,
             code=REQUEST_TOO_LARGE_CODE,
-            message=_bounded_message(
-                f"request body exceeds {limit} byte limit"
-            ),
+            message=f"request body exceeds {limit} byte limit",
             metadata={
                 "limit_bytes": limit,
                 "observed_bytes": observed_bytes,
@@ -429,9 +434,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.RESOURCE_EXHAUSTION,
             code=RESPONSE_TOO_LARGE_CODE,
-            message=_bounded_message(
-                f"response body exceeds {limit} byte limit"
-            ),
+            message=f"response body exceeds {limit} byte limit",
             metadata={
                 "limit_bytes": limit,
                 "observed_bytes": observed_bytes,
@@ -445,7 +448,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,
             code=MISSING_BASE_URL_CODE,
-            message=_bounded_message(
+            message=(
                 "transport policy for route "
                 f"{config.quota_identity.label()!r} has no base_url"
             ),
@@ -455,7 +458,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,
             code=MISSING_API_KEY_CODE,
-            message=_bounded_message(
+            message=(
                 f"environment variable {self._policy.api_key_env!r} is not set"
             ),
         )

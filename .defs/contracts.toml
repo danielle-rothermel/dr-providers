@@ -76,7 +76,8 @@ title = "Raised provider failures have one classification"
 statement = """
 A raised ControlValidationError carries exactly one ProviderFailure record \
 whose recoverability is the sole recoverability signal. There is no parallel \
-retryable flag and no per-recoverability exception types."""
+retryable flag, no per-recoverability exception types, and no separate \
+underlying exception attribute on the raised error."""
 rationale = """
 Transport failures use the same recoverability enum on \
 ProviderTransportFailure.recoverability, separate from dr-graph attribution \
@@ -103,8 +104,8 @@ check = "uv run pytest -q tests/lifecycle/test_reducer.py tests/lifecycle/test_h
 [[contracts]]
 title = "Native transport timeouts are locally contained"
 statement = """
-Timeout values are strict positive finite policy values, and the response-read \
-idle timeout is clamped to the general timeout. Each provider wire request runs \
+Timeout values are strict positive finite policy values. Connect and response-read \
+idle timeouts are clamped to the general timeout. Each provider wire request runs \
 directly under native connect, read, write, and pool timeouts. A native timeout \
 is observed only after the local HTTP operation has ended, records \
 ``TransportTimeoutContainment.CONTAINED`` on the failure, and is classified as \
@@ -119,6 +120,22 @@ date = "2026-08-08"
 check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_timeout.py tests/lifecycle/test_classification.py"
 
 [[contracts]]
+title = "Wire-path httpx errors are classified explicitly"
+statement = """
+Non-timeout httpx wire errors are classified by classify_httpx_error into \
+recoverability and code. Network and proxy failures are transient; protocol, \
+decoding, unsupported-protocol, and redirect-limit failures are permanent; \
+HTTPStatusError uses the HTTP status classifier; unknown errors are unknown. \
+Wire-path summary messages stay static and name the exception type in \
+metadata.exception_type."""
+rationale = """
+Explicit httpx taxonomy preserves retry and lifecycle semantics without \
+embedding exception detail in the summary message or relying on a single \
+transient bucket."""
+date = "2026-08-11"
+check = "uv run pytest -q tests/transport/test_httpx_errors.py tests/transport/test_http.py -k httpx"
+
+[[contracts]]
 title = "Invocation evidence is normalized and byte-bounded"
 statement = """
 Transport policy declares positive request and response byte limits that \
@@ -127,7 +144,9 @@ request is counted before dispatch, and decompressed response bytes are streamed
 and counted before decoding. Over-limit outcomes retain bounded resource-\
 exhaustion evidence and no partial body. Provider HTTP request evidence is the \
 sole owner of the constructed request body; transport failures do not repeat \
-it. Failure summaries are bounded and do not copy response bodies. The standard \
+it. Failure summary messages are unbudgeted; wire-path transport failures \
+retain the underlying exception traceback when one exists. Failure messages do \
+not copy response bodies. The standard \
 HTTP path redacts known credential headers, while direct construction and \
 deserialization remain trusted inputs. Original wire bytes are not retained."""
 rationale = """

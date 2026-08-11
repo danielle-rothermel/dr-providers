@@ -56,6 +56,7 @@ OPENAI_POLICY = ProviderTransportPolicy(
     api_key_env=str(ApiKeyEnv.OPENAI),
     base_url=str(ProviderBaseUrl.OPENAI),
     timeout_seconds=120.0,
+    connect_timeout_seconds=30.0,
     idle_timeout_seconds=90.0,
     max_connections=10,
     max_keepalive_connections=5,
@@ -67,6 +68,7 @@ ANTHROPIC_POLICY = ProviderTransportPolicy(
     api_key_env=str(ApiKeyEnv.ANTHROPIC),
     base_url=str(ProviderBaseUrl.ANTHROPIC),
     timeout_seconds=120.0,
+    connect_timeout_seconds=30.0,
     idle_timeout_seconds=90.0,
     max_connections=10,
     max_keepalive_connections=5,
@@ -115,7 +117,7 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 5,
+        "schema_version": 6,
         "payload": {
             "request_identity_hash": "1" * 64,
             "policy_identity": {
@@ -192,7 +194,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 5
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 6
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -292,6 +294,17 @@ class TestInvocationEvidence:
             evidence.identity_document().to_json_dict()
         )
 
+    def test_evidence_retains_wire_path_exception_traceback(self) -> None:
+        provider = mock_provider(
+            lambda _req: (_ for _ in ()).throw(httpx.ConnectError("wire down"))
+        )
+        evidence = provider.invoke(openai_request())
+        failure = evidence.failure
+        assert failure is not None
+        assert failure.traceback is not None
+        assert "ConnectError" in failure.traceback
+        assert "wire down" not in failure.message
+
     def test_success_document_shape(self) -> None:
         assert evidence_for(
             response=SUCCESS
@@ -320,6 +333,7 @@ class TestInvocationEvidence:
                     "recoverability": "permanent",
                     "code": "invalid_request",
                     "message": "bad request",
+                    "traceback": None,
                     "response_body": {"error": "bad"},
                     "status_code": 400,
                     "containment": None,

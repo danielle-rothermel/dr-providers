@@ -188,7 +188,6 @@ class ProviderBodyExtensions(BaseModel):
                     ),
                     metadata=error.diagnostics(),
                 ),
-                underlying=error,
             ) from error
         object.__setattr__(self, "extra_body", _deep_freeze(validated))
         return self

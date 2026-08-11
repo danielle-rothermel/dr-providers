@@ -296,17 +296,53 @@ class TestHttpProvider:
         assert outcome.recoverability is RecoverabilityClass.TRANSIENT
         assert outcome.code == "http_status_500"
         assert outcome.status_code == 500
+        assert outcome.traceback is None
+
+    def test_transport_error_is_transient_no_throw(self) -> None:
+        def handler(_req: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("boom")
+
+        provider = mock_provider(handler)
+        outcome = provider.invoke(openai_request()).outcome
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.recoverability is RecoverabilityClass.TRANSIENT
+        assert outcome.code == "transport_error"
+        assert outcome.message == "provider transport error"
+        assert outcome.metadata["exception_type"] == "ConnectError"
+        assert outcome.traceback is not None
+        assert "ConnectError" in outcome.traceback
+        assert "boom" not in outcome.message
 
     @pytest.mark.parametrize(
-        ("error", "expected_code"),
+        ("error", "expected_code", "expected_recoverability"),
         [
-            (httpx.ConnectError("down"), "transport_error"),
-            (httpx.ConnectTimeout("slow connect"), "timeout"),
-            (httpx.ReadTimeout("idle stall"), "stalled_response"),
+            (
+                httpx.ConnectError("down"),
+                "transport_error",
+                RecoverabilityClass.TRANSIENT,
+            ),
+            (
+                httpx.ConnectTimeout("slow connect"),
+                "timeout",
+                RecoverabilityClass.TRANSIENT,
+            ),
+            (
+                httpx.ReadTimeout("idle stall"),
+                "stalled_response",
+                RecoverabilityClass.TRANSIENT,
+            ),
+            (
+                httpx.LocalProtocolError("bad framing"),
+                "transport_protocol_error",
+                RecoverabilityClass.PERMANENT,
+            ),
         ],
     )
     def test_httpx_error_classification(
-        self, error: httpx.HTTPError, expected_code: str
+        self,
+        error: httpx.HTTPError,
+        expected_code: str,
+        expected_recoverability: RecoverabilityClass,
     ) -> None:
         def handler(_req: httpx.Request) -> httpx.Response:
             raise error
@@ -315,7 +351,24 @@ class TestHttpProvider:
         outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == expected_code
-        assert outcome.recoverability is RecoverabilityClass.TRANSIENT
+        assert outcome.recoverability is expected_recoverability
+        assert outcome.message == (
+            "provider transport timeout"
+            if isinstance(error, httpx.TimeoutException)
+            else "provider transport error"
+        )
+        assert outcome.metadata["exception_type"] == type(error).__name__
+        assert outcome.traceback is not None
+        assert type(error).__name__ in outcome.traceback
+        assert str(error) not in outcome.message
+
+    def test_http_status_failure_has_no_traceback(self) -> None:
+        provider = mock_provider(
+            lambda _req: httpx.Response(500, text="server error detail")
+        )
+        outcome = provider.invoke(openai_request()).outcome
+        assert isinstance(outcome, ProviderTransportFailure)
+        assert outcome.traceback is None
 
     def test_invalid_json_is_permanent_no_throw(self) -> None:
         provider = mock_provider(
@@ -349,6 +402,7 @@ class TestHttpProvider:
             api_key_env=str(ApiKeyEnv.OPENAI),
             base_url=None,
             timeout_seconds=120.0,
+            connect_timeout_seconds=30.0,
             idle_timeout_seconds=90.0,
             max_connections=10,
             max_keepalive_connections=5,

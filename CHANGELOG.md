@@ -31,10 +31,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   canonical-form re-validation on the hint model.
 - Require explicit transport-policy sizing at `ProviderTransportPolicy`
   construction and `policy_for()` (timeouts, connection pool limits, byte caps).
+- Require explicit `connect_timeout_seconds` on transport policy; remove the
+  hidden 30-second connect cap from `HttpProvider`.
 - Rename `FailureClass` to `RecoverabilityClass` and rename serialized field
   `failure_class` to `recoverability` on transport failures and failure
   records.
 - Advance Provider Invocation Evidence to schema version 5 (hard cutover).
+- Advance Provider Invocation Evidence to schema version 6 with an optional
+  `traceback` field on transport failures for wire-path httpx exceptions.
+- Remove the 256-character failure message cap on provider-constructed transport
+  failures.
+- Remove `ProviderFailureError.underlying`; raised validation errors retain the
+  original cause through normal exception chaining only.
+- Classify wire-path httpx errors with `classify_httpx_error` instead of
+  treating every non-timeout `HTTPError` as transient.
+- Use static transport failure summary messages with `metadata.exception_type`
+  for wire-path httpx exceptions; tracebacks carry diagnostic detail.
 
 ## [0.3.0] - 2026-08-08
 
