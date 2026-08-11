@@ -23,12 +23,12 @@ from dr_providers.lifecycle.classifier import (
     classify_provider_invocation,
 )
 from dr_providers.lifecycle.outcomes import ProviderInvocationOutcome
-from dr_providers.transport.http import (
+from dr_providers.outcomes.models import (
+    POOL_TIMEOUT_CODE,
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
-    HttpProvider,
-    _httpx_timeout,
 )
+from dr_providers.transport.http import HttpProvider, _httpx_timeout
 
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="hi"),)
 
@@ -94,7 +94,7 @@ def test_connect_timeout_comes_from_policy() -> None:
             STALLED_RESPONSE_CODE,
         ),
         (httpx.WriteTimeout("unbounded provider detail"), TIMEOUT_CODE),
-        (httpx.PoolTimeout("unbounded provider detail"), TIMEOUT_CODE),
+        (httpx.PoolTimeout("unbounded provider detail"), POOL_TIMEOUT_CODE),
     ],
     ids=("connect", "read", "write", "pool"),
 )

@@ -379,6 +379,14 @@ termination of the associated operation."""
 is_a = ["provider invocation outcome"]
 
 [[terms]]
+name = "never sent"
+definition = """
+A provider invocation outcome for a request the process never dispatched, \
+because the configured endpoint does not form a dispatchable http or https \
+URL. It carries no HTTP request evidence and reaches no provider."""
+is_a = ["provider invocation outcome"]
+
+[[terms]]
 name = "provider call state"
 definition = """
 The closed versioned serializable state needed to validate and continue one \

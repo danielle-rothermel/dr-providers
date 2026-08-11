@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 PARSE_ERROR_CODE = "response_parse_error"
 RESPONSE_NO_TEXT_CODE = "response_no_text"
+RESPONSE_INCOMPLETE_NO_TEXT_CODE = "response_incomplete_no_text"
+PROVIDER_ERROR_ENVELOPE_CODE = "provider_error_envelope"
 
 ParseOutcome = ProviderTransportResponse | ProviderTransportFailure
 

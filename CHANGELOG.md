@@ -13,7 +13,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `HttpProvider.offload()`.
 - Add `HttpProvider.offload()`, backed by a provider-owned executor created on
   first use with `policy.max_connections` workers; `close()` drains offloaded
-  work before draining active invocations and closing the client.
+  work before draining active invocations and closing the client, and an
+  interrupted close still reaches the terminal closed state and releases the
+  executor and client without completing the drain.
+- Pin every persisted enum value, failure code, wire-format prefix, identity
+  schema name, and schema version with golden tests against hand-written
+  literals, and record the pinning rule as a standing contract.
 
 ### Removed
 
@@ -56,6 +61,21 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   treating every non-timeout `HTTPError` as transient.
 - Use static transport failure summary messages with `metadata.exception_type`
   for wire-path httpx exceptions; tracebacks carry diagnostic detail.
+- Classify blank generation text by stop reason on every protocol: token-limit
+  truncation is truncated-no-text, a genuine stop is empty-generation, and only
+  an absent stop signal remains missing-generation-text.
+- Classify success-status provider error envelopes with absent, empty, or
+  text-free containers as provider rejections on chat-completions and Anthropic
+  Messages; an envelope alongside real generation text remains a success.
+- Validate `base_url` before dispatch and classify undispatchable URLs as
+  never-sent failures carrying no HTTP request evidence, instead of letting
+  `httpx` raise an unclassified `ValueError` out of `invoke()`.
+- Classify HTTP 413 as resource exhaustion and remote protocol errors as
+  transient; local protocol errors remain permanent.
+- Name redirect statuses (301, 302, 303, 307, 308) with dedicated
+  `http_redirect_*` codes and pool-acquisition timeouts with `pool_timeout`, in
+  the wire path and the exported `classify_httpx_error` alike.
+- Require `containment` on transport failures that carry timeout codes.
 
 ## [0.3.0] - 2026-08-08
 

@@ -109,7 +109,11 @@ idle timeouts are clamped to the general timeout. Each provider wire request run
 directly under native connect, read, write, and pool timeouts. A native timeout \
 is observed only after the local HTTP operation has ended, records \
 ``TransportTimeoutContainment.CONTAINED`` on the failure, and is classified as \
-a contained transport timeout. Native phase and response-read idle timeouts do \
+a contained transport timeout. Pool starvation is local contention and carries \
+its own timeout code. Every transport failure carrying a timeout code states \
+its containment explicitly, because containment alone separates a contained \
+timeout from an uncontained deadline expiration. Native phase and response-read \
+idle timeouts do \
 not bound the total wall-clock duration of a slow response that continues to \
 produce bytes. Provider invocation starts no deadline worker or child process."""
 rationale = """
@@ -123,17 +127,24 @@ check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_ti
 title = "Wire-path httpx errors are classified explicitly"
 statement = """
 Non-timeout httpx wire errors are classified by classify_httpx_error into \
-recoverability and code. Network and proxy failures are transient; protocol, \
-decoding, unsupported-protocol, and redirect-limit failures are permanent; \
-HTTPStatusError uses the HTTP status classifier; unknown errors are unknown. \
-Wire-path summary messages stay static and name the exception type in \
+recoverability and code. Network and proxy failures are transient; a remote \
+protocol error, the classic dropped-keepalive server disconnect, is transient \
+under its own code; local protocol, decoding, unsupported-protocol, and \
+redirect-limit failures are permanent; HTTPStatusError uses the HTTP status \
+classifier; unknown errors are unknown. A timeout passed directly to \
+classify_httpx_error returns the same phase-named timeout classification the \
+wire path assigns, so pool starvation keeps its own code on both paths. The \
+statuses that name a new location are not followed and carry a redirect code \
+distinct from a provider status rejection; other 3xx statuses, which answer the \
+request rather than redirecting it, take the ordinary status classification. \
+HTTP 413 is resource exhaustion, matching the local request-size bound. Wire-path summary messages stay static and name the exception type in \
 metadata.exception_type."""
 rationale = """
 Explicit httpx taxonomy preserves retry and lifecycle semantics without \
 embedding exception detail in the summary message or relying on a single \
 transient bucket."""
 date = "2026-08-11"
-check = "uv run pytest -q tests/transport/test_httpx_errors.py tests/transport/test_http.py -k httpx"
+check = "uv run pytest -q tests/transport/test_httpx_errors.py tests/transport/test_status.py tests/transport/test_http.py"
 
 [[contracts]]
 title = "Invocation evidence is normalized and byte-bounded"
@@ -195,15 +206,42 @@ Provider invocation outcomes form a closed transport, protocol, and semantic \
 classification. Failure evidence deterministically fixes its exact outcome; \
 only success versus semantic rejection remains classifier-owned for a valid \
 nonblank response. Strict protocol classification precedes semantic classification. \
-Provider call outcomes form a closed terminal classification of acceptance, a \
-policy-terminal invocation outcome, draining cancellation, or policy exhaustion. \
-Neither outcome model assigns application correctness, reward, rank, or \
-statistical meaning."""
+Blank generation text is classified by the stop reason the response carries: a \
+length stop is truncated-no-text, a genuine stop is empty generation, and an \
+absent or unknown stop reason is missing generation text. An upstream error \
+envelope delivered inside a success status code and carrying no generation is a \
+provider rejection, whether its choices or content are absent, empty, or blank, \
+and that envelope outranks any stop reason the body also carries. A request the \
+process never dispatched, including one whose configured base_url does not form \
+a dispatchable http or https URL, is never sent and carries no HTTP request \
+evidence; an absent base_url or credential remains missing transport config or \
+missing credential. Provider call outcomes form a closed terminal \
+classification of acceptance, a policy-terminal invocation outcome, draining \
+cancellation, or policy exhaustion. Neither outcome model assigns application \
+correctness, reward, rank, or statistical meaning."""
 rationale = """
 Exhaustive provider outcomes support deterministic lifecycle transitions without \
 importing evaluation policy."""
 date = "2026-08-08"
-check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py tests/lifecycle/test_reducer.py"
+check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py tests/lifecycle/test_reducer.py tests/translation/test_chat_completions.py tests/translation/test_anthropic_messages.py"
+
+[[contracts]]
+title = "Persisted enum values and wire literals are pinned"
+statement = """
+Every enum member value, failure code, wire-format prefix, identity schema \
+name, and schema version reachable from a serialized provider call result or \
+provider invocation evidence payload is pinned by a golden test against \
+hand-written expected literals, never against values derived from the code \
+under test. Changing a pinned literal is a recorded-data format change; an \
+intentional change updates the pin in the same change that edits the literal."""
+rationale = """
+Consumers persist whole serialized payloads and identity hashes computed over \
+these literals. Without a pin, renaming a member value passes the suite while \
+silently changing the meaning of already-recorded data and breaking hash \
+correspondence; requiring the pin edit makes every format change visible in \
+review."""
+date = "2026-08-11"
+check = "uv run pytest -q tests/outcomes/test_persisted_literals.py tests/lifecycle/test_policy_and_outcomes.py"
 
 [[contracts]]
 title = "Semantic classification excludes evaluation policy"

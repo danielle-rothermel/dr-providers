@@ -135,6 +135,7 @@ def test_timeout_classification_exposes_containment() -> None:
     uncontained = _failure_evidence(
         recoverability=RecoverabilityClass.TRANSIENT,
         code=STALLED_RESPONSE_CODE,
+        containment=TransportTimeoutContainment.UNCONTAINED,
         metadata={"deadline_seconds": 5.0},
     )
 
