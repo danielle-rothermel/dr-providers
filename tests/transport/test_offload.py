@@ -82,7 +82,9 @@ class _InterruptingCondition(threading.Condition):
     """Raise out of the drain wait taken in one named provider state.
 
     This stands in for a keyboard interrupt delivered to the closing
-    thread, which CPython raises out of exactly this wait.
+    thread, which CPython raises out of exactly this wait. Setting
+    ``only_thread_ident`` restricts the interrupt to one thread so a
+    test can target a specific waiter.
     """
 
     def __init__(self, interrupt_in_state: str) -> None:
@@ -90,10 +92,15 @@ class _InterruptingCondition(threading.Condition):
         self._interrupt_in_state = interrupt_in_state
         self.state_name: Callable[[], str] = lambda: ""
         self.interrupted = threading.Event()
+        self.only_thread_ident: int | None = None
 
     @override
     def wait(self, timeout: float | None = None) -> bool:
-        if self.state_name() == self._interrupt_in_state:
+        targeted = (
+            self.only_thread_ident is None
+            or self.only_thread_ident == threading.get_ident()
+        )
+        if targeted and self.state_name() == self._interrupt_in_state:
             self.interrupted.set()
             raise KeyboardInterrupt(self._interrupt_in_state)
         return super().wait(timeout)
@@ -484,3 +491,95 @@ def test_interrupted_invocation_drain_leaves_the_provider_terminal() -> None:
     release.set()
     invoker.result()
     _assert_aborted_close_released_everything(provider, executor)
+
+
+NO_THREAD_IDENT = 0
+SECONDARY_CLOSE_NOT_REACHED = "secondary closer did not reach its wait"
+
+
+def test_interrupted_secondary_closer_leaves_the_primary_close_intact() -> (
+    None
+):
+    started = threading.Event()
+    release = threading.Event()
+    provider, condition = _provider_interrupted_in("DRAINING_OFFLOADS")
+    condition.only_thread_ident = NO_THREAD_IDENT
+
+    def gated() -> None:
+        started.set()
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
+
+    future = provider.offload(gated)
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
+
+    primary = DaemonCall.start(provider.close)
+    with condition:
+        assert condition.wait_for(
+            lambda: provider._state.name == "DRAINING_OFFLOADS",
+            timeout=WATCHDOG_SECONDS,
+        ), CLOSE_WAIT_NOT_REACHED
+
+    def secondary_close() -> None:
+        condition.only_thread_ident = threading.get_ident()
+        provider.close()
+
+    secondary = DaemonCall.start(secondary_close)
+    _wait_for(condition.interrupted, SECONDARY_CLOSE_NOT_REACHED)
+    with pytest.raises(KeyboardInterrupt, match="DRAINING_OFFLOADS"):
+        secondary.result()
+
+    assert provider._client.is_closed is False
+    assert provider._state.name == "DRAINING_OFFLOADS"
+
+    release.set()
+    future.result(timeout=WATCHDOG_SECONDS)
+    primary.result()
+    assert provider._state.name == "CLOSED"
+    assert provider._client.is_closed is True
+
+
+CLIENT_CLOSE_FAILED_MSG = "client close failed"
+
+
+class _RaisingCloseClient(httpx.Client):
+    @override
+    def close(self) -> None:
+        raise RuntimeError(CLIENT_CLOSE_FAILED_MSG)
+
+
+def test_abort_close_release_errors_do_not_mask_the_interrupt() -> None:
+    started = threading.Event()
+    release = threading.Event()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=CHAT_BODY_OK)
+
+    client = _RaisingCloseClient(transport=httpx.MockTransport(handler))
+    provider = HttpProvider(
+        policy=_policy(),
+        api_key="test-key",
+        _client_factory=lambda **_kwargs: client,
+    )
+    condition = _InterruptingCondition("DRAINING_OFFLOADS")
+    condition.state_name = lambda: provider._state.name
+    provider._condition = condition
+
+    def gated() -> None:
+        started.set()
+        _wait_for(release, OFFLOADED_WORK_NOT_RELEASED)
+
+    future = provider.offload(gated)
+    _wait_for(started, OFFLOADED_WORK_DID_NOT_START)
+    executor = provider._executor
+    assert executor is not None
+
+    closer = DaemonCall.start(provider.close)
+    _wait_for(condition.interrupted, CLOSE_WAIT_NOT_REACHED)
+    with pytest.raises(KeyboardInterrupt, match="DRAINING_OFFLOADS"):
+        closer.result()
+
+    assert provider._state.name == "CLOSED"
+    assert executor._shutdown is True
+
+    release.set()
+    future.result(timeout=WATCHDOG_SECONDS)

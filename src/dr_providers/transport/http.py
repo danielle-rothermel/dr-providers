@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import threading
@@ -172,8 +173,11 @@ class HttpProvider:
         provider becomes terminal, admission stays refused, the executor
         and client are released without joining workers, and the original
         exception propagates. An aborted close does not complete the
-        drain.
+        drain. Only the closing thread that owns the drain aborts this
+        way; a caller interrupted while waiting for another closer to
+        finish re-raises without touching provider state.
         """
+        became_primary = False
         try:
             with self._condition:
                 if self._state is _ProviderState.CLOSED:
@@ -182,6 +186,7 @@ class HttpProvider:
                     while self._state is not _ProviderState.CLOSED:
                         self._condition.wait()
                     return
+                became_primary = True
                 self._state = _ProviderState.DRAINING_OFFLOADS
                 self._condition.notify_all()
                 while self._active_offloads:
@@ -192,7 +197,8 @@ class HttpProvider:
                     self._condition.wait()
                 executor = self._executor
         except BaseException:
-            self._abort_close()
+            if became_primary:
+                self._abort_close()
             raise
 
         try:
@@ -212,6 +218,8 @@ class HttpProvider:
         The provider becomes terminal so no later caller blocks waiting on
         a closer that no longer exists. Executor shutdown does not join
         workers because the abort means the operator asked to stop.
+        Release errors are suppressed so the exception that aborted the
+        close is the one that propagates.
         """
         with self._condition:
             self._state = _ProviderState.CLOSED
@@ -220,9 +228,11 @@ class HttpProvider:
 
         try:
             if executor is not None:
-                executor.shutdown(wait=False)
+                with contextlib.suppress(Exception):
+                    executor.shutdown(wait=False)
         finally:
-            self._client.close()
+            with contextlib.suppress(Exception):
+                self._client.close()
 
     def __enter__(self) -> HttpProvider:
         return self
