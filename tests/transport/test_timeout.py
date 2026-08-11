@@ -107,6 +107,8 @@ def test_native_timeout_phases_are_contained(
     assert failure.containment is TransportTimeoutContainment.CONTAINED
     assert "phase" not in failure.metadata
     assert "unbounded provider detail" not in failure.message
+    assert failure.traceback is not None
+    assert type(error).__name__ in failure.traceback
     assert (
         classify_provider_invocation(
             evidence,

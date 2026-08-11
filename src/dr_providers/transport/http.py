@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import traceback
 from collections.abc import Callable, Mapping
 from datetime import UTC
 from email.utils import format_datetime, parsedate_to_datetime
@@ -55,7 +56,6 @@ RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 
 # Bound TCP/TLS setup independently of the response-read idle budget.
 MAX_CONNECT_TIMEOUT_SECONDS = 30.0
-MAX_FAILURE_MESSAGE_CHARS = 256
 RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
@@ -83,8 +83,10 @@ def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
     )
 
 
-def _bounded_message(message: str) -> str:
-    return message[:MAX_FAILURE_MESSAGE_CHARS]
+def _exception_traceback(error: BaseException) -> str:
+    return "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )
 
 
 def _normalize_retry_after(value: str | None) -> ProviderRetryAfterHint | None:
@@ -301,9 +303,8 @@ class HttpProvider:
                 ProviderTransportFailure(
                     recoverability=RecoverabilityClass.TRANSIENT,
                     code=TRANSPORT_ERROR_CODE,
-                    message=_bounded_message(
-                        f"provider transport error ({error_type})"
-                    ),
+                    message=f"provider transport error ({error_type})",
+                    traceback=_exception_traceback(error),
                     metadata={"url": url},
                 ),
                 None,
@@ -336,9 +337,8 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
-            message=_bounded_message(
-                f"provider transport timeout ({error_type})"
-            ),
+            message=f"provider transport timeout ({error_type})",
+            traceback=_exception_traceback(error),
             containment=TransportTimeoutContainment.CONTAINED,
             metadata={
                 "url": url,
@@ -412,9 +412,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.RESOURCE_EXHAUSTION,
             code=REQUEST_TOO_LARGE_CODE,
-            message=_bounded_message(
-                f"request body exceeds {limit} byte limit"
-            ),
+            message=f"request body exceeds {limit} byte limit",
             metadata={
                 "limit_bytes": limit,
                 "observed_bytes": observed_bytes,
@@ -429,9 +427,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.RESOURCE_EXHAUSTION,
             code=RESPONSE_TOO_LARGE_CODE,
-            message=_bounded_message(
-                f"response body exceeds {limit} byte limit"
-            ),
+            message=f"response body exceeds {limit} byte limit",
             metadata={
                 "limit_bytes": limit,
                 "observed_bytes": observed_bytes,
@@ -445,7 +441,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,
             code=MISSING_BASE_URL_CODE,
-            message=_bounded_message(
+            message=(
                 "transport policy for route "
                 f"{config.quota_identity.label()!r} has no base_url"
             ),
@@ -455,7 +451,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,
             code=MISSING_API_KEY_CODE,
-            message=_bounded_message(
+            message=(
                 f"environment variable {self._policy.api_key_env!r} is not set"
             ),
         )

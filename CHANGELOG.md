@@ -35,6 +35,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `failure_class` to `recoverability` on transport failures and failure
   records.
 - Advance Provider Invocation Evidence to schema version 5 (hard cutover).
+- Advance Provider Invocation Evidence to schema version 6 with an optional
+  `traceback` field on transport failures for wire-path httpx exceptions.
+- Remove the 256-character failure message cap on provider-constructed transport
+  failures.
 
 ## [0.3.0] - 2026-08-08
 

@@ -138,6 +138,7 @@ class ProviderTransportFailure(BaseModel):
     recoverability: RecoverabilityClass
     code: StrictStr | None = None
     message: StrictStr
+    traceback: StrictStr | None = None
     response_body: Any | None = None
     status_code: StrictInt | None = None
     containment: TransportTimeoutContainment | None = None

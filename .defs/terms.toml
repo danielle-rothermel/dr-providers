@@ -202,9 +202,9 @@ part_of = ["provider invocation evidence"]
 name = "provider transport failure"
 definition = """
 A typed expected transport or protocol failure containing recoverability \
-classification, a bounded summary, optional decoded response evidence, status, \
-typed timeout containment, and diagnostics. It does not own provider HTTP \
-request evidence."""
+classification, an unbudgeted summary message, optional wire-path exception \
+traceback, optional decoded response evidence, status, typed timeout \
+containment, and diagnostics. It does not own provider HTTP request evidence."""
 exported_symbols = [
   "ProviderTransportFailure",
   "TransportTimeoutContainment",

@@ -127,7 +127,9 @@ request is counted before dispatch, and decompressed response bytes are streamed
 and counted before decoding. Over-limit outcomes retain bounded resource-\
 exhaustion evidence and no partial body. Provider HTTP request evidence is the \
 sole owner of the constructed request body; transport failures do not repeat \
-it. Failure summaries are bounded and do not copy response bodies. The standard \
+it. Failure summary messages are unbudgeted; wire-path transport failures \
+retain the underlying exception traceback when one exists. Failure messages do \
+not copy response bodies. The standard \
 HTTP path redacts known credential headers, while direct construction and \
 deserialization remain trusted inputs. Original wire bytes are not retained."""
 rationale = """
