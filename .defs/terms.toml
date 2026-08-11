@@ -201,19 +201,27 @@ part_of = ["provider invocation evidence"]
 [[terms]]
 name = "provider transport failure"
 definition = """
-A typed expected transport or protocol failure containing classification, a \
-bounded summary, optional decoded response evidence, status, typed timeout \
-containment, and diagnostics. It does not own provider HTTP request evidence."""
+A typed expected transport or protocol failure containing recoverability \
+classification, a bounded summary, optional decoded response evidence, status, \
+typed timeout containment, and diagnostics. It does not own provider HTTP \
+request evidence."""
 exported_symbols = [
   "ProviderTransportFailure",
   "TransportTimeoutContainment",
-  "FailureClass",
-  "RECOVERABLE_FAILURE_CLASSES",
-  "RETRYABLE_FAILURE_CLASSES",
   "classify_status_code",
 ]
 is_a = ["provider transport outcome"]
 part_of = ["provider invocation evidence"]
+
+[[terms]]
+name = "recoverability class"
+definition = """
+The closed recoverability classification for a provider transport failure or \
+raised validation failure record. Values are permanent, transient, \
+rate-limited, resource exhaustion, or unknown. This is distinct from \
+platform attribution channels also named failure_class elsewhere."""
+exported_symbols = ["RecoverabilityClass"]
+part_of = ["provider transport failure", "provider failure record"]
 
 [[terms]]
 name = "provider transport outcome"
@@ -226,19 +234,12 @@ exported_symbols = ["ProviderTransportOutcome", "is_response", "is_failure"]
 name = "provider failure record"
 definition = """
 A compact classification record carried consistently by its raised provider \
-error."""
+error, with recoverability on the record."""
 exported_symbols = [
   "ProviderFailure",
   "ControlValidationError",
-  "PermanentProviderError",
   "ProviderFailureError",
-  "RateLimitedProviderError",
-  "ResourceExhaustionProviderError",
-  "TransientProviderError",
-  "UnknownProviderError",
-  "FAILURE_ERROR_TYPES",
   "failure_record",
-  "raise_failure",
 ]
 
 [[terms]]

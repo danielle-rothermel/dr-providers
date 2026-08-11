@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 from _policy import make_transport_policy
 
 from dr_providers import (
-    FailureClass,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
+    RecoverabilityClass,
     Transcript,
     openai_chat_config,
 )
@@ -126,7 +126,9 @@ def test_exact_encoded_request_is_counted_and_sent_once(
         assert seen == []
         failure = evidence.failure
         assert isinstance(failure, ProviderTransportFailure)
-        assert failure.failure_class is FailureClass.RESOURCE_EXHAUSTION
+        assert (
+            failure.recoverability is RecoverabilityClass.RESOURCE_EXHAUSTION
+        )
         assert failure.code == REQUEST_TOO_LARGE_CODE
         assert failure.response_body is None
         assert failure.metadata == {
@@ -169,7 +171,9 @@ def test_streamed_response_exact_limit_boundaries(
     if expected == "rejected":
         failure = evidence.failure
         assert isinstance(failure, ProviderTransportFailure)
-        assert failure.failure_class is FailureClass.RESOURCE_EXHAUSTION
+        assert (
+            failure.recoverability is RecoverabilityClass.RESOURCE_EXHAUSTION
+        )
         assert failure.code == RESPONSE_TOO_LARGE_CODE
         assert failure.response_body is None
         assert failure.metadata == {

@@ -1,25 +1,25 @@
 import pytest
 
-from dr_providers import FailureClass, classify_status_code
+from dr_providers import RecoverabilityClass, classify_status_code
 
 
 @pytest.mark.parametrize(
     ("status", "expected"),
     [
-        (429, FailureClass.RATE_LIMITED),
-        (500, FailureClass.TRANSIENT),
-        (503, FailureClass.TRANSIENT),
-        (408, FailureClass.TRANSIENT),
-        (409, FailureClass.TRANSIENT),
-        (425, FailureClass.TRANSIENT),
-        (400, FailureClass.PERMANENT),
-        (401, FailureClass.PERMANENT),
-        (402, FailureClass.PERMANENT),
-        (404, FailureClass.PERMANENT),
+        (429, RecoverabilityClass.RATE_LIMITED),
+        (500, RecoverabilityClass.TRANSIENT),
+        (503, RecoverabilityClass.TRANSIENT),
+        (408, RecoverabilityClass.TRANSIENT),
+        (409, RecoverabilityClass.TRANSIENT),
+        (425, RecoverabilityClass.TRANSIENT),
+        (400, RecoverabilityClass.PERMANENT),
+        (401, RecoverabilityClass.PERMANENT),
+        (402, RecoverabilityClass.PERMANENT),
+        (404, RecoverabilityClass.PERMANENT),
     ],
 )
 def test_classify_status_code(
     status: int,
-    expected: FailureClass,
+    expected: RecoverabilityClass,
 ) -> None:
     assert classify_status_code(status) is expected

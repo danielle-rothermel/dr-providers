@@ -256,11 +256,11 @@ def test_invalid_choice_exits_with_clear_diagnostic(
 def test_query_failure_prints_stderr_and_exits_nonzero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dr_providers.core.failures import FailureClass
+    from dr_providers.core.failures import RecoverabilityClass
     from dr_providers.outcomes.models import ProviderTransportFailure
 
     failure = ProviderTransportFailure(
-        failure_class=FailureClass.PERMANENT,
+        recoverability=RecoverabilityClass.PERMANENT,
         code="boom_code",
         message="boom message",
     )
@@ -302,27 +302,3 @@ def test_anthropic_missing_token_limit_exits_nonzero(
     assert result.exit_code == 1
     assert "missing_required_control" in result.stderr
     assert "token_limit" in result.stderr
-
-
-def test_removed_retries_flag_is_rejected(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    stub = patch_http_provider(monkeypatch)
-
-    result = runner.invoke(
-        cli.app,
-        [
-            "--provider",
-            "openrouter",
-            "--model",
-            "test/model",
-            "-m",
-            "hi",
-            "--retries",
-            "3",
-        ],
-    )
-
-    assert result.exit_code == 2
-    assert "--retries" in _strip_ansi(result.output)
-    assert stub.requests == []

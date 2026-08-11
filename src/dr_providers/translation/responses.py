@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
-from dr_providers.core.failures import FailureClass
+from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.outcomes.models import (
     ProviderStopReason,
     ProviderTransportFailure,
@@ -353,7 +353,7 @@ def _responses_failure(
     config: ProviderCallConfig,
 ) -> ProviderTransportFailure:
     return ProviderTransportFailure(
-        failure_class=FailureClass.PERMANENT,
+        recoverability=RecoverabilityClass.PERMANENT,
         code=code,
         message=message,
         response_body=dict(body),

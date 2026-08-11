@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from dr_providers.core.failures import FailureClass
+from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.outcomes.models import (
     CostInfo,
     ProviderStopReason,
@@ -124,7 +124,7 @@ def parse_failure(
     code: str = PARSE_ERROR_CODE,
 ) -> ProviderTransportFailure:
     return ProviderTransportFailure(
-        failure_class=FailureClass.PERMANENT,
+        recoverability=RecoverabilityClass.PERMANENT,
         code=code,
         message=message,
         response_body=dict(body),

@@ -9,7 +9,6 @@ from _retry_fixtures import two_invocation_transient_retry_policy
 from pydantic import ValidationError
 
 from dr_providers import (
-    FailureClass,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
@@ -17,6 +16,7 @@ from dr_providers import (
     ProviderInvocationEvidence,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    RecoverabilityClass,
     ScriptedOutcome,
     ScriptedProvider,
     Transcript,
@@ -49,22 +49,22 @@ CALL_IDENTITY_HASH = (
     "ec38a9ecb996867288077db54efcb592deb330618e9e9ad19f4e579923510dab"
 )
 FIRST_EVIDENCE_IDENTITY_HASH = (
-    "02421ea37c05cc25d88a108a99df475967099fa29bee005cd6a646e63afb11d9"
+    "fc0cc9dbd4d4e7fdc1ecd73a8ecdc78b326455f552c2365b39bd97307ad39011"
 )
 FIRST_OBSERVATION_IDENTITY_HASH = (
-    "50c7faf6ddc509368a901dc8d7af1b0880ca39104694d7b1acc7e04a0f44dee0"
+    "5ae7b728eb4f83bad32c427a0d062d4234481e00947b331f8df61c8e440e6c47"
 )
 FIRST_RECORD_IDENTITY_HASH = (
-    "dbcf1d748c394da7c6890cda7bb39c400a4c7b0dc8b7a81e4d48b8eed093da37"
+    "a8d32850e0ae581cc632e13d6e50f0fa90627fa9c3b36f51329f789e8c5695bb"
 )
 SECOND_RECORD_IDENTITY_HASH = (
-    "ec842dcfd80702e4a0a738b00bf32e0de1332b63f2625ca359dae0d15164229b"
+    "7c83743691218432d4d7722dcd681eb03e5cd383c869816393e7b7a5e93d185a"
 )
 RESULT_IDENTITY_HASH = (
-    "8eedebbae4ae36917d6cec3f0f59a80b639871ea5694319591a2a09b085c6d68"
+    "559941a02d1c4628cee0e8c25f3da7a4d67b767d176bfdb022c0789de75b01d2"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "0589e48db5953eb642d77eb89f64ac08defaaa21029a286158e974ec0928d38d"
+    "28ed159239b48967472bef0fc8e55b7f7e12cc22d3252569813e671ad8e69818"
 )
 
 
@@ -105,7 +105,7 @@ def _scripted_outcomes() -> list[ScriptedOutcome]:
     return [
         ScriptedOutcome(
             failure=ProviderTransportFailure(
-                failure_class=FailureClass.TRANSIENT,
+                recoverability=RecoverabilityClass.TRANSIENT,
                 code="connection_reset",
                 message="retryable failure",
             )
@@ -212,7 +212,7 @@ def _golden_trace() -> tuple[
         http_request=http_request,
         response_bytes=41,
         failure=ProviderTransportFailure(
-            failure_class=FailureClass.TRANSIENT,
+            recoverability=RecoverabilityClass.TRANSIENT,
             code="connection_reset",
             message="retryable failure",
             response_body={"failure_body_marker": "first"},
@@ -433,7 +433,7 @@ def test_terminal_history_cannot_be_restored_as_continuable_state(
         evidence = ProviderInvocationEvidence(
             request_identity_hash=state.request_identity_hash,
             failure=ProviderTransportFailure(
-                failure_class=FailureClass.TRANSIENT,
+                recoverability=RecoverabilityClass.TRANSIENT,
                 code="stalled_response",
                 message="local work may remain active",
             ),

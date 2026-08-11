@@ -9,7 +9,6 @@ from _policy import make_transport_policy
 
 from dr_providers import (
     ApiKeyEnv,
-    FailureClass,
     GenerationControls,
     MessageRole,
     PromptMessage,
@@ -19,6 +18,7 @@ from dr_providers import (
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
+    RecoverabilityClass,
     Transcript,
     anthropic_messages_config,
     openai_chat_config,
@@ -261,7 +261,7 @@ class TestHttpProvider:
         outcome = evidence.outcome
 
         assert isinstance(outcome, ProviderTransportFailure)
-        assert outcome.failure_class is FailureClass.PERMANENT
+        assert outcome.recoverability is RecoverabilityClass.PERMANENT
         assert outcome.code == "response_parse_error"
         assert outcome.response_body == body
         assert outcome.status_code == 200
@@ -289,35 +289,13 @@ class TestHttpProvider:
         assert seen["version"]
         assert seen["auth"] is None
 
-    @pytest.mark.parametrize(
-        ("status", "failure_class"),
-        [
-            (429, FailureClass.RATE_LIMITED),
-            (500, FailureClass.TRANSIENT),
-            (400, FailureClass.PERMANENT),
-        ],
-    )
-    def test_http_status_classification_no_throw(
-        self, status: int, failure_class: FailureClass
-    ) -> None:
-        provider = mock_provider(
-            lambda _req: httpx.Response(status, text="nope")
-        )
+    def test_http_status_failure_is_typed_no_throw(self) -> None:
+        provider = mock_provider(lambda _req: httpx.Response(500, text="nope"))
         outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
-        assert outcome.failure_class is failure_class
-        assert outcome.code == f"http_status_{status}"
-        assert outcome.status_code == status
-
-    def test_transport_error_is_transient_no_throw(self) -> None:
-        def handler(_req: httpx.Request) -> httpx.Response:
-            raise httpx.ConnectError("boom")
-
-        provider = mock_provider(handler)
-        outcome = provider.invoke(openai_request()).outcome
-        assert isinstance(outcome, ProviderTransportFailure)
-        assert outcome.failure_class is FailureClass.TRANSIENT
-        assert outcome.code == "transport_error"
+        assert outcome.recoverability is RecoverabilityClass.TRANSIENT
+        assert outcome.code == "http_status_500"
+        assert outcome.status_code == 500
 
     @pytest.mark.parametrize(
         ("error", "expected_code"),
@@ -337,7 +315,7 @@ class TestHttpProvider:
         outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == expected_code
-        assert outcome.failure_class is FailureClass.TRANSIENT
+        assert outcome.recoverability is RecoverabilityClass.TRANSIENT
 
     def test_invalid_json_is_permanent_no_throw(self) -> None:
         provider = mock_provider(

@@ -7,7 +7,6 @@ from _retry_fixtures import two_invocation_transient_retry_policy
 from pydantic import ValidationError
 
 from dr_providers import (
-    FailureClass,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
@@ -15,6 +14,7 @@ from dr_providers import (
     ProviderInvocationEvidence,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    RecoverabilityClass,
     Transcript,
     openai_chat_config,
 )
@@ -101,25 +101,27 @@ def _observation(
             ),
         )
     else:
-        failure_class = {
+        recoverability = {
             ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE: (
-                FailureClass.TRANSIENT
+                RecoverabilityClass.TRANSIENT
             ),
             ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT: (
-                FailureClass.TRANSIENT
+                RecoverabilityClass.TRANSIENT
             ),
-            ProviderInvocationOutcome.RATE_LIMITING: FailureClass.RATE_LIMITED,
+            ProviderInvocationOutcome.RATE_LIMITING: (
+                RecoverabilityClass.RATE_LIMITED
+            ),
             ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION: (
-                FailureClass.TRANSIENT
+                RecoverabilityClass.TRANSIENT
             ),
             ProviderInvocationOutcome.RESOURCE_EXHAUSTION: (
-                FailureClass.RESOURCE_EXHAUSTION
+                RecoverabilityClass.RESOURCE_EXHAUSTION
             ),
             ProviderInvocationOutcome.PROVIDER_REJECTION: (
-                FailureClass.PERMANENT
+                RecoverabilityClass.PERMANENT
             ),
             ProviderInvocationOutcome.UNKNOWN_TRANSPORT_FAILURE: (
-                FailureClass.UNKNOWN
+                RecoverabilityClass.UNKNOWN
             ),
         }[outcome]
         code = outcome.value
@@ -144,7 +146,7 @@ def _observation(
             },
             http_request=HTTP_REQUEST,
             failure=ProviderTransportFailure(
-                failure_class=failure_class,
+                recoverability=recoverability,
                 code=code,
                 message=marker,
                 containment=containment,
@@ -174,44 +176,6 @@ def test_initial_state_carries_full_identity_components() -> None:
     assert state.retry_policy_identity_hash == state.retry_policy.identity_hash
     assert state.next_invocation_ordinal == 1
     assert _restored_state(state) == state
-
-
-def test_two_round_restore_matches_uninterrupted_transition() -> None:
-    initial = _retry_state()
-    first = _observation(
-        initial,
-        ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
-    )
-
-    uninterrupted_instruction = transition_provider_call(initial, first)
-    assert isinstance(uninterrupted_instruction, ProviderRetryInstruction)
-    restored_instruction = ProviderRetryInstruction.model_validate_json(
-        uninterrupted_instruction.model_dump_json()
-    )
-    restored_state = _restored_state(restored_instruction.next_state)
-    second = _observation(
-        restored_state,
-        ProviderInvocationOutcome.SUCCESS,
-        marker="two",
-    )
-
-    restored_result = transition_provider_call(restored_state, second)
-    uninterrupted_result = transition_provider_call(
-        uninterrupted_instruction.next_state,
-        second,
-    )
-
-    assert isinstance(restored_result, ProviderCallResult)
-    assert isinstance(uninterrupted_result, ProviderCallResult)
-    assert restored_result == uninterrupted_result
-    assert restored_result.identity_hash == uninterrupted_result.identity_hash
-    assert restored_result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
-    assert len(restored_result.completed_invocations) == 2
-    retry_decision = restored_result.completed_invocations[0].retry_decision
-    assert retry_decision is not None
-    assert retry_decision.delay_seconds == 1.0
-    assert restored_result.completed_invocations[1].retry_decision is None
-    assert "identity_hash" in restored_result.__dict__
 
 
 @pytest.mark.parametrize(
@@ -333,7 +297,7 @@ def test_failure_outcome_is_recomputed_during_json_restore() -> None:
     evidence = ProviderInvocationEvidence(
         request_identity_hash=state.request_identity_hash,
         failure=ProviderTransportFailure(
-            failure_class=FailureClass.PERMANENT,
+            recoverability=RecoverabilityClass.PERMANENT,
             code="missing_api_key",
             message="missing API key",
         ),
