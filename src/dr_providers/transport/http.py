@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import threading
 import traceback
 from collections.abc import Callable, Mapping
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import UTC
 from email.utils import format_datetime, parsedate_to_datetime
 from enum import Enum, auto
@@ -57,12 +59,20 @@ RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
+OFFLOAD_THREAD_NAME_PREFIX = "dr-providers-offload"
+_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG = "HttpProvider is closing or closed"
 
 
 class _ProviderState(Enum):
     OPEN = auto()
+    DRAINING_OFFLOADS = auto()
     CLOSING = auto()
     CLOSED = auto()
+
+
+_CLOSING_STATES = frozenset(
+    {_ProviderState.DRAINING_OFFLOADS, _ProviderState.CLOSING}
+)
 
 
 def _operational_timeout_seconds(timeout_seconds: float) -> float:
@@ -118,7 +128,13 @@ def _normalize_retry_after(value: str | None) -> ProviderRetryAfterHint | None:
 
 
 class HttpProvider:
-    """Own and reuse one bounded synchronous HTTP client until closed."""
+    """Own and reuse one bounded synchronous HTTP client until closed.
+
+    Asynchronous callers reach the same synchronous client by offloading
+    work onto a provider-owned executor whose worker count is
+    ``policy.max_connections``, so thread count and connection-pool size
+    cannot disagree. The executor exists only once ``offload`` is called.
+    """
 
     def __init__(
         self,
@@ -143,27 +159,80 @@ class HttpProvider:
         self._condition = threading.Condition()
         self._state = _ProviderState.OPEN
         self._active_invocations = 0
+        self._active_offloads = 0
+        self._executor: ThreadPoolExecutor | None = None
 
     def close(self) -> None:
-        """Stop admission, drain active invocations, and close exactly once."""
-        with self._condition:
-            if self._state is _ProviderState.CLOSED:
-                return
-            if self._state is _ProviderState.CLOSING:
-                while self._state is _ProviderState.CLOSING:
+        """Drain offloaded work, drain invocations, and close exactly once.
+
+        Offloaded work keeps invoking the provider while it drains, so
+        invocation admission stays open until the offload drain finishes.
+
+        An exception escaping either drain wait, such as a keyboard
+        interrupt delivered to the closing thread, aborts the close: the
+        provider becomes terminal, admission stays refused, the executor
+        and client are released without joining workers, and the original
+        exception propagates. An aborted close does not complete the
+        drain. Only the closing thread that owns the drain aborts this
+        way; a caller interrupted while waiting for another closer to
+        finish re-raises without touching provider state.
+        """
+        became_primary = False
+        try:
+            with self._condition:
+                if self._state is _ProviderState.CLOSED:
+                    return
+                if self._state in _CLOSING_STATES:
+                    while self._state is not _ProviderState.CLOSED:
+                        self._condition.wait()
+                    return
+                became_primary = True
+                self._state = _ProviderState.DRAINING_OFFLOADS
+                self._condition.notify_all()
+                while self._active_offloads:
                     self._condition.wait()
-                return
-            self._state = _ProviderState.CLOSING
-            self._condition.notify_all()
-            while self._active_invocations:
-                self._condition.wait()
+                self._state = _ProviderState.CLOSING
+                self._condition.notify_all()
+                while self._active_invocations:
+                    self._condition.wait()
+                executor = self._executor
+        except BaseException:
+            if became_primary:
+                self._abort_close()
+            raise
 
         try:
-            self._client.close()
+            if executor is not None:
+                executor.shutdown(wait=True)
         finally:
-            with self._condition:
-                self._state = _ProviderState.CLOSED
-                self._condition.notify_all()
+            try:
+                self._client.close()
+            finally:
+                with self._condition:
+                    self._state = _ProviderState.CLOSED
+                    self._condition.notify_all()
+
+    def _abort_close(self) -> None:
+        """Make an interrupted close terminal and release OS resources.
+
+        The provider becomes terminal so no later caller blocks waiting on
+        a closer that no longer exists. Executor shutdown does not join
+        workers because the abort means the operator asked to stop.
+        Release errors are suppressed so the exception that aborted the
+        close is the one that propagates.
+        """
+        with self._condition:
+            self._state = _ProviderState.CLOSED
+            self._condition.notify_all()
+            executor = self._executor
+
+        try:
+            if executor is not None:
+                with contextlib.suppress(Exception):
+                    executor.shutdown(wait=False)
+        finally:
+            with contextlib.suppress(Exception):
+                self._client.close()
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -180,11 +249,65 @@ class HttpProvider:
         finally:
             self._end_invocation()
 
-    def _begin_invocation(self) -> None:
+    def offload[ResultT](self, fn: Callable[[], ResultT]) -> Future[ResultT]:
+        """Run ``fn`` on the provider-owned executor until closing begins.
+
+        The executor is created on first use with
+        ``policy.max_connections`` workers. A clean ``close`` drains
+        admitted work before it shuts the executor down and closes the
+        client; an aborted ``close`` releases resources without completing
+        that drain.
+
+        Offloaded work must not call ``close`` or ``offload`` on the
+        provider that runs it: closing from inside offloaded work waits
+        forever on that same work, and offloaded work that blocks on a
+        nested offload starves once every worker is held that way.
+        """
         with self._condition:
             if self._state is not _ProviderState.OPEN:
-                msg = "HttpProvider is closing or closed"
-                raise RuntimeError(msg)
+                raise RuntimeError(_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG)
+            if self._executor is None:
+                self._executor = ThreadPoolExecutor(
+                    max_workers=self._policy.max_connections,
+                    thread_name_prefix=OFFLOAD_THREAD_NAME_PREFIX,
+                )
+            self._active_offloads += 1
+            executor = self._executor
+
+        released = threading.Lock()
+
+        def release() -> None:
+            """Release this offload's hold on the drain exactly once."""
+            if released.acquire(blocking=False):
+                self._end_offload()
+
+        def run() -> ResultT:
+            try:
+                return fn()
+            finally:
+                release()
+
+        try:
+            future = executor.submit(run)
+        except BaseException:
+            release()
+            raise
+        future.add_done_callback(lambda _future: release())
+        return future
+
+    def _end_offload(self) -> None:
+        with self._condition:
+            self._active_offloads -= 1
+            if self._active_offloads == 0:
+                self._condition.notify_all()
+
+    def _begin_invocation(self) -> None:
+        with self._condition:
+            if self._state not in (
+                _ProviderState.OPEN,
+                _ProviderState.DRAINING_OFFLOADS,
+            ):
+                raise RuntimeError(_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG)
             self._active_invocations += 1
 
     def _end_invocation(self) -> None:

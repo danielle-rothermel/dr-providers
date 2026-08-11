@@ -86,6 +86,14 @@ exported_symbols = ["HttpProvider"]
 is_a = ["provider"]
 
 [[terms]]
+name = "offloading provider"
+definition = """
+A provider that also runs caller work on its own executor, sized from the \
+transport policy's connection limit and drained before the provider closes."""
+exported_symbols = ["OffloadingProvider"]
+is_a = ["provider"]
+
+[[terms]]
 name = "scripted provider"
 definition = """
 A deterministic network-free provider that consumes scripted outcomes in \
@@ -469,3 +477,10 @@ definition = """
 A synchronous executor that performs provider invocations and follows provider \
 call transition outputs until cancellation or a terminal result."""
 exported_symbols = ["run_local_provider_call"]
+
+[[terms]]
+name = "offloaded provider call entry"
+definition = """
+An awaitable entry point that runs one local provider call driver on an \
+offloading provider's executor and awaits its result."""
+exported_symbols = ["run_local_provider_call_async"]

@@ -155,8 +155,14 @@ Transient network/provider failures and contained transport timeouts are
 terminal unless the caller selects an explicit custom retry policy. The
 standard HTTP provider uses direct synchronous native phase timeouts, so it
 observes a timeout only after the local HTTP operation has ended. It owns and
-reuses one bounded client; closing stops admission, drains active invocations,
-and closes that client once. Connect, write, and pool phase timeouts and the
+reuses one bounded client; a clean close stops offload admission, drains
+offloaded work, stops invocation admission, drains active invocations, and
+closes that client once. Invocation admission stays open to every caller, on any
+thread, until the offload drain finishes. An exception escaping a drain wait,
+such as a keyboard interrupt, aborts the close: the provider still becomes
+terminal and releases the executor and client without joining workers, so no
+later caller blocks, but the drain does not complete. Connect, write, and pool
+phase timeouts and the
 response-read idle timeout are each declared explicitly on transport policy and
 do not bound the total wall-clock duration of a slow response that keeps
 producing bytes.
@@ -169,6 +175,19 @@ repository configure one open and one keep-alive connection because each run
 admits a single invocation. A caller that shares one `HttpProvider` across
 concurrent work must size both connection limits to its own maximum concurrent
 `invoke()` calls.
+
+`run_local_provider_call_async()` is the asynchronous entry point. It submits
+the same synchronous driver to the provider's own executor through
+`HttpProvider.offload()` and awaits the result, so the transport stays one
+bounded synchronous client. That executor is created on first offload and sized
+from `max_connections`, which also bounds the client connection pool, so thread
+count and pool size cannot disagree. Cancelling the awaiting asyncio task does
+not interrupt the offloaded call: the offloaded future is shielded, so
+cancellation flows through the cancellation event, and a clean `close()` drains
+admitted offloaded work. Offloaded work must not call `close()` or `offload()`
+on the provider running it: closing from inside offloaded work waits on that
+same work, and offloaded work blocking on a nested offload starves once every
+worker is held that way.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared

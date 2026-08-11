@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from threading import TIMEOUT_MAX
 from typing import TYPE_CHECKING, Protocol
@@ -20,15 +21,31 @@ from dr_providers.lifecycle.reducer import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from concurrent.futures import Future
     from threading import Event
 
     from dr_providers.core.provider import Provider
+    from dr_providers.modeling.request import ProviderCallRequest
+    from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 
 
 class ProviderRetryWait(Protocol):
     """Controlled boundary for one reducer-declared retry delay."""
 
     def wait(self, delay_seconds: float, cancellation: Event) -> None: ...
+
+
+class OffloadingProvider(Protocol):
+    """A provider that also runs caller work on its own executor."""
+
+    def invoke(
+        self, request: ProviderCallRequest
+    ) -> ProviderInvocationEvidence: ...
+
+    def offload[ResultT](
+        self, fn: Callable[[], ResultT]
+    ) -> Future[ResultT]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,3 +102,34 @@ def run_local_provider_call(
         current_state = transition.next_state
         if cancellation.is_set():
             return cancel_provider_call(current_state)
+
+
+async def run_local_provider_call_async(
+    *,
+    provider: OffloadingProvider,
+    state: ProviderCallState,
+    classifier: SemanticResponseClassifier,
+    cancellation: Event,
+    retry_wait: ProviderRetryWait | None = None,
+) -> ProviderCallResult:
+    """Await one local provider call offloaded onto the provider's executor.
+
+    The synchronous driver runs unchanged on a provider-owned thread.
+    Cancelling the awaiting asyncio task does not interrupt the offloaded
+    call: the offloaded future is shielded, so cancellation flows through
+    the cancellation event, and a clean provider close drains admitted
+    offloaded work. An aborted close releases resources without
+    completing that drain. The caller must not await this entry point
+    from work already offloaded onto the same provider, which starves
+    once every worker is held that way.
+    """
+    future = provider.offload(
+        lambda: run_local_provider_call(
+            provider=provider,
+            state=state,
+            classifier=classifier,
+            cancellation=cancellation,
+            retry_wait=retry_wait,
+        )
+    )
+    return await asyncio.shield(asyncio.wrap_future(future))

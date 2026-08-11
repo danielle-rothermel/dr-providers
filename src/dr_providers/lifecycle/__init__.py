@@ -8,8 +8,10 @@ from dr_providers.lifecycle.classifier import (
 )
 from dr_providers.lifecycle.driver import (
     EventProviderRetryWait,
+    OffloadingProvider,
     ProviderRetryWait,
     run_local_provider_call,
+    run_local_provider_call_async,
 )
 from dr_providers.lifecycle.models import (
     COMPLETED_INVOCATION_OBSERVATION_SCHEMA,
@@ -68,6 +70,7 @@ __all__ = [
     "CustomProviderCallRetryPolicy",
     "DecidedProviderInvocationRecord",
     "EventProviderRetryWait",
+    "OffloadingProvider",
     "ProviderCallOutcome",
     "ProviderCallOutcomeKind",
     "ProviderCallResult",
@@ -87,5 +90,6 @@ __all__ = [
     "provider_call_identity_document",
     "provider_call_identity_hash",
     "run_local_provider_call",
+    "run_local_provider_call_async",
     "transition_provider_call",
 ]

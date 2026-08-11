@@ -46,14 +46,6 @@ CODE_TO_OUTCOME = {
     RESPONSE_FAILED_CODE: ProviderInvocationOutcome.PROVIDER_REJECTION,
 }
 
-BLANK_RESPONSE_OUTCOMES = frozenset(
-    {
-        ProviderInvocationOutcome.EMPTY_GENERATION,
-        ProviderInvocationOutcome.TRUNCATED_NO_TEXT,
-        ProviderInvocationOutcome.MISSING_GENERATION_TEXT,
-    }
-)
-
 
 class SemanticResponseClassifierIdentifier(
     RootModel[Annotated[StrictStr, Field(min_length=1)]]
