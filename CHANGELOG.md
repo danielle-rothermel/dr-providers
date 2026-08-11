@@ -6,6 +6,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- Remove `dr_providers.surfaces.serve` and the `[serve]` optional extra
+  (FastAPI/uvicorn).
+- Remove post-build wheel install/smoke verification from CI and release
+  workflows.
+
 ## [0.3.0] - 2026-08-08
 
 ### Added

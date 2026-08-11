@@ -22,7 +22,6 @@ identity, provider translation, transport policy, and outcomes separate.
 | `dr_providers.core` | Shared provider protocol and failure vocabulary |
 | `dr_providers.surfaces.testing` | Deterministic `ScriptedProvider` for network-free tests |
 | `dr_providers.surfaces.cli` | Optional `dr-providers` one-shot CLI |
-| `dr_providers.surfaces.serve` | Optional localhost FastAPI facade |
 
 The top-level `dr_providers` exports are the stable general import surface.
 Functional-area module paths primarily make ownership discoverable; they are
@@ -118,7 +117,7 @@ Expected transport failures are retained in invocation evidence and classified
 into the terminal `ProviderCallResult`. Unexpected programming or infrastructure
 errors can still raise.
 
-## CLI and local server
+## CLI
 
 Install and run the one-shot CLI:
 
@@ -128,13 +127,6 @@ uv run dr-providers --provider openai-responses \
   --model gpt-5-mini \
   --token-limit 256 \
   -m 'Say hello in one word.'
-```
-
-Install the serving extra and bind the FastAPI facade to localhost:
-
-```bash
-uv add 'dr-providers[serve]'
-uv run python -m dr_providers.surfaces.serve serve --port 8322
 ```
 
 ## Outcome and evidence boundaries
@@ -161,10 +153,7 @@ The public transport-policy defaults allow 10 open connections and retain 5
 idle connections. A caller that shares one `HttpProvider` across concurrent
 work must explicitly size both limits to its own maximum concurrent
 `invoke()` calls. The one-shot CLI, live matrix, and quickstart run one admitted
-invocation per provider and therefore configure both limits to 1. The local
-server also configures both limits to 1, but it creates one `HttpProvider` per
-HTTP request, so its connection limit and reuse are scoped to that provider and
-request rather than the server as a whole.
+invocation per provider and therefore configure both limits to 1.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared

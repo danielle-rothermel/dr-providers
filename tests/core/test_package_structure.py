@@ -17,7 +17,7 @@ FUNCTIONAL_AREAS = {
     "transport",
 }
 APPROVED_TEST_AREAS = FUNCTIONAL_AREAS | {"data"}
-SURFACE_AREAS = {"cli", "serve", "testing"}
+SURFACE_AREAS = {"cli", "testing"}
 
 
 def _directories_with_python(root: Path) -> set[str]:

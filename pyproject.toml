@@ -37,11 +37,6 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
-serve = [
-    "fastapi>=0.121",
-    "typer>=0.26.7",
-    "uvicorn>=0.35",
-]
 
 [project.scripts]
 dr-providers = "dr_providers.surfaces.cli.entry:main"
