@@ -54,8 +54,6 @@ HTTP_STATUS_CODE_PREFIX = "http_status_"
 REQUEST_TOO_LARGE_CODE = "request_body_too_large"
 RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 
-# Bound TCP/TLS setup independently of the response-read idle budget.
-MAX_CONNECT_TIMEOUT_SECONDS = 30.0
 RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
@@ -74,9 +72,12 @@ def _operational_timeout_seconds(timeout_seconds: float) -> float:
 def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
     """Use direct native phase timeouts for the synchronous HTTP operation."""
     operation_timeout = _operational_timeout_seconds(policy.timeout_seconds)
+    connect_timeout = _operational_timeout_seconds(
+        policy.connect_timeout_seconds
+    )
     read_timeout = _operational_timeout_seconds(policy.idle_timeout_seconds)
     return httpx.Timeout(
-        connect=min(MAX_CONNECT_TIMEOUT_SECONDS, operation_timeout),
+        connect=connect_timeout,
         read=read_timeout,
         write=operation_timeout,
         pool=operation_timeout,
@@ -346,6 +347,9 @@ class HttpProvider:
                 "url": url,
                 "exception_type": type(error).__name__,
                 "timeout_seconds": self._policy.timeout_seconds,
+                "connect_timeout_seconds": (
+                    self._policy.connect_timeout_seconds
+                ),
                 "idle_timeout_seconds": self._policy.idle_timeout_seconds,
             },
         )

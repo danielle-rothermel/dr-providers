@@ -266,6 +266,7 @@ class TestPolicyExclusion:
             api_key_env=str(ApiKeyEnv.OPENAI),
             base_url=str(ProviderBaseUrl.OPENAI),
             timeout_seconds=5.0,
+            connect_timeout_seconds=3.0,
             idle_timeout_seconds=3.0,
             max_connections=10,
             max_keepalive_connections=5,

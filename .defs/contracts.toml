@@ -104,8 +104,8 @@ check = "uv run pytest -q tests/lifecycle/test_reducer.py tests/lifecycle/test_h
 [[contracts]]
 title = "Native transport timeouts are locally contained"
 statement = """
-Timeout values are strict positive finite policy values, and the response-read \
-idle timeout is clamped to the general timeout. Each provider wire request runs \
+Timeout values are strict positive finite policy values. Connect and response-read \
+idle timeouts are clamped to the general timeout. Each provider wire request runs \
 directly under native connect, read, write, and pool timeouts. A native timeout \
 is observed only after the local HTTP operation has ended, records \
 ``TransportTimeoutContainment.CONTAINED`` on the failure, and is classified as \

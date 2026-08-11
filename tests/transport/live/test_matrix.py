@@ -139,6 +139,7 @@ def test_live_matrix(
     policy = policy_for(
         kind,
         timeout_seconds=120.0,
+        connect_timeout_seconds=30.0,
         idle_timeout_seconds=90.0,
         max_connections=1,
         max_keepalive_connections=1,

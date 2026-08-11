@@ -10,6 +10,7 @@ from dr_providers import (
 )
 
 TEST_TIMEOUT_SECONDS = 120.0
+TEST_CONNECT_TIMEOUT_SECONDS = 30.0
 TEST_IDLE_TIMEOUT_SECONDS = 90.0
 TEST_MAX_CONNECTIONS = 10
 TEST_MAX_KEEPALIVE_CONNECTIONS = 5
@@ -37,6 +38,7 @@ def make_transport_policy(  # noqa: PLR0913 -- test helper mirrors explicit sizi
     api_key_env: str | None = None,
     base_url: str | None = None,
     timeout_seconds: float = TEST_TIMEOUT_SECONDS,
+    connect_timeout_seconds: float = TEST_CONNECT_TIMEOUT_SECONDS,
     idle_timeout_seconds: float = TEST_IDLE_TIMEOUT_SECONDS,
     max_connections: int = TEST_MAX_CONNECTIONS,
     max_keepalive_connections: int = TEST_MAX_KEEPALIVE_CONNECTIONS,
@@ -59,6 +61,7 @@ def make_transport_policy(  # noqa: PLR0913 -- test helper mirrors explicit sizi
         api_key_env=resolved_api_key_env,
         base_url=resolved_base_url,
         timeout_seconds=timeout_seconds,
+        connect_timeout_seconds=connect_timeout_seconds,
         idle_timeout_seconds=idle_timeout_seconds,
         max_connections=max_connections,
         max_keepalive_connections=max_keepalive_connections,

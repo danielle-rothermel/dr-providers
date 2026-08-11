@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 from _policy import (
+    TEST_CONNECT_TIMEOUT_SECONDS,
     TEST_IDLE_TIMEOUT_SECONDS,
     TEST_MAX_CONNECTIONS,
     TEST_MAX_KEEPALIVE_CONNECTIONS,
@@ -31,6 +32,7 @@ def _sized_policy_for(  # noqa: PLR0913 -- mirrors explicit policy_for sizing
     api_key_env: ApiKeyEnv | str | None = None,
     base_url: str | None = None,
     timeout_seconds: float = TEST_TIMEOUT_SECONDS,
+    connect_timeout_seconds: float = TEST_CONNECT_TIMEOUT_SECONDS,
     idle_timeout_seconds: float = TEST_IDLE_TIMEOUT_SECONDS,
     max_connections: int = TEST_MAX_CONNECTIONS,
     max_keepalive_connections: int = TEST_MAX_KEEPALIVE_CONNECTIONS,
@@ -45,6 +47,7 @@ def _sized_policy_for(  # noqa: PLR0913 -- mirrors explicit policy_for sizing
     return policy_for(
         kind,
         timeout_seconds=timeout_seconds,
+        connect_timeout_seconds=connect_timeout_seconds,
         idle_timeout_seconds=idle_timeout_seconds,
         max_connections=max_connections,
         max_keepalive_connections=max_keepalive_connections,
@@ -64,6 +67,7 @@ class TestPolicyFor:
     def test_policy_for_requires_explicit_sizing(self) -> None:
         required = (
             "timeout_seconds",
+            "connect_timeout_seconds",
             "idle_timeout_seconds",
             "max_connections",
             "max_keepalive_connections",
@@ -110,6 +114,14 @@ class TestPolicyFor:
             idle_timeout_seconds=45.0,
         )
         assert policy.idle_timeout_seconds == 10.0
+
+    def test_connect_timeout_clamped_to_timeout(self) -> None:
+        policy = _sized_policy_for(
+            ProviderKind.OPENAI,
+            timeout_seconds=10.0,
+            connect_timeout_seconds=45.0,
+        )
+        assert policy.connect_timeout_seconds == 10.0
 
     @pytest.mark.parametrize(
         "timeout_seconds",
@@ -158,7 +170,8 @@ class TestPolicyFor:
             )
 
     @pytest.mark.parametrize(
-        "field_name", ["timeout_seconds", "idle_timeout_seconds"]
+        "field_name",
+        ["timeout_seconds", "connect_timeout_seconds", "idle_timeout_seconds"],
     )
     @pytest.mark.parametrize(
         "json_value", ["true", '"1.0"'], ids=("bool", "numeric-string")
@@ -223,6 +236,7 @@ class TestPolicyFor:
     ) -> None:
         direct = make_transport_policy(
             timeout_seconds=timeout_seconds,
+            connect_timeout_seconds=timeout_seconds,
             idle_timeout_seconds=timeout_seconds,
             max_connections=1,
             max_keepalive_connections=1,
@@ -234,6 +248,7 @@ class TestPolicyFor:
             '"provider_kind":"openai",'
             '"api_key_env":"OPENAI_API_KEY",'
             f'"timeout_seconds":{timeout_seconds},'
+            f'"connect_timeout_seconds":{timeout_seconds},'
             f'"idle_timeout_seconds":{timeout_seconds},'
             '"max_connections":1,'
             '"max_keepalive_connections":1,'
@@ -244,6 +259,7 @@ class TestPolicyFor:
 
         for policy in (direct, from_json):
             assert policy.timeout_seconds == timeout_seconds
+            assert policy.connect_timeout_seconds == timeout_seconds
             assert policy.idle_timeout_seconds == timeout_seconds
 
     def test_identity_carries_provider_and_credential_environment_name(
@@ -262,6 +278,7 @@ class TestPolicyFor:
             "api_key_env": "OPENAI_API_KEY",
             "base_url": "https://api.openai.com/v1",
             "timeout_seconds": TEST_TIMEOUT_SECONDS,
+            "connect_timeout_seconds": TEST_CONNECT_TIMEOUT_SECONDS,
             "idle_timeout_seconds": TEST_IDLE_TIMEOUT_SECONDS,
             "max_connections": TEST_MAX_CONNECTIONS,
             "max_keepalive_connections": TEST_MAX_KEEPALIVE_CONNECTIONS,

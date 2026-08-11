@@ -59,7 +59,13 @@ class ProviderTransportPolicy(BaseModel):
         allow_inf_nan=False,
         strict=True,
     )
-    """Native connect, write, and pool timeout bound."""
+    """Native write and pool timeout bound."""
+    connect_timeout_seconds: float = Field(
+        gt=0,
+        allow_inf_nan=False,
+        strict=True,
+    )
+    """Native TCP/TLS connect bound, clamped to ``timeout_seconds``."""
     idle_timeout_seconds: float = Field(
         gt=0,
         allow_inf_nan=False,
@@ -100,6 +106,10 @@ class ProviderTransportPolicy(BaseModel):
 
     @model_validator(mode="after")
     def _normalize_and_validate_limits(self) -> ProviderTransportPolicy:
+        if self.connect_timeout_seconds > self.timeout_seconds:
+            object.__setattr__(
+                self, "connect_timeout_seconds", self.timeout_seconds
+            )
         if self.idle_timeout_seconds > self.timeout_seconds:
             object.__setattr__(
                 self, "idle_timeout_seconds", self.timeout_seconds
@@ -119,6 +129,7 @@ class ProviderTransportPolicy(BaseModel):
             "api_key_env": self.api_key_env,
             "base_url": self.base_url,
             "timeout_seconds": self.timeout_seconds,
+            "connect_timeout_seconds": self.connect_timeout_seconds,
             "idle_timeout_seconds": self.idle_timeout_seconds,
             "max_connections": self.max_connections,
             "max_keepalive_connections": self.max_keepalive_connections,
@@ -133,6 +144,7 @@ def policy_for(  # noqa: PLR0913 -- one explicit transport policy surface
     api_key_env: ApiKeyEnv | str | None = None,
     base_url: str | None = None,
     timeout_seconds: float,
+    connect_timeout_seconds: float,
     idle_timeout_seconds: float,
     max_connections: int,
     max_keepalive_connections: int,
@@ -150,6 +162,7 @@ def policy_for(  # noqa: PLR0913 -- one explicit transport policy surface
         api_key_env=str(resolved_key_env),
         base_url=resolved_base_url,
         timeout_seconds=timeout_seconds,
+        connect_timeout_seconds=connect_timeout_seconds,
         idle_timeout_seconds=idle_timeout_seconds,
         max_connections=max_connections,
         max_keepalive_connections=max_keepalive_connections,

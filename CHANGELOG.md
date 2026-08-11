@@ -31,6 +31,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   canonical-form re-validation on the hint model.
 - Require explicit transport-policy sizing at `ProviderTransportPolicy`
   construction and `policy_for()` (timeouts, connection pool limits, byte caps).
+- Require explicit `connect_timeout_seconds` on transport policy; remove the
+  hidden 30-second connect cap from `HttpProvider`.
 - Rename `FailureClass` to `RecoverabilityClass` and rename serialized field
   `failure_class` to `recoverability` on transport failures and failure
   records.

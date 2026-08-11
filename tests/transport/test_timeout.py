@@ -44,6 +44,7 @@ def _policy(**overrides: Any) -> ProviderTransportPolicy:
     return make_transport_policy(
         base_url="https://example.test",
         timeout_seconds=overrides.pop("timeout_seconds", 0.3),
+        connect_timeout_seconds=overrides.pop("connect_timeout_seconds", 0.1),
         idle_timeout_seconds=overrides.pop("idle_timeout_seconds", 0.2),
         max_connections=overrides.pop("max_connections", 1),
         max_keepalive_connections=overrides.pop(
@@ -58,17 +59,30 @@ def _policy(**overrides: Any) -> ProviderTransportPolicy:
 def test_native_timeout_phases_are_explicit_and_saturated() -> None:
     policy = _policy(
         timeout_seconds=1e300,
+        connect_timeout_seconds=1e300,
         idle_timeout_seconds=1e300,
     )
 
     timeout = _httpx_timeout(policy)
 
-    assert timeout.connect == 30.0
+    assert timeout.connect == threading.TIMEOUT_MAX
     assert timeout.read == threading.TIMEOUT_MAX
     assert timeout.write == threading.TIMEOUT_MAX
     assert timeout.pool == threading.TIMEOUT_MAX
     assert policy.timeout_seconds == 1e300
+    assert policy.connect_timeout_seconds == 1e300
     assert policy.idle_timeout_seconds == 1e300
+
+
+def test_connect_timeout_comes_from_policy() -> None:
+    policy = _policy(
+        timeout_seconds=120.0,
+        connect_timeout_seconds=45.0,
+    )
+
+    timeout = _httpx_timeout(policy)
+
+    assert timeout.connect == 45.0
 
 
 @pytest.mark.parametrize(

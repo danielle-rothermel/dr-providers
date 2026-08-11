@@ -75,6 +75,7 @@ def _http_provider(outcome_kind: OutcomeKind) -> Provider:
             api_key_env="TEST_API_KEY",
             base_url="https://example.test/v1",
             timeout_seconds=120.0,
+            connect_timeout_seconds=30.0,
             idle_timeout_seconds=90.0,
             max_connections=10,
             max_keepalive_connections=5,

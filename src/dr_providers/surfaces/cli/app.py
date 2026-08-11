@@ -26,6 +26,7 @@ from dr_providers.transport.http import HttpProvider
 from dr_providers.transport.policy import policy_for
 
 CLI_TIMEOUT_SECONDS = 120.0
+CLI_CONNECT_TIMEOUT_SECONDS = 30.0
 CLI_IDLE_TIMEOUT_SECONDS = 90.0
 CLI_MAX_REQUEST_BYTES = 1024 * 1024
 CLI_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
@@ -112,6 +113,7 @@ def query(  # noqa: PLR0913
     transport_policy = policy_for(
         config.route.provider,
         timeout_seconds=CLI_TIMEOUT_SECONDS,
+        connect_timeout_seconds=CLI_CONNECT_TIMEOUT_SECONDS,
         idle_timeout_seconds=CLI_IDLE_TIMEOUT_SECONDS,
         max_connections=1,
         max_keepalive_connections=1,

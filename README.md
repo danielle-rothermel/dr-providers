@@ -95,6 +95,7 @@ with HttpProvider(
     policy=policy_for(
         ProviderKind.OPENAI,
         timeout_seconds=120.0,
+        connect_timeout_seconds=30.0,
         idle_timeout_seconds=90.0,
         max_connections=1,
         max_keepalive_connections=1,
@@ -156,11 +157,13 @@ standard HTTP provider uses direct synchronous native phase timeouts, so it
 observes a timeout only after the local HTTP operation has ended. It owns and
 reuses one bounded client; closing stops admission, drains active invocations,
 and closes that client once. Connect, write, and pool phase timeouts and the
-response-read idle timeout do not bound the total wall-clock duration of a slow
-response that keeps producing bytes.
+response-read idle timeout are each declared explicitly on transport policy and
+do not bound the total wall-clock duration of a slow response that keeps
+producing bytes.
 
 Every `ProviderTransportPolicy` and `policy_for()` call must declare native
-phase timeouts, connection-pool limits, and request/response byte caps.
+connect, write/pool, and response-read idle timeouts, connection-pool limits,
+and request/response byte caps.
 There are no library-wide implicit sizing defaults. One-shot examples in this
 repository configure one open and one keep-alive connection because each run
 admits a single invocation. A caller that shares one `HttpProvider` across
