@@ -304,7 +304,6 @@ class HttpProvider:
                     message=_bounded_message(
                         f"provider transport error ({error_type})"
                     ),
-                    containment=TransportTimeoutContainment.CONTAINED,
                     metadata={"url": url},
                 ),
                 None,
