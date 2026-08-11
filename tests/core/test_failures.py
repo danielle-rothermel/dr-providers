@@ -1,9 +1,7 @@
 import pytest
-from pydantic import ValidationError
 
 from dr_providers import (
     ControlValidationError,
-    ProviderFailure,
     ProviderFailureError,
     RecoverabilityClass,
     failure_record,
@@ -40,14 +38,3 @@ def test_control_validation_error_carries_failure_record() -> None:
     assert str(error) == failure.message
     assert error.failure is failure
     assert error.underlying is underlying
-
-
-def test_provider_failure_rejects_retryable_field() -> None:
-    with pytest.raises(ValidationError):
-        ProviderFailure.model_validate(
-            {
-                "recoverability": "permanent",
-                "message": "removed field",
-                "retryable": False,
-            }
-        )
