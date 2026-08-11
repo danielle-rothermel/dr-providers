@@ -206,6 +206,24 @@ date = "2026-08-08"
 check = "uv run pytest -q tests/lifecycle/test_classification.py tests/lifecycle/test_policy_and_outcomes.py tests/lifecycle/test_reducer.py"
 
 [[contracts]]
+title = "Persisted enum values and wire literals are pinned"
+statement = """
+Every enum member value, failure code, wire-format prefix, identity schema \
+name, and schema version reachable from a serialized provider call result or \
+provider invocation evidence payload is pinned by a golden test against \
+hand-written expected literals, never against values derived from the code \
+under test. Changing a pinned literal is a recorded-data format change; an \
+intentional change updates the pin in the same change that edits the literal."""
+rationale = """
+Consumers persist whole serialized payloads and identity hashes computed over \
+these literals. Without a pin, renaming a member value passes the suite while \
+silently changing the meaning of already-recorded data and breaking hash \
+correspondence; requiring the pin edit makes every format change visible in \
+review."""
+date = "2026-08-11"
+check = "uv run pytest -q tests/outcomes/test_persisted_literals.py tests/lifecycle/test_policy_and_outcomes.py"
+
+[[contracts]]
 title = "Semantic classification excludes evaluation policy"
 statement = """
 A semantic response classifier receives a valid nonblank provider transport \
