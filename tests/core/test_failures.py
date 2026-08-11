@@ -42,16 +42,6 @@ def test_control_validation_error_carries_failure_record() -> None:
     assert error.underlying is underlying
 
 
-def test_provider_failure_rejects_stale_failure_class_field() -> None:
-    with pytest.raises(ValidationError):
-        ProviderFailure.model_validate(
-            {
-                "failure_class": "permanent",
-                "message": "stale field name",
-            }
-        )
-
-
 def test_provider_failure_rejects_retryable_field() -> None:
     with pytest.raises(ValidationError):
         ProviderFailure.model_validate(

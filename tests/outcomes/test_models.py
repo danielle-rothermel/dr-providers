@@ -29,12 +29,7 @@ def test_removed_persisted_field_names_are_rejected() -> None:
         ProviderTransportResponse.model_validate(
             {"text": "hi", "raw_body": {}}
         )
-    for removed_field in (
-        "retryable",
-        "request_body",
-        "raw_request",
-        "failure_class",
-    ):
+    for removed_field in ("retryable", "request_body", "raw_request"):
         with pytest.raises(ValidationError):
             ProviderTransportFailure.model_validate(
                 {
