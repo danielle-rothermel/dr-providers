@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from dr_providers.core.failures import FailureClass
+from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.modeling.route import Protocol
 from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import (
@@ -299,7 +299,7 @@ class HttpProvider:
             error_type = type(error).__name__[:64]
             return (
                 ProviderTransportFailure(
-                    failure_class=FailureClass.TRANSIENT,
+                    recoverability=RecoverabilityClass.TRANSIENT,
                     code=TRANSPORT_ERROR_CODE,
                     message=_bounded_message(
                         f"provider transport error ({error_type})"
@@ -334,7 +334,7 @@ class HttpProvider:
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
         error_type = type(error).__name__[:64]
         return ProviderTransportFailure(
-            failure_class=FailureClass.TRANSIENT,
+            recoverability=RecoverabilityClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
             message=_bounded_message(
                 f"provider transport timeout ({error_type})"
@@ -364,7 +364,7 @@ class HttpProvider:
             body = json.loads(response_bytes)
         except ValueError:
             return ProviderTransportFailure(
-                failure_class=FailureClass.PERMANENT,
+                recoverability=RecoverabilityClass.PERMANENT,
                 code=INVALID_JSON_CODE,
                 message="provider response body is not valid JSON",
                 response_body=response_bytes.decode(
@@ -376,7 +376,7 @@ class HttpProvider:
             )
         if not isinstance(body, Mapping):
             return ProviderTransportFailure(
-                failure_class=FailureClass.PERMANENT,
+                recoverability=RecoverabilityClass.PERMANENT,
                 code=PARSE_ERROR_CODE,
                 message="provider response JSON must be an object",
                 response_body=body,
@@ -396,7 +396,7 @@ class HttpProvider:
         except ValueError:
             response_body = response_bytes.decode("utf-8", errors="replace")
         return ProviderTransportFailure(
-            failure_class=classify_status_code(status_code),
+            recoverability=classify_status_code(status_code),
             code=f"{HTTP_STATUS_CODE_PREFIX}{status_code}",
             message=f"provider returned HTTP status {status_code}",
             response_body=response_body,
@@ -410,7 +410,7 @@ class HttpProvider:
     ) -> ProviderTransportFailure:
         limit = self._policy.max_request_bytes
         return ProviderTransportFailure(
-            failure_class=FailureClass.RESOURCE_EXHAUSTION,
+            recoverability=RecoverabilityClass.RESOURCE_EXHAUSTION,
             code=REQUEST_TOO_LARGE_CODE,
             message=_bounded_message(
                 f"request body exceeds {limit} byte limit"
@@ -427,7 +427,7 @@ class HttpProvider:
     ) -> ProviderTransportFailure:
         limit = self._policy.max_response_bytes
         return ProviderTransportFailure(
-            failure_class=FailureClass.RESOURCE_EXHAUSTION,
+            recoverability=RecoverabilityClass.RESOURCE_EXHAUSTION,
             code=RESPONSE_TOO_LARGE_CODE,
             message=_bounded_message(
                 f"response body exceeds {limit} byte limit"
@@ -443,7 +443,7 @@ class HttpProvider:
         config: ProviderCallConfig,
     ) -> ProviderTransportFailure:
         return ProviderTransportFailure(
-            failure_class=FailureClass.PERMANENT,
+            recoverability=RecoverabilityClass.PERMANENT,
             code=MISSING_BASE_URL_CODE,
             message=_bounded_message(
                 "transport policy for route "
@@ -453,7 +453,7 @@ class HttpProvider:
 
     def _missing_api_key_failure(self) -> ProviderTransportFailure:
         return ProviderTransportFailure(
-            failure_class=FailureClass.PERMANENT,
+            recoverability=RecoverabilityClass.PERMANENT,
             code=MISSING_API_KEY_CODE,
             message=_bounded_message(
                 f"environment variable {self._policy.api_key_env!r} is not set"

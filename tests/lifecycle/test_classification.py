@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dr_providers.core.failures import FailureClass
+from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
     AcceptAllSemanticResponseClassifier,
@@ -34,7 +34,7 @@ CLASSIFIER = AcceptAllSemanticResponseClassifier()
 
 def _failure_evidence(
     *,
-    failure_class: FailureClass,
+    recoverability: RecoverabilityClass,
     code: str | None = None,
     metadata: dict[str, object] | None = None,
     containment: TransportTimeoutContainment | None = None,
@@ -42,7 +42,7 @@ def _failure_evidence(
     return ProviderInvocationEvidence(
         request_identity_hash=REQUEST_HASH,
         failure=ProviderTransportFailure(
-            failure_class=failure_class,
+            recoverability=recoverability,
             code=code,
             message="classified failure",
             containment=containment,
@@ -80,12 +80,12 @@ def _failure_evidence(
         ("http_status_402", ProviderInvocationOutcome.BUDGET_EXHAUSTED),
     ],
 )
-def test_protocol_outcome_precedes_failure_class(
+def test_protocol_outcome_precedes_recoverability(
     code: str,
     expected: ProviderInvocationOutcome,
 ) -> None:
     evidence = _failure_evidence(
-        failure_class=FailureClass.PERMANENT,
+        recoverability=RecoverabilityClass.PERMANENT,
         code=code,
     )
 
@@ -93,44 +93,47 @@ def test_protocol_outcome_precedes_failure_class(
 
 
 @pytest.mark.parametrize(
-    ("failure_class", "expected"),
+    ("recoverability", "expected"),
     [
         (
-            FailureClass.PERMANENT,
+            RecoverabilityClass.PERMANENT,
             ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE,
         ),
         (
-            FailureClass.TRANSIENT,
+            RecoverabilityClass.TRANSIENT,
             ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
         ),
-        (FailureClass.RATE_LIMITED, ProviderInvocationOutcome.RATE_LIMITING),
         (
-            FailureClass.RESOURCE_EXHAUSTION,
+            RecoverabilityClass.RATE_LIMITED,
+            ProviderInvocationOutcome.RATE_LIMITING,
+        ),
+        (
+            RecoverabilityClass.RESOURCE_EXHAUSTION,
             ProviderInvocationOutcome.RESOURCE_EXHAUSTION,
         ),
         (
-            FailureClass.UNKNOWN,
+            RecoverabilityClass.UNKNOWN,
             ProviderInvocationOutcome.UNKNOWN_TRANSPORT_FAILURE,
         ),
     ],
 )
-def test_failure_class_maps_to_closed_outcome(
-    failure_class: FailureClass,
+def test_recoverability_maps_to_closed_outcome(
+    recoverability: RecoverabilityClass,
     expected: ProviderInvocationOutcome,
 ) -> None:
-    evidence = _failure_evidence(failure_class=failure_class)
+    evidence = _failure_evidence(recoverability=recoverability)
 
     assert classify_provider_invocation(evidence, CLASSIFIER) is expected
 
 
 def test_timeout_classification_exposes_containment() -> None:
     contained = _failure_evidence(
-        failure_class=FailureClass.TRANSIENT,
+        recoverability=RecoverabilityClass.TRANSIENT,
         code=STALLED_RESPONSE_CODE,
         containment=TransportTimeoutContainment.CONTAINED,
     )
     uncontained = _failure_evidence(
-        failure_class=FailureClass.TRANSIENT,
+        recoverability=RecoverabilityClass.TRANSIENT,
         code=STALLED_RESPONSE_CODE,
         metadata={"deadline_seconds": 5.0},
     )

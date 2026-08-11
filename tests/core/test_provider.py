@@ -7,7 +7,6 @@ import httpx
 import pytest
 
 from dr_providers import (
-    FailureClass,
     HttpProvider,
     MessageRole,
     PromptMessage,
@@ -17,6 +16,7 @@ from dr_providers import (
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
+    RecoverabilityClass,
     ScriptedOutcome,
     ScriptedProvider,
     Transcript,
@@ -40,7 +40,7 @@ def _scripted_provider(outcome_kind: OutcomeKind) -> Provider:
     else:
         outcome = ScriptedOutcome(
             failure=ProviderTransportFailure(
-                failure_class=FailureClass.RATE_LIMITED,
+                recoverability=RecoverabilityClass.RATE_LIMITED,
                 code="scripted_rate_limit",
                 message="slow down",
             )
@@ -115,4 +115,4 @@ def test_provider_returns_common_typed_failure(
     outcome = provider_factory("failure").invoke(REQUEST).outcome
 
     assert isinstance(outcome, ProviderTransportFailure)
-    assert outcome.failure_class is FailureClass.RATE_LIMITED
+    assert outcome.recoverability is RecoverabilityClass.RATE_LIMITED

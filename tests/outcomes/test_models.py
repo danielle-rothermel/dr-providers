@@ -2,9 +2,9 @@ import pytest
 from pydantic import ValidationError
 
 from dr_providers import (
-    FailureClass,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    RecoverabilityClass,
     is_failure,
     is_response,
 )
@@ -14,7 +14,7 @@ class TestOutcomeGuards:
     def test_is_response_and_is_failure_narrow(self) -> None:
         response = ProviderTransportResponse(text="hi")
         failure = ProviderTransportFailure(
-            failure_class=FailureClass.PERMANENT,
+            recoverability=RecoverabilityClass.PERMANENT,
             code="x",
             message="m",
         )
@@ -29,11 +29,16 @@ def test_removed_persisted_field_names_are_rejected() -> None:
         ProviderTransportResponse.model_validate(
             {"text": "hi", "raw_body": {}}
         )
-    for removed_field in ("retryable", "request_body", "raw_request"):
+    for removed_field in (
+        "retryable",
+        "request_body",
+        "raw_request",
+        "failure_class",
+    ):
         with pytest.raises(ValidationError):
             ProviderTransportFailure.model_validate(
                 {
-                    "failure_class": FailureClass.PERMANENT,
+                    "recoverability": RecoverabilityClass.PERMANENT,
                     "message": "bad",
                     removed_field: False,
                 }

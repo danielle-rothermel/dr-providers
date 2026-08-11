@@ -5,11 +5,11 @@ from threading import TIMEOUT_MAX, Event, Thread
 from _retry_fixtures import two_invocation_transient_retry_policy
 
 from dr_providers import (
-    FailureClass,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
     ProviderTransportFailure,
+    RecoverabilityClass,
     ScriptedOutcome,
     ScriptedProvider,
     Transcript,
@@ -79,7 +79,7 @@ def test_driver_follows_reducer_retry_instruction() -> None:
         [
             ScriptedOutcome(
                 failure=ProviderTransportFailure(
-                    failure_class=FailureClass.TRANSIENT,
+                    recoverability=RecoverabilityClass.TRANSIENT,
                     message="try again",
                 )
             ),
@@ -152,7 +152,7 @@ def test_cancellation_interrupts_controlled_retry_wait() -> None:
         [
             ScriptedOutcome(
                 failure=ProviderTransportFailure(
-                    failure_class=FailureClass.TRANSIENT,
+                    recoverability=RecoverabilityClass.TRANSIENT,
                     message="try again",
                 )
             ),

@@ -6,7 +6,7 @@ from typing import Any, TypeGuard
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from dr_providers.core.failures import (  # noqa: TC001 -- pydantic field
-    FailureClass,
+    RecoverabilityClass,
 )
 from dr_providers.core.frozen import _freeze_json
 
@@ -135,7 +135,7 @@ class ProviderTransportFailure(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    failure_class: FailureClass
+    recoverability: RecoverabilityClass
     code: StrictStr | None = None
     message: StrictStr
     response_body: Any | None = None

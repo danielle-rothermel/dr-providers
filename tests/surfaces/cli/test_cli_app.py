@@ -256,11 +256,11 @@ def test_invalid_choice_exits_with_clear_diagnostic(
 def test_query_failure_prints_stderr_and_exits_nonzero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from dr_providers.core.failures import FailureClass
+    from dr_providers.core.failures import RecoverabilityClass
     from dr_providers.outcomes.models import ProviderTransportFailure
 
     failure = ProviderTransportFailure(
-        failure_class=FailureClass.PERMANENT,
+        recoverability=RecoverabilityClass.PERMANENT,
         code="boom_code",
         message="boom message",
     )

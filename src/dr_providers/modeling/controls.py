@@ -22,7 +22,7 @@ from pydantic import (
 
 from dr_providers.core.failures import (
     ControlValidationError,
-    FailureClass,
+    RecoverabilityClass,
     failure_record,
 )
 from dr_providers.core.frozen import _deep_freeze, _FrozenMap, _thaw
@@ -120,7 +120,7 @@ class ControlConstraints(BaseModel):
         ):
             raise ControlValidationError(
                 failure_record(
-                    failure_class=FailureClass.PERMANENT,
+                    recoverability=RecoverabilityClass.PERMANENT,
                     code="reasoning_mapping_missing",
                     message=(
                         "reasoning cannot be advertised as supported without "
@@ -180,7 +180,7 @@ class ProviderBodyExtensions(BaseModel):
         except StrictJsonError as error:
             raise ControlValidationError(
                 failure_record(
-                    failure_class=FailureClass.PERMANENT,
+                    recoverability=RecoverabilityClass.PERMANENT,
                     code="invalid_extension_json",
                     message=(
                         "extra_body must contain only strict finite JSON "

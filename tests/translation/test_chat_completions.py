@@ -1,10 +1,10 @@
 import pytest
 
 from dr_providers import (
-    FailureClass,
     ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    RecoverabilityClass,
     openai_chat_config,
     parse_chat_completions_body,
 )
@@ -55,4 +55,4 @@ def test_chat_parse_failures_are_typed(body: dict) -> None:
     )
 
     assert isinstance(outcome, ProviderTransportFailure)
-    assert outcome.failure_class is FailureClass.PERMANENT
+    assert outcome.recoverability is RecoverabilityClass.PERMANENT

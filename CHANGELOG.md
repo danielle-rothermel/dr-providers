@@ -19,6 +19,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DEFAULT_MAX_CONNECTIONS`, `DEFAULT_MAX_KEEPALIVE_CONNECTIONS`,
   `DEFAULT_MAX_REQUEST_BYTES`, `DEFAULT_MAX_RESPONSE_BYTES`).
 - Remove the CLI Anthropic 4096 `max_tokens` fallback.
+- Remove unused failure exception hierarchy, `raise_failure`,
+  `FAILURE_ERROR_TYPES`, recoverability frozensets, `ProviderFailure.retryable`,
+  and public `FailureClass`.
 
 ### Changed
 
@@ -28,6 +31,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   canonical-form re-validation on the hint model.
 - Require explicit transport-policy sizing at `ProviderTransportPolicy`
   construction and `policy_for()` (timeouts, connection pool limits, byte caps).
+- Rename `FailureClass` to `RecoverabilityClass` and rename serialized field
+  `failure_class` to `recoverability` on transport failures and failure
+  records.
+- Advance Provider Invocation Evidence to schema version 5 (hard cutover).
 
 ## [0.3.0] - 2026-08-08
 

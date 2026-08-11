@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dr_providers import (
     CostInfo,
-    FailureClass,
     GenerationControls,
     MessageRole,
     PromptMessage,
@@ -11,6 +10,7 @@ from dr_providers import (
     ProviderTransportFailure,
     ProviderTransportResponse,
     ProviderTransportWarning,
+    RecoverabilityClass,
     ScriptedOutcome,
     ScriptedProvider,
     TokenUsage,
@@ -94,7 +94,7 @@ class TestScriptedProvider:
 
     def test_scripted_failure_returns_typed_outcome(self) -> None:
         failure = ProviderTransportFailure(
-            failure_class=FailureClass.RATE_LIMITED,
+            recoverability=RecoverabilityClass.RATE_LIMITED,
             message="scripted 429",
         )
         provider = ScriptedProvider([ScriptedOutcome(failure=failure)])

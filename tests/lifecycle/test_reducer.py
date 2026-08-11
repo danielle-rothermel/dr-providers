@@ -7,7 +7,6 @@ from _retry_fixtures import two_invocation_transient_retry_policy
 from pydantic import ValidationError
 
 from dr_providers import (
-    FailureClass,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
@@ -15,6 +14,7 @@ from dr_providers import (
     ProviderInvocationEvidence,
     ProviderTransportFailure,
     ProviderTransportResponse,
+    RecoverabilityClass,
     Transcript,
     openai_chat_config,
 )
@@ -101,25 +101,27 @@ def _observation(
             ),
         )
     else:
-        failure_class = {
+        recoverability = {
             ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE: (
-                FailureClass.TRANSIENT
+                RecoverabilityClass.TRANSIENT
             ),
             ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT: (
-                FailureClass.TRANSIENT
+                RecoverabilityClass.TRANSIENT
             ),
-            ProviderInvocationOutcome.RATE_LIMITING: FailureClass.RATE_LIMITED,
+            ProviderInvocationOutcome.RATE_LIMITING: (
+                RecoverabilityClass.RATE_LIMITED
+            ),
             ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION: (
-                FailureClass.TRANSIENT
+                RecoverabilityClass.TRANSIENT
             ),
             ProviderInvocationOutcome.RESOURCE_EXHAUSTION: (
-                FailureClass.RESOURCE_EXHAUSTION
+                RecoverabilityClass.RESOURCE_EXHAUSTION
             ),
             ProviderInvocationOutcome.PROVIDER_REJECTION: (
-                FailureClass.PERMANENT
+                RecoverabilityClass.PERMANENT
             ),
             ProviderInvocationOutcome.UNKNOWN_TRANSPORT_FAILURE: (
-                FailureClass.UNKNOWN
+                RecoverabilityClass.UNKNOWN
             ),
         }[outcome]
         code = outcome.value
@@ -144,7 +146,7 @@ def _observation(
             },
             http_request=HTTP_REQUEST,
             failure=ProviderTransportFailure(
-                failure_class=failure_class,
+                recoverability=recoverability,
                 code=code,
                 message=marker,
                 containment=containment,
@@ -333,7 +335,7 @@ def test_failure_outcome_is_recomputed_during_json_restore() -> None:
     evidence = ProviderInvocationEvidence(
         request_identity_hash=state.request_identity_hash,
         failure=ProviderTransportFailure(
-            failure_class=FailureClass.PERMANENT,
+            recoverability=RecoverabilityClass.PERMANENT,
             code="missing_api_key",
             message="missing API key",
         ),

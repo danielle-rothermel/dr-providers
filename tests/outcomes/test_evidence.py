@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from dr_providers import (
     PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
     ApiKeyEnv,
-    FailureClass,
     GenerationControls,
     MessageRole,
     PromptMessage,
@@ -24,6 +23,7 @@ from dr_providers import (
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
+    RecoverabilityClass,
     Transcript,
     anthropic_messages_config,
     openai_chat_config,
@@ -82,7 +82,7 @@ HTTP_REQUEST = ProviderHttpRequestEvidence(
 )
 SUCCESS = ProviderTransportResponse(text="hi", response_body={"id": "resp-1"})
 FAILURE = ProviderTransportFailure(
-    failure_class=FailureClass.PERMANENT,
+    recoverability=RecoverabilityClass.PERMANENT,
     code="invalid_request",
     message="bad request",
     response_body={"error": "bad"},
@@ -115,7 +115,7 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 4,
+        "schema_version": 5,
         "payload": {
             "request_identity_hash": "1" * 64,
             "policy_identity": {
@@ -192,7 +192,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 4
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 5
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -343,7 +343,7 @@ class TestInvocationEvidence:
         ).identity_document().to_json_dict() == (
             expected_document(
                 failure={
-                    "failure_class": "permanent",
+                    "recoverability": "permanent",
                     "code": "invalid_request",
                     "message": "bad request",
                     "response_body": {"error": "bad"},

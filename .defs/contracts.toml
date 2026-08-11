@@ -74,14 +74,14 @@ check = "uv run pytest -q tests/core/test_provider.py tests/transport/test_http.
 [[contracts]]
 title = "Raised provider failures have one classification"
 statement = """
-A raised provider error's nominal class, carried failure-record class, and \
-derived retryability cannot disagree. Direct construction with a mismatched \
-record is rejected."""
+A raised ControlValidationError carries exactly one ProviderFailure record \
+whose recoverability is the sole recoverability signal. There is no parallel \
+retryable flag and no per-recoverability exception types."""
 rationale = """
-Callers may branch on either the exception type or its structured record. A \
-contradiction between those public signals would make recovery decisions \
-depend on which representation a caller happened to inspect."""
-date = "2026-08-05"
+Transport failures use the same recoverability enum on \
+ProviderTransportFailure.recoverability, separate from dr-graph attribution \
+channels named failure_class elsewhere."""
+date = "2026-08-11"
 check = "uv run pytest -q tests/core/test_failures.py"
 
 [[contracts]]

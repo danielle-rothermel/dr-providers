@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Annotated, Protocol, runtime_checkable
 
 from pydantic import ConfigDict, Field, RootModel, StrictStr
 
-from dr_providers.core.failures import FailureClass
+from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle.outcomes import ProviderInvocationOutcome
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
@@ -137,19 +137,21 @@ def classify_provider_failure(
         if failure.containment is TransportTimeoutContainment.CONTAINED:
             return ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT
         return ProviderInvocationOutcome.UNCONTAINED_DEADLINE_EXPIRATION
-    by_failure_class = {
-        FailureClass.PERMANENT: (
+    by_recoverability = {
+        RecoverabilityClass.PERMANENT: (
             ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
         ),
-        FailureClass.TRANSIENT: (
+        RecoverabilityClass.TRANSIENT: (
             ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE
         ),
-        FailureClass.RATE_LIMITED: ProviderInvocationOutcome.RATE_LIMITING,
-        FailureClass.RESOURCE_EXHAUSTION: (
+        RecoverabilityClass.RATE_LIMITED: (
+            ProviderInvocationOutcome.RATE_LIMITING
+        ),
+        RecoverabilityClass.RESOURCE_EXHAUSTION: (
             ProviderInvocationOutcome.RESOURCE_EXHAUSTION
         ),
-        FailureClass.UNKNOWN: (
+        RecoverabilityClass.UNKNOWN: (
             ProviderInvocationOutcome.UNKNOWN_TRANSPORT_FAILURE
         ),
     }
-    return by_failure_class[failure.failure_class]
+    return by_recoverability[failure.recoverability]

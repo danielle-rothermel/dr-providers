@@ -20,7 +20,7 @@ from pydantic import (
 
 from dr_providers.core.failures import (
     ControlValidationError,
-    FailureClass,
+    RecoverabilityClass,
     failure_record,
 )
 from dr_providers.modeling.controls import (
@@ -84,7 +84,7 @@ class ProviderCallDefinition(BaseModel):
         if unsupported:
             raise ControlValidationError(
                 failure_record(
-                    failure_class=FailureClass.PERMANENT,
+                    recoverability=RecoverabilityClass.PERMANENT,
                     code="required_control_unsupported",
                     message=(
                         f"definition {self.definition_id!r} requires controls "
@@ -172,7 +172,7 @@ class ProviderCallConfig(BaseModel):
             )
             raise ControlValidationError(
                 failure_record(
-                    failure_class=FailureClass.PERMANENT,
+                    recoverability=RecoverabilityClass.PERMANENT,
                     code="unmappable_reasoning_effort",
                     message=(
                         f"reasoning effort {effort.value!r} has no Anthropic "
@@ -190,7 +190,7 @@ class ProviderCallConfig(BaseModel):
         if undeclared:
             raise ControlValidationError(
                 failure_record(
-                    failure_class=FailureClass.PERMANENT,
+                    recoverability=RecoverabilityClass.PERMANENT,
                     code="undeclared_extension",
                     message=(
                         f"config sets extension keys {sorted(undeclared)!r} "
@@ -204,7 +204,7 @@ class ProviderCallConfig(BaseModel):
         if reserved:
             raise ControlValidationError(
                 failure_record(
-                    failure_class=FailureClass.PERMANENT,
+                    recoverability=RecoverabilityClass.PERMANENT,
                     code="reserved_extension_key",
                     message=(
                         f"config sets extension keys {sorted(reserved)!r} "
@@ -262,7 +262,7 @@ class ProviderCallConfig(BaseModel):
     def _raise_unsupported(self, control: RequestControl) -> None:
         raise ControlValidationError(
             failure_record(
-                failure_class=FailureClass.PERMANENT,
+                recoverability=RecoverabilityClass.PERMANENT,
                 code="unsupported_control",
                 message=(
                     f"config sets {control.value!r} but definition "
@@ -279,7 +279,7 @@ class ProviderCallConfig(BaseModel):
     def _raise_missing(self, control: RequestControl) -> None:
         raise ControlValidationError(
             failure_record(
-                failure_class=FailureClass.PERMANENT,
+                recoverability=RecoverabilityClass.PERMANENT,
                 code="missing_required_control",
                 message=(
                     f"definition {self.definition.definition_id!r} requires "
