@@ -38,8 +38,6 @@ EXPECTED_ALL = {
     "RECOVERABLE_FAILURE_CLASSES",
     "RETRYABLE_FAILURE_CLASSES",
     "SANITIZE_KEYS",
-    "STANDARD_RETRY_DELAYS_SECONDS",
-    "STANDARD_RETRY_ELIGIBLE_OUTCOMES",
     "AcceptAllSemanticResponseClassifier",
     "ApiKeyEnv",
     "ControlConstraints",

@@ -40,8 +40,6 @@ from dr_providers.lifecycle.outcomes import (
 from dr_providers.lifecycle.policy import (
     PROVIDER_CALL_RETRY_POLICY_SCHEMA,
     PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION,
-    STANDARD_RETRY_DELAYS_SECONDS,
-    STANDARD_RETRY_ELIGIBLE_OUTCOMES,
     CustomProviderCallRetryPolicy,
     ProviderCallRetryPolicy,
     StandardProviderCallRetryPolicy,
@@ -65,8 +63,6 @@ __all__ = [
     "PROVIDER_CALL_SCHEMA_VERSION",
     "PROVIDER_CALL_STATE_SCHEMA_VERSION",
     "PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION",
-    "STANDARD_RETRY_DELAYS_SECONDS",
-    "STANDARD_RETRY_ELIGIBLE_OUTCOMES",
     "AcceptAllSemanticResponseClassifier",
     "CompletedProviderInvocationObservation",
     "CustomProviderCallRetryPolicy",

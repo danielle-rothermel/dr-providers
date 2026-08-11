@@ -23,12 +23,6 @@ from dr_providers.lifecycle.outcomes import ProviderInvocationOutcome
 PROVIDER_CALL_RETRY_POLICY_SCHEMA = "dr_providers.provider_call_retry_policy"
 PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION = 1
 
-STANDARD_RETRY_ELIGIBLE_OUTCOMES = (
-    ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
-    ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
-)
-STANDARD_RETRY_DELAYS_SECONDS = (1.0,)
-
 type NonNegativeFiniteFloat = Annotated[
     float,
     Field(ge=0, allow_inf_nan=False, strict=True),
@@ -36,34 +30,12 @@ type NonNegativeFiniteFloat = Annotated[
 
 
 class StandardProviderCallRetryPolicy(BaseModel):
-    """The exact standard two-invocation, one-second retry policy."""
+    """The exact standard one-invocation policy (no auto-retry)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     policy_type: Literal["standard"] = "standard"
-    maximum_invocations: Literal[2] = 2
-    eligible_outcomes: tuple[ProviderInvocationOutcome, ...] = (
-        STANDARD_RETRY_ELIGIBLE_OUTCOMES
-    )
-    declared_delays_seconds: tuple[NonNegativeFiniteFloat, ...] = (
-        STANDARD_RETRY_DELAYS_SECONDS
-    )
-    maximum_cumulative_delay_seconds: NonNegativeFiniteFloat = 1.0
-
-    @model_validator(mode="after")
-    def _require_exact_standard_policy(
-        self,
-    ) -> StandardProviderCallRetryPolicy:
-        if self.eligible_outcomes != STANDARD_RETRY_ELIGIBLE_OUTCOMES:
-            msg = "standard retry eligibility is fixed"
-            raise ValueError(msg)
-        if self.declared_delays_seconds != STANDARD_RETRY_DELAYS_SECONDS:
-            msg = "standard retry delays are fixed"
-            raise ValueError(msg)
-        if self.maximum_cumulative_delay_seconds != 1.0:
-            msg = "standard maximum cumulative delay is fixed"
-            raise ValueError(msg)
-        return self
+    maximum_invocations: Literal[1] = 1
 
     def identity_payload(self) -> dict[str, object]:
         return self.model_dump(mode="json")
@@ -78,9 +50,6 @@ class StandardProviderCallRetryPolicy(BaseModel):
     @cached_property
     def identity_hash(self) -> str:
         return identity_document_hash(self.identity_document())
-
-    def retry_delay_after(self, invocation_ordinal: int) -> float:
-        return self.declared_delays_seconds[invocation_ordinal - 1]
 
 
 class CustomProviderCallRetryPolicy(BaseModel):

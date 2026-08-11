@@ -4,17 +4,18 @@ import math
 
 import pytest
 from pydantic import ValidationError
+from test_reducer import _observation, _state
 
 from dr_providers.lifecycle import (
-    STANDARD_RETRY_DELAYS_SECONDS,
-    STANDARD_RETRY_ELIGIBLE_OUTCOMES,
     CustomProviderCallRetryPolicy,
     ProviderCallOutcome,
     ProviderCallOutcomeKind,
+    ProviderCallResult,
     ProviderInvocationOutcome,
     SemanticResponseClassifierIdentifier,
     StandardProviderCallRetryPolicy,
     classify_semantic_response,
+    transition_provider_call,
 )
 from dr_providers.outcomes.models import ProviderTransportResponse
 
@@ -46,16 +47,10 @@ EXPECTED_CALL_OUTCOME_LITERALS = [
 ]
 EXPECTED_STANDARD_POLICY = {
     "policy_type": "standard",
-    "maximum_invocations": 2,
-    "eligible_outcomes": [
-        "transient_provider_or_network_failure",
-        "contained_transport_timeout",
-    ],
-    "declared_delays_seconds": [1.0],
-    "maximum_cumulative_delay_seconds": 1.0,
+    "maximum_invocations": 1,
 }
 GOLDEN_STANDARD_POLICY_HASH = (
-    "a53e481b6f1be12c4f23785315463fb53193c5e674364a860907369730c2f797"
+    "05f3a9d2b068b140e17da0936f931f878b57565d63362321e721d0e84dbc4cdf"
 )
 
 
@@ -73,25 +68,38 @@ def test_standard_policy_shape_and_identity_are_pinned() -> None:
 
     assert policy.model_dump(mode="json") == EXPECTED_STANDARD_POLICY
     assert policy.identity_hash == GOLDEN_STANDARD_POLICY_HASH
-    assert policy.maximum_invocations == 2
-    assert policy.eligible_outcomes == STANDARD_RETRY_ELIGIBLE_OUTCOMES
-    assert policy.declared_delays_seconds == STANDARD_RETRY_DELAYS_SECONDS
-    assert policy.retry_delay_after(1) == 1.0
+    assert policy.maximum_invocations == 1
     assert "identity_hash" in policy.__dict__
 
 
 @pytest.mark.parametrize(
     "change",
     [
-        {"maximum_invocations": 3},
-        {"eligible_outcomes": ()},
-        {"declared_delays_seconds": (0.5,)},
-        {"maximum_cumulative_delay_seconds": 2.0},
+        {"maximum_invocations": 2},
     ],
 )
 def test_standard_policy_rejects_variants(change: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         StandardProviderCallRetryPolicy.model_validate(change)
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE,
+        ProviderInvocationOutcome.CONTAINED_TRANSPORT_TIMEOUT,
+    ],
+)
+def test_standard_policy_never_retries_transient_or_timeout(
+    outcome: ProviderInvocationOutcome,
+) -> None:
+    state = _state()
+    result = transition_provider_call(state, _observation(state, outcome))
+
+    assert isinstance(result, ProviderCallResult)
+    assert result.outcome.kind is ProviderCallOutcomeKind.INVOCATION_OUTCOME
+    assert result.outcome.invocation_outcome is outcome
+    assert result.completed_invocations[-1].retry_decision is None
 
 
 def test_custom_policy_is_closed_deterministic_data() -> None:

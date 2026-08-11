@@ -154,14 +154,15 @@ check = "uv run pytest -q tests/lifecycle/test_handoff.py tests/lifecycle/test_r
 title = "The standard retry policy is small and exact"
 statement = """
 The provider call retry policy is the sole retryability authority. The standard \
-policy permits at most two invocations and one deterministic one-second delay, \
-with one second of maximum cumulative delay in policy identity. It retries only \
-contained transient provider or network failure and contained transport timeout. \
-Rate limiting, uncontained deadline expiration, resource exhaustion, provider \
-rejection, permanent failure, and unknown failure are terminal. Empty generation, \
-truncated-no-text, missing-generation-text, malformed response, and semantic \
-rejection require an explicitly selected custom policy. A retained normalized \
-Retry-After hint does not affect the standard policy."""
+policy permits exactly one invocation with no declared delays and no cumulative \
+delay in policy identity. Auto-retry of contained transient provider or network \
+failure and contained transport timeout requires an explicitly selected custom \
+policy. Rate limiting, uncontained deadline expiration, resource exhaustion, \
+provider rejection, permanent failure, and unknown failure are terminal under \
+the standard policy. Empty generation, truncated-no-text, missing-generation-\
+text, malformed response, and semantic rejection require an explicitly selected \
+custom policy. A retained normalized Retry-After hint does not affect the \
+standard policy."""
 rationale = """
 One explicit retry authority bounds request amplification while making broader \
 caller-selected policies identifiable."""
@@ -329,16 +330,3 @@ deliberate operation; the explicit restoration limit avoids presenting an \
 in-process best-effort rollback as crash-atomic publication."""
 date = "2026-08-05"
 check = "uv run pytest -q tests/transport/live/test_workflow.py"
-
-[[contracts]]
-title = "Audit-corpus curation and generated outputs have separate owners"
-statement = """
-Raw audits, the manifest, and the canonical suggestion mapping are curated \
-inputs. The generator validates but never overwrites the canonical mapping \
-and deterministically owns only parsed audits and analysis outputs."""
-rationale = """
-Human judgment owns canonical suggestions, while deterministic transformation \
-owns reproducible derived data. Mixing those owners would let regeneration \
-silently replace curated ground truth."""
-date = "2026-06-23"
-check = "uv run pytest -q tests/data/test_audit_ground_truth.py"

@@ -20,6 +20,7 @@ from dr_providers import (
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
     ProviderKind,
+    ProviderRetryAfterHint,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -357,3 +358,15 @@ class TestInvocationEvidence:
         )
 
         assert restored.identity_document().to_json_dict() == document
+
+
+def test_retry_after_hint_accepts_bounded_http_date_evidence() -> None:
+    hint = ProviderRetryAfterHint(
+        kind="http_date",
+        value="Wed, 21 Oct 2015 07:28:00 GMT",
+    )
+
+    assert hint.model_dump(mode="json") == {
+        "kind": "http_date",
+        "value": "Wed, 21 Oct 2015 07:28:00 GMT",
+    }

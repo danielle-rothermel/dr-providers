@@ -13,6 +13,7 @@ from dr_providers.lifecycle.outcomes import (
     ProviderCallOutcomeKind,
     ProviderInvocationOutcome,
 )
+from dr_providers.lifecycle.policy import CustomProviderCallRetryPolicy
 
 
 def transition_provider_call(
@@ -32,11 +33,15 @@ def transition_provider_call(
             ),
         )
 
-    is_eligible = outcome in state.retry_policy.eligible_outcomes
+    is_eligible = (
+        isinstance(state.retry_policy, CustomProviderCallRetryPolicy)
+        and outcome in state.retry_policy.eligible_outcomes
+    )
     has_capacity = (
         observation.invocation_ordinal < state.retry_policy.maximum_invocations
     )
     if is_eligible and has_capacity:
+        assert isinstance(state.retry_policy, CustomProviderCallRetryPolicy)
         delay = state.retry_policy.retry_delay_after(
             observation.invocation_ordinal
         )

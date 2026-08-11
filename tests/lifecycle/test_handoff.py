@@ -5,6 +5,7 @@ from threading import Event
 from typing import Any
 
 import pytest
+from _retry_fixtures import two_invocation_transient_retry_policy
 from pydantic import ValidationError
 
 from dr_providers import (
@@ -42,10 +43,10 @@ REQUEST_IDENTITY_HASH = (
     "5e7f8d07340accee58cc0a3d6570cf7966295b1a7f1102858b2fd254a7c2b27c"
 )
 POLICY_IDENTITY_HASH = (
-    "a53e481b6f1be12c4f23785315463fb53193c5e674364a860907369730c2f797"
+    "a465bcf528ec87cfacd1fe842849ee13880bc236f3693268caf6555aeba7c4cc"
 )
 CALL_IDENTITY_HASH = (
-    "a1ca086506691c936b6f19342935a27b592eaf0f7e2f4642038df9a7c5658c91"
+    "ec38a9ecb996867288077db54efcb592deb330618e9e9ad19f4e579923510dab"
 )
 FIRST_EVIDENCE_IDENTITY_HASH = (
     "02421ea37c05cc25d88a108a99df475967099fa29bee005cd6a646e63afb11d9"
@@ -60,10 +61,10 @@ SECOND_RECORD_IDENTITY_HASH = (
     "ec842dcfd80702e4a0a738b00bf32e0de1332b63f2625ca359dae0d15164229b"
 )
 RESULT_IDENTITY_HASH = (
-    "8369d3b8335de472be0b860565911bdc07100d6f47e3bb73d31bea50ed80304c"
+    "8eedebbae4ae36917d6cec3f0f59a80b639871ea5694319591a2a09b085c6d68"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "0e2452a8340af2b119c14730b87d7797f0dc4ca9dc5ccdf2fd031a7ce9fccba1"
+    "0589e48db5953eb642d77eb89f64ac08defaaa21029a286158e974ec0928d38d"
 )
 
 
@@ -84,6 +85,18 @@ def _state(
     return ProviderCallState.initial(
         request=_request(),
         retry_policy=StandardProviderCallRetryPolicy(),
+        classifier_identifier=classifier_identifier,
+    )
+
+
+def _retry_state(
+    classifier_identifier: SemanticResponseClassifierIdentifier = (
+        ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER
+    ),
+) -> ProviderCallState:
+    return ProviderCallState.initial(
+        request=_request(),
+        retry_policy=two_invocation_transient_retry_policy(),
         classifier_identifier=classifier_identifier,
     )
 
@@ -129,7 +142,7 @@ class _NoWait:
 
 
 def test_serialized_two_invocation_handoff_matches_local_driver() -> None:
-    initial_state = _state()
+    initial_state = _retry_state()
     durable_provider = ScriptedProvider(_scripted_outcomes())
 
     first_evidence = durable_provider.invoke(initial_state.request)
@@ -160,7 +173,7 @@ def test_serialized_two_invocation_handoff_matches_local_driver() -> None:
     wait = _NoWait()
     local_result = run_local_provider_call(
         provider=ScriptedProvider(_scripted_outcomes()),
-        state=_state(),
+        state=_retry_state(),
         classifier=AcceptAllSemanticResponseClassifier(),
         cancellation=Event(),
         retry_wait=wait,
@@ -178,7 +191,7 @@ def _golden_trace() -> tuple[
     ProviderRetryInstruction,
     ProviderCallResult,
 ]:
-    state = _state(SemanticResponseClassifierIdentifier("semantic-v1"))
+    state = _retry_state(SemanticResponseClassifierIdentifier("semantic-v1"))
     http_request = ProviderHttpRequestEvidence(
         url="https://example.test/v1/chat/completions",
         headers={"Content-Type": "application/json"},
@@ -438,7 +451,7 @@ def test_terminal_history_cannot_be_restored_as_continuable_state(
     payload = terminal.model_dump(mode="json")
     payload.pop("outcome")
     payload["next_invocation_ordinal"] = 2
-    with pytest.raises(ValidationError, match="terminal record"):
+    with pytest.raises(ValidationError, match="exceeds retry policy"):
         ProviderCallState.model_validate(payload)
 
 

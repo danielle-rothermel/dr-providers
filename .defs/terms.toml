@@ -327,8 +327,6 @@ finite maximum cumulative delay."""
 exported_symbols = [
   "PROVIDER_CALL_RETRY_POLICY_SCHEMA",
   "PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION",
-  "STANDARD_RETRY_DELAYS_SECONDS",
-  "STANDARD_RETRY_ELIGIBLE_OUTCOMES",
   "CustomProviderCallRetryPolicy",
   "ProviderCallRetryPolicy",
   "StandardProviderCallRetryPolicy",

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping  # noqa: TC003 -- pydantic field type
-from datetime import UTC
-from email.utils import format_datetime, parsedate_to_datetime
 from functools import cached_property
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -125,7 +123,11 @@ class ProviderHttpRequestEvidence(BaseModel):
 
 
 class ProviderRetryAfterHint(BaseModel):
-    """Small normalized form of a response ``Retry-After`` header."""
+    """Bounded recorded form of a response ``Retry-After`` header.
+
+    The HTTP producer normalizes values at capture time. dr-providers records
+    the hint as evidence only; no retry policy reads it today.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -141,29 +143,12 @@ class ProviderRetryAfterHint(BaseModel):
             ):
                 msg = "delta_seconds Retry-After value is outside its bound"
                 raise ValueError(msg)
-        else:
-            if (
-                not isinstance(self.value, str)
-                or len(self.value.encode("utf-8"))
-                > MAX_RETRY_AFTER_HEADER_BYTES
-            ):
-                msg = "http_date Retry-After value is outside its bound"
-                raise ValueError(msg)
-            try:
-                parsed = parsedate_to_datetime(self.value)
-                canonical = (
-                    None
-                    if parsed.tzinfo is None
-                    else format_datetime(
-                        parsed.astimezone(UTC),
-                        usegmt=True,
-                    )
-                )
-            except (TypeError, ValueError, OverflowError):
-                canonical = None
-            if canonical != self.value:
-                msg = "http_date Retry-After value must be canonical"
-                raise ValueError(msg)
+        elif (
+            not isinstance(self.value, str)
+            or len(self.value.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES
+        ):
+            msg = "http_date Retry-After value is outside its bound"
+            raise ValueError(msg)
         return self
 
 

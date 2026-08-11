@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from threading import TIMEOUT_MAX, Event, Thread
 
+from _retry_fixtures import two_invocation_transient_retry_policy
+
 from dr_providers import (
     FailureClass,
     MessageRole,
@@ -64,6 +66,14 @@ class _ScriptedCancellation(Event):
         return next(self._wait_results)
 
 
+def _retry_state() -> ProviderCallState:
+    return ProviderCallState.initial(
+        request=_request(),
+        retry_policy=two_invocation_transient_retry_policy(),
+        classifier_identifier=ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
+    )
+
+
 def test_driver_follows_reducer_retry_instruction() -> None:
     provider = ScriptedProvider(
         [
@@ -80,7 +90,7 @@ def test_driver_follows_reducer_retry_instruction() -> None:
 
     result = run_local_provider_call(
         provider=provider,
-        state=_state(),
+        state=_retry_state(),
         classifier=AcceptAllSemanticResponseClassifier(),
         cancellation=Event(),
         retry_wait=wait,
@@ -153,7 +163,7 @@ def test_cancellation_interrupts_controlled_retry_wait() -> None:
         target=lambda: results.append(
             run_local_provider_call(
                 provider=provider,
-                state=_state(),
+                state=_retry_state(),
                 classifier=AcceptAllSemanticResponseClassifier(),
                 cancellation=cancellation,
                 retry_wait=GateWait(),
