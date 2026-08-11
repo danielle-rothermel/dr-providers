@@ -74,6 +74,12 @@ def _http_provider(outcome_kind: OutcomeKind) -> Provider:
             provider_kind=ProviderKind.OPENAI,
             api_key_env="TEST_API_KEY",
             base_url="https://example.test/v1",
+            timeout_seconds=120.0,
+            idle_timeout_seconds=90.0,
+            max_connections=10,
+            max_keepalive_connections=5,
+            max_request_bytes=1024 * 1024,
+            max_response_bytes=8 * 1024 * 1024,
         ),
         _client_factory=lambda **_kwargs: httpx.Client(
             transport=httpx.MockTransport(handler)

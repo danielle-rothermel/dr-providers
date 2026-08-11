@@ -128,7 +128,7 @@ def test_query_prints_response_and_metadata(
             "anthropic",
             ProviderKind.ANTHROPIC,
             Protocol.ANTHROPIC_MESSAGES,
-            cli.DEFAULT_ANTHROPIC_TOKEN_LIMIT,
+            2048,
             id="anthropic-messages",
         ),
     ],
@@ -142,17 +142,18 @@ def test_provider_flags_select_request_route(
 ) -> None:
     scripted = patch_http_provider(monkeypatch)
 
-    result = runner.invoke(
-        cli.app,
-        [
-            "--provider",
-            provider_flag,
-            "--model",
-            "test-model",
-            "-m",
-            "hello",
-        ],
-    )
+    arguments = [
+        "--provider",
+        provider_flag,
+        "--model",
+        "test-model",
+        "-m",
+        "hello",
+    ]
+    if expected_token_limit is not None:
+        arguments.extend(["--token-limit", str(expected_token_limit)])
+
+    result = runner.invoke(cli.app, arguments)
 
     assert result.exit_code == 0
     request = scripted.requests[0]
@@ -279,6 +280,28 @@ def test_query_failure_prints_stderr_and_exits_nonzero(
 
     assert result.exit_code == 1
     assert result.stderr == "failure: boom_code: boom message\n"
+
+
+def test_anthropic_missing_token_limit_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "anthropic",
+            "--model",
+            "claude-sonnet-4-6",
+            "-m",
+            "hi",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "missing_required_control" in result.stderr
+    assert "token_limit" in result.stderr
 
 
 def test_removed_retries_flag_is_rejected(

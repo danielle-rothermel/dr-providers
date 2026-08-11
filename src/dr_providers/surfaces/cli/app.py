@@ -6,6 +6,7 @@ from typing import Annotated
 
 import typer
 
+from dr_providers.core.failures import ControlValidationError
 from dr_providers.lifecycle import (
     AcceptAllSemanticResponseClassifier,
     ProviderCallOutcomeKind,
@@ -24,8 +25,10 @@ from dr_providers.modeling.transcript import (
 from dr_providers.transport.http import HttpProvider
 from dr_providers.transport.policy import policy_for
 
-# Anthropic requires max_tokens; the CLI defaults it when omitted.
-DEFAULT_ANTHROPIC_TOKEN_LIMIT = 4096
+CLI_TIMEOUT_SECONDS = 120.0
+CLI_IDLE_TIMEOUT_SECONDS = 90.0
+CLI_MAX_REQUEST_BYTES = 1024 * 1024
+CLI_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
 
 class ProviderChoice(StrEnum):
@@ -58,9 +61,7 @@ TOP_P_OPTION = typer.Option("--top-p", help="Nucleus sampling top-p.")
 TOKEN_LIMIT_OPTION = typer.Option(
     "--token-limit",
     help=(
-        "Max output/completion tokens. Required by the anthropic preset; "
-        f"if omitted for --provider anthropic, defaults to "
-        f"{DEFAULT_ANTHROPIC_TOKEN_LIMIT}."
+        "Max output/completion tokens. Required when --provider is anthropic."
     ),
 )
 app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
@@ -78,18 +79,21 @@ def query(  # noqa: PLR0913
     token_limit: Annotated[int | None, TOKEN_LIMIT_OPTION] = None,
 ) -> None:
     """Run a single-shot provider query and print the response text."""
-    if token_limit is None and provider is ProviderChoice.ANTHROPIC:
-        token_limit = DEFAULT_ANTHROPIC_TOKEN_LIMIT
     factory = FACTORY_BY_KIND[_CHOICE_TO_FACTORY_KIND[provider]]
-    config = factory(
-        model=model,
-        controls=GenerationControls(
-            temperature=temperature,
-            top_p=top_p,
-            token_limit=token_limit,
-            reasoning=effort,
-        ),
-    )
+    try:
+        config = factory(
+            model=model,
+            controls=GenerationControls(
+                temperature=temperature,
+                top_p=top_p,
+                token_limit=token_limit,
+                reasoning=effort,
+            ),
+        )
+    except ControlValidationError as exc:
+        failure = exc.failure
+        typer.echo(f"failure: {failure.code}: {failure.message}", err=True)
+        raise typer.Exit(code=1) from exc
     messages: list[PromptMessage] = []
     if system is not None:
         messages.append(PromptMessage(role=MessageRole.SYSTEM, content=system))
@@ -107,8 +111,12 @@ def query(  # noqa: PLR0913
     )
     transport_policy = policy_for(
         config.route.provider,
+        timeout_seconds=CLI_TIMEOUT_SECONDS,
+        idle_timeout_seconds=CLI_IDLE_TIMEOUT_SECONDS,
         max_connections=1,
         max_keepalive_connections=1,
+        max_request_bytes=CLI_MAX_REQUEST_BYTES,
+        max_response_bytes=CLI_MAX_RESPONSE_BYTES,
     )
     with HttpProvider(policy=transport_policy) as http_provider:
         result = run_local_provider_call(

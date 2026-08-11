@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import inspect
 from typing import cast
 
 import pytest
+from _policy import (
+    TEST_IDLE_TIMEOUT_SECONDS,
+    TEST_MAX_CONNECTIONS,
+    TEST_MAX_KEEPALIVE_CONNECTIONS,
+    TEST_MAX_REQUEST_BYTES,
+    TEST_MAX_RESPONSE_BYTES,
+    TEST_TIMEOUT_SECONDS,
+    make_transport_policy,
+)
 from pydantic import ValidationError
 
 from dr_providers import (
@@ -12,12 +22,36 @@ from dr_providers import (
     ProviderTransportPolicy,
     policy_for,
 )
-from dr_providers.transport.policy import (
-    DEFAULT_MAX_CONNECTIONS,
-    DEFAULT_MAX_KEEPALIVE_CONNECTIONS,
-    DEFAULT_MAX_REQUEST_BYTES,
-    DEFAULT_MAX_RESPONSE_BYTES,
-)
+
+
+def _sized_policy_for(  # noqa: PLR0913 -- mirrors explicit policy_for sizing
+    kind: ProviderKind,
+    /,
+    *,
+    api_key_env: ApiKeyEnv | str | None = None,
+    base_url: str | None = None,
+    timeout_seconds: float = TEST_TIMEOUT_SECONDS,
+    idle_timeout_seconds: float = TEST_IDLE_TIMEOUT_SECONDS,
+    max_connections: int = TEST_MAX_CONNECTIONS,
+    max_keepalive_connections: int = TEST_MAX_KEEPALIVE_CONNECTIONS,
+    max_request_bytes: int = TEST_MAX_REQUEST_BYTES,
+    max_response_bytes: int = TEST_MAX_RESPONSE_BYTES,
+) -> ProviderTransportPolicy:
+    kwargs: dict[str, ApiKeyEnv | str | None] = {}
+    if api_key_env is not None:
+        kwargs["api_key_env"] = api_key_env
+    if base_url is not None:
+        kwargs["base_url"] = base_url
+    return policy_for(
+        kind,
+        timeout_seconds=timeout_seconds,
+        idle_timeout_seconds=idle_timeout_seconds,
+        max_connections=max_connections,
+        max_keepalive_connections=max_keepalive_connections,
+        max_request_bytes=max_request_bytes,
+        max_response_bytes=max_response_bytes,
+        **kwargs,
+    )
 
 
 class TestPolicyFor:
@@ -27,21 +61,33 @@ class TestPolicyFor:
                 {"api_key_env": "OPENAI_API_KEY"}
             )
 
-    def test_derives_defaults_from_provider_kind(self) -> None:
-        policy = policy_for(ProviderKind.ANTHROPIC)
+    def test_policy_for_requires_explicit_sizing(self) -> None:
+        required = (
+            "timeout_seconds",
+            "idle_timeout_seconds",
+            "max_connections",
+            "max_keepalive_connections",
+            "max_request_bytes",
+            "max_response_bytes",
+        )
+        for name in required:
+            parameter = inspect.signature(policy_for).parameters[name]
+            assert parameter.default is inspect.Parameter.empty
+
+    def test_resolves_provider_binding_from_kind(self) -> None:
+        policy = _sized_policy_for(ProviderKind.ANTHROPIC)
         assert policy.provider_kind is ProviderKind.ANTHROPIC
         assert policy.api_key_env == ApiKeyEnv.ANTHROPIC.value
         assert policy.base_url == ProviderBaseUrl.ANTHROPIC.value
-        assert policy.max_connections == DEFAULT_MAX_CONNECTIONS
+        assert policy.max_connections == TEST_MAX_CONNECTIONS
         assert (
-            policy.max_keepalive_connections
-            == DEFAULT_MAX_KEEPALIVE_CONNECTIONS
+            policy.max_keepalive_connections == TEST_MAX_KEEPALIVE_CONNECTIONS
         )
-        assert policy.max_request_bytes == DEFAULT_MAX_REQUEST_BYTES
-        assert policy.max_response_bytes == DEFAULT_MAX_RESPONSE_BYTES
+        assert policy.max_request_bytes == TEST_MAX_REQUEST_BYTES
+        assert policy.max_response_bytes == TEST_MAX_RESPONSE_BYTES
 
     def test_overrides_apply(self) -> None:
-        policy = policy_for(
+        policy = _sized_policy_for(
             ProviderKind.OPENAI,
             base_url="https://proxy.example/v1",
             api_key_env="CUSTOM_KEY_ENV",
@@ -58,7 +104,7 @@ class TestPolicyFor:
         assert policy.max_response_bytes == 8192
 
     def test_idle_timeout_clamped_to_timeout(self) -> None:
-        policy = policy_for(
+        policy = _sized_policy_for(
             ProviderKind.OPENAI,
             timeout_seconds=10.0,
             idle_timeout_seconds=45.0,
@@ -72,7 +118,7 @@ class TestPolicyFor:
     )
     def test_invalid_timeout_rejected(self, timeout_seconds: float) -> None:
         with pytest.raises(ValidationError):
-            policy_for(
+            _sized_policy_for(
                 ProviderKind.OPENAI,
                 timeout_seconds=timeout_seconds,
             )
@@ -86,7 +132,7 @@ class TestPolicyFor:
         self, idle_timeout_seconds: float
     ) -> None:
         with pytest.raises(ValidationError):
-            policy_for(
+            _sized_policy_for(
                 ProviderKind.OPENAI,
                 idle_timeout_seconds=idle_timeout_seconds,
             )
@@ -96,9 +142,7 @@ class TestPolicyFor:
     )
     def test_timeout_type_rejected_direct(self, invalid_value: object) -> None:
         with pytest.raises(ValidationError):
-            ProviderTransportPolicy(
-                provider_kind=ProviderKind.OPENAI,
-                api_key_env="OPENAI_API_KEY",
+            make_transport_policy(
                 timeout_seconds=cast("float", invalid_value),
             )
 
@@ -109,9 +153,7 @@ class TestPolicyFor:
         self, invalid_value: object
     ) -> None:
         with pytest.raises(ValidationError):
-            ProviderTransportPolicy(
-                provider_kind=ProviderKind.OPENAI,
-                api_key_env="OPENAI_API_KEY",
+            make_transport_policy(
                 idle_timeout_seconds=cast("float", invalid_value),
             )
 
@@ -176,9 +218,7 @@ class TestPolicyFor:
                 "max_keepalive_connections must not exceed max_connections"
             ),
         ):
-            ProviderTransportPolicy(
-                provider_kind=ProviderKind.OPENAI,
-                api_key_env="OPENAI_API_KEY",
+            make_transport_policy(
                 max_connections=2,
                 max_keepalive_connections=3,
             )
@@ -191,18 +231,24 @@ class TestPolicyFor:
     def test_positive_finite_timeouts_accepted(
         self, timeout_seconds: int | float
     ) -> None:
-        direct = ProviderTransportPolicy(
-            provider_kind=ProviderKind.OPENAI,
-            api_key_env="OPENAI_API_KEY",
+        direct = make_transport_policy(
             timeout_seconds=timeout_seconds,
             idle_timeout_seconds=timeout_seconds,
+            max_connections=1,
+            max_keepalive_connections=1,
+            max_request_bytes=1024,
+            max_response_bytes=1024,
         )
         from_json = ProviderTransportPolicy.model_validate_json(
             "{"
             '"provider_kind":"openai",'
             '"api_key_env":"OPENAI_API_KEY",'
             f'"timeout_seconds":{timeout_seconds},'
-            f'"idle_timeout_seconds":{timeout_seconds}'
+            f'"idle_timeout_seconds":{timeout_seconds},'
+            '"max_connections":1,'
+            '"max_keepalive_connections":1,'
+            '"max_request_bytes":1024,'
+            '"max_response_bytes":1024'
             "}"
         )
 
@@ -213,7 +259,7 @@ class TestPolicyFor:
     def test_identity_carries_provider_and_credential_environment_name(
         self,
     ) -> None:
-        policy = ProviderTransportPolicy(
+        policy = make_transport_policy(
             provider_kind=ProviderKind.OPENAI,
             api_key_env=str(ApiKeyEnv.OPENAI),
             base_url=str(ProviderBaseUrl.OPENAI),
@@ -225,12 +271,12 @@ class TestPolicyFor:
             "provider_kind": "openai",
             "api_key_env": "OPENAI_API_KEY",
             "base_url": "https://api.openai.com/v1",
-            "timeout_seconds": 120.0,
-            "idle_timeout_seconds": 90.0,
-            "max_connections": DEFAULT_MAX_CONNECTIONS,
-            "max_keepalive_connections": (DEFAULT_MAX_KEEPALIVE_CONNECTIONS),
-            "max_request_bytes": DEFAULT_MAX_REQUEST_BYTES,
-            "max_response_bytes": DEFAULT_MAX_RESPONSE_BYTES,
+            "timeout_seconds": TEST_TIMEOUT_SECONDS,
+            "idle_timeout_seconds": TEST_IDLE_TIMEOUT_SECONDS,
+            "max_connections": TEST_MAX_CONNECTIONS,
+            "max_keepalive_connections": TEST_MAX_KEEPALIVE_CONNECTIONS,
+            "max_request_bytes": TEST_MAX_REQUEST_BYTES,
+            "max_response_bytes": TEST_MAX_RESPONSE_BYTES,
         }
         assert "api_key" not in payload
 
@@ -246,11 +292,7 @@ class TestPolicyFor:
         with pytest.raises(
             ValidationError, match="must not contain URL userinfo"
         ):
-            ProviderTransportPolicy(
-                provider_kind=ProviderKind.OPENAI,
-                api_key_env="OPENAI_API_KEY",
-                base_url=base_url,
-            )
+            make_transport_policy(base_url=base_url)
 
         with pytest.raises(
             ValidationError, match="must not contain URL userinfo"
@@ -258,4 +300,13 @@ class TestPolicyFor:
             ProviderTransportPolicy.model_validate_json(
                 '{"provider_kind":"openai",'
                 f'"api_key_env":"OPENAI_API_KEY","base_url":"{base_url}"}}'
+            )
+
+    def test_transport_policy_requires_explicit_sizing(self) -> None:
+        with pytest.raises(ValidationError):
+            ProviderTransportPolicy.model_validate(
+                {
+                    "provider_kind": "openai",
+                    "api_key_env": "OPENAI_API_KEY",
+                }
             )

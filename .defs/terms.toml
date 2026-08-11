@@ -164,20 +164,15 @@ exported_symbols = [
 name = "provider transport policy"
 definition = """
 An identity-bearing declaration binding one provider service to its credentials \
-location, endpoint, native phase timeouts, connection-pool limits, and request \
-and response byte limits. It is excluded from provider-call request identity."""
+location, endpoint, caller-declared native phase timeouts, connection-pool \
+limits, and request and response byte limits. It is excluded from provider-call \
+request identity."""
 exported_symbols = [
   "ProviderTransportPolicy",
   "ApiKeyEnv",
   "ProviderBaseUrl",
   "DEFAULT_API_KEY_ENVS",
   "DEFAULT_BASE_URLS",
-  "DEFAULT_IDLE_TIMEOUT_SECONDS",
-  "DEFAULT_MAX_CONNECTIONS",
-  "DEFAULT_MAX_KEEPALIVE_CONNECTIONS",
-  "DEFAULT_MAX_REQUEST_BYTES",
-  "DEFAULT_MAX_RESPONSE_BYTES",
-  "DEFAULT_TIMEOUT_SECONDS",
   "policy_for",
 ]
 

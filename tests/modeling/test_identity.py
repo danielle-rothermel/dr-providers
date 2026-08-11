@@ -285,6 +285,10 @@ class TestPolicyExclusion:
             base_url=str(ProviderBaseUrl.OPENAI),
             timeout_seconds=5.0,
             idle_timeout_seconds=3.0,
+            max_connections=10,
+            max_keepalive_connections=5,
+            max_request_bytes=1024 * 1024,
+            max_response_bytes=8 * 1024 * 1024,
         )
         policy_keys = set(policy.identity_payload())
         config_text = str(config.identity_payload())

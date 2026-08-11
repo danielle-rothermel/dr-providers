@@ -138,8 +138,12 @@ def test_live_matrix(
     kind = config.route.provider
     policy = policy_for(
         kind,
+        timeout_seconds=120.0,
+        idle_timeout_seconds=90.0,
         max_connections=1,
         max_keepalive_connections=1,
+        max_request_bytes=1024 * 1024,
+        max_response_bytes=8 * 1024 * 1024,
     )
     classifier = AcceptAllSemanticResponseClassifier()
     state = ProviderCallState.initial(

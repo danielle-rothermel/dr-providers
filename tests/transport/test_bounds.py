@@ -10,12 +10,13 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+from _policy import make_transport_policy
+
 from dr_providers import (
     FailureClass,
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
-    ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -69,8 +70,7 @@ class ByteChunks(httpx.SyncByteStream):
 
 
 def _policy(**overrides: Any) -> ProviderTransportPolicy:
-    return ProviderTransportPolicy(
-        provider_kind=ProviderKind.OPENAI,
+    return make_transport_policy(
         api_key_env="TEST_API_KEY",
         base_url="https://example.test/v1",
         max_request_bytes=overrides.pop("max_request_bytes", 1024),

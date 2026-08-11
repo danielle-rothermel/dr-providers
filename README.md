@@ -94,8 +94,12 @@ state = ProviderCallState.initial(
 with HttpProvider(
     policy=policy_for(
         ProviderKind.OPENAI,
+        timeout_seconds=120.0,
+        idle_timeout_seconds=90.0,
         max_connections=1,
         max_keepalive_connections=1,
+        max_request_bytes=1024 * 1024,
+        max_response_bytes=8 * 1024 * 1024,
     )
 ) as provider:
     result = run_local_provider_call(
@@ -127,6 +131,12 @@ uv run dr-providers --provider openai-responses \
   --model gpt-5-mini \
   --token-limit 256 \
   -m 'Say hello in one word.'
+
+# Anthropic requires --token-limit:
+uv run dr-providers --provider anthropic \
+  --model claude-sonnet-4-6 \
+  --token-limit 256 \
+  -m 'Say hello in one word.'
 ```
 
 ## Outcome and evidence boundaries
@@ -149,11 +159,13 @@ and closes that client once. Connect, write, and pool phase timeouts and the
 response-read idle timeout do not bound the total wall-clock duration of a slow
 response that keeps producing bytes.
 
-The public transport-policy defaults allow 10 open connections and retain 5
-idle connections. A caller that shares one `HttpProvider` across concurrent
-work must explicitly size both limits to its own maximum concurrent
-`invoke()` calls. The one-shot CLI, live matrix, and quickstart run one admitted
-invocation per provider and therefore configure both limits to 1.
+Every `ProviderTransportPolicy` and `policy_for()` call must declare native
+phase timeouts, connection-pool limits, and request/response byte caps.
+There are no library-wide implicit sizing defaults. One-shot examples in this
+repository configure one open and one keep-alive connection because each run
+admits a single invocation. A caller that shares one `HttpProvider` across
+concurrent work must size both connection limits to its own maximum concurrent
+`invoke()` calls.
 
 `ProviderCallState`, `ProviderRetryInstruction`, and `ProviderCallResult` are
 JSON-serializable handoff values. A durable consumer can persist the declared

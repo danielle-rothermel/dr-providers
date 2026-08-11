@@ -14,6 +14,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   workflows.
 - Remove the ponytail audit-corpus benchmark fixtures, generator script, and
   tests.
+- Remove the six public `DEFAULT_*` transport sizing constants
+  (`DEFAULT_TIMEOUT_SECONDS`, `DEFAULT_IDLE_TIMEOUT_SECONDS`,
+  `DEFAULT_MAX_CONNECTIONS`, `DEFAULT_MAX_KEEPALIVE_CONNECTIONS`,
+  `DEFAULT_MAX_REQUEST_BYTES`, `DEFAULT_MAX_RESPONSE_BYTES`).
+- Remove the CLI Anthropic 4096 `max_tokens` fallback.
 
 ### Changed
 
@@ -21,6 +26,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   auto-retry; opt-in retry remains on `CustomProviderCallRetryPolicy`.
 - Record `Retry-After` hints as bounded invocation evidence only; remove
   canonical-form re-validation on the hint model.
+- Require explicit transport-policy sizing at `ProviderTransportPolicy`
+  construction and `policy_for()` (timeouts, connection pool limits, byte caps).
 
 ## [0.3.0] - 2026-08-08
 
