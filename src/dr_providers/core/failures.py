@@ -43,15 +43,9 @@ def failure_record(
 class ProviderFailureError(Exception):
     """Raised carrier for a :class:`ProviderFailure` record."""
 
-    def __init__(
-        self,
-        failure: ProviderFailure,
-        *,
-        underlying: BaseException | None = None,
-    ) -> None:
+    def __init__(self, failure: ProviderFailure) -> None:
         super().__init__(failure.message)
         self.failure = failure
-        self.underlying = underlying
 
 
 class ControlValidationError(ProviderFailureError):

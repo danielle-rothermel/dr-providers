@@ -39,6 +39,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `traceback` field on transport failures for wire-path httpx exceptions.
 - Remove the 256-character failure message cap on provider-constructed transport
   failures.
+- Remove `ProviderFailureError.underlying`; raised validation errors retain the
+  original cause through normal exception chaining only.
+- Classify wire-path httpx errors with `classify_httpx_error` instead of
+  treating every non-timeout `HTTPError` as transient.
+- Use static transport failure summary messages with `metadata.exception_type`
+  for wire-path httpx exceptions; tracebacks carry diagnostic detail.
 
 ## [0.3.0] - 2026-08-08
 

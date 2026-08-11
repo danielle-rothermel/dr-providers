@@ -105,6 +105,8 @@ def test_native_timeout_phases_are_contained(
     assert isinstance(failure, ProviderTransportFailure)
     assert failure.code == expected_code
     assert failure.containment is TransportTimeoutContainment.CONTAINED
+    assert failure.message == "provider transport timeout"
+    assert failure.metadata["exception_type"] == type(error).__name__
     assert "phase" not in failure.metadata
     assert "unbounded provider detail" not in failure.message
     assert failure.traceback is not None

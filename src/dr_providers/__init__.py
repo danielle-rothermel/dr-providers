@@ -233,6 +233,7 @@ __all__ = [
     "anthropic_messages_config",
     "build_payload",
     "cancel_provider_call",
+    "classify_httpx_error",
     "classify_provider_invocation",
     "classify_semantic_response",
     "classify_status_code",
@@ -264,10 +265,16 @@ __all__ = [
 __version__ = version(PACKAGE_NAME)
 
 
-_LAZY_TRANSPORT_EXPORTS = frozenset({"HttpProvider"})
+_LAZY_TRANSPORT_EXPORTS = frozenset({"HttpProvider", "classify_httpx_error"})
 
 
 def __getattr__(name: str) -> Any:
+    if name == "classify_httpx_error":
+        from dr_providers.transport.httpx_errors import (  # noqa: PLC0415 -- lazy
+            classify_httpx_error,
+        )
+
+        return classify_httpx_error
     if name in _LAZY_TRANSPORT_EXPORTS:
         from dr_providers.transport import http  # noqa: PLC0415 -- lazy
 

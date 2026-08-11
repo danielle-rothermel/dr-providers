@@ -307,20 +307,42 @@ class TestHttpProvider:
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.recoverability is RecoverabilityClass.TRANSIENT
         assert outcome.code == "transport_error"
+        assert outcome.message == "provider transport error"
+        assert outcome.metadata["exception_type"] == "ConnectError"
         assert outcome.traceback is not None
         assert "ConnectError" in outcome.traceback
         assert "boom" not in outcome.message
 
     @pytest.mark.parametrize(
-        ("error", "expected_code"),
+        ("error", "expected_code", "expected_recoverability"),
         [
-            (httpx.ConnectError("down"), "transport_error"),
-            (httpx.ConnectTimeout("slow connect"), "timeout"),
-            (httpx.ReadTimeout("idle stall"), "stalled_response"),
+            (
+                httpx.ConnectError("down"),
+                "transport_error",
+                RecoverabilityClass.TRANSIENT,
+            ),
+            (
+                httpx.ConnectTimeout("slow connect"),
+                "timeout",
+                RecoverabilityClass.TRANSIENT,
+            ),
+            (
+                httpx.ReadTimeout("idle stall"),
+                "stalled_response",
+                RecoverabilityClass.TRANSIENT,
+            ),
+            (
+                httpx.LocalProtocolError("bad framing"),
+                "transport_protocol_error",
+                RecoverabilityClass.PERMANENT,
+            ),
         ],
     )
     def test_httpx_error_classification(
-        self, error: httpx.HTTPError, expected_code: str
+        self,
+        error: httpx.HTTPError,
+        expected_code: str,
+        expected_recoverability: RecoverabilityClass,
     ) -> None:
         def handler(_req: httpx.Request) -> httpx.Response:
             raise error
@@ -329,7 +351,13 @@ class TestHttpProvider:
         outcome = provider.invoke(openai_request()).outcome
         assert isinstance(outcome, ProviderTransportFailure)
         assert outcome.code == expected_code
-        assert outcome.recoverability is RecoverabilityClass.TRANSIENT
+        assert outcome.recoverability is expected_recoverability
+        assert outcome.message == (
+            "provider transport timeout"
+            if isinstance(error, httpx.TimeoutException)
+            else "provider transport error"
+        )
+        assert outcome.metadata["exception_type"] == type(error).__name__
         assert outcome.traceback is not None
         assert type(error).__name__ in outcome.traceback
         assert str(error) not in outcome.message

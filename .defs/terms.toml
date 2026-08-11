@@ -209,6 +209,7 @@ exported_symbols = [
   "ProviderTransportFailure",
   "TransportTimeoutContainment",
   "classify_status_code",
+  "classify_httpx_error",
 ]
 is_a = ["provider transport outcome"]
 part_of = ["provider invocation evidence"]

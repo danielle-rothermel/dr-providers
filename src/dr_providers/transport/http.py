@@ -34,6 +34,7 @@ from dr_providers.outcomes.models import (
 from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
+from dr_providers.transport.httpx_errors import classify_httpx_error
 from dr_providers.transport.status import classify_status_code
 
 if TYPE_CHECKING:
@@ -50,7 +51,6 @@ JSON_CONTENT_TYPE = "application/json"
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
-TRANSPORT_ERROR_CODE = "transport_error"
 REQUEST_TOO_LARGE_CODE = "request_body_too_large"
 RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
 
@@ -298,14 +298,17 @@ class HttpProvider:
         except httpx.TimeoutException as error:
             return self._httpx_timeout_failure(error, url), None, None
         except httpx.HTTPError as error:
-            error_type = type(error).__name__[:64]
+            recoverability, code = classify_httpx_error(error)
             return (
                 ProviderTransportFailure(
-                    recoverability=RecoverabilityClass.TRANSIENT,
-                    code=TRANSPORT_ERROR_CODE,
-                    message=f"provider transport error ({error_type})",
+                    recoverability=recoverability,
+                    code=code,
+                    message="provider transport error",
                     traceback=_exception_traceback(error),
-                    metadata={"url": url},
+                    metadata={
+                        "url": url,
+                        "exception_type": type(error).__name__,
+                    },
                 ),
                 None,
                 None,
@@ -333,15 +336,15 @@ class HttpProvider:
     ) -> ProviderTransportFailure:
         """Every native timeout is contained because the HTTP call returned."""
         is_idle_stall = isinstance(error, httpx.ReadTimeout)
-        error_type = type(error).__name__[:64]
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.TRANSIENT,
             code=STALLED_RESPONSE_CODE if is_idle_stall else TIMEOUT_CODE,
-            message=f"provider transport timeout ({error_type})",
+            message="provider transport timeout",
             traceback=_exception_traceback(error),
             containment=TransportTimeoutContainment.CONTAINED,
             metadata={
                 "url": url,
+                "exception_type": type(error).__name__,
                 "timeout_seconds": self._policy.timeout_seconds,
                 "idle_timeout_seconds": self._policy.idle_timeout_seconds,
             },
