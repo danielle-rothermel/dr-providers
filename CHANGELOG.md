@@ -22,6 +22,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- Remove the public `classify_httpx_error` export; wire-error classification is
+  now the internal kind-to-code boundary mapping.
+- Remove `httpx` as a runtime dependency; it remains a dev dependency for
+  `MockTransport`-based tests.
 - Remove `dr_providers.surfaces.serve` and the `[serve]` optional extra
   (FastAPI/uvicorn).
 - Remove post-build wheel install/smoke verification from CI and release
@@ -39,6 +43,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Depend on `dr-http` for the bounded HTTP client core. `HttpProvider` now
+  composes `dr_http.BoundedHttpClient`, which owns the lifecycle state machine,
+  the offload executor, connection-pool and byte bounds, native timeout phases,
+  and wire-error detection. `dr_providers` no longer imports `httpx` anywhere
+  in `src/`.
+- Admit one whole invocation through the client rather than one wire call, so a
+  clean close drains complete invocations and their evidence.
+- Map `dr_http.WireFailureKind` to persisted recoverability and failure codes at
+  one exhaustive boundary; every recorded literal is unchanged.
+- Bound `Retry-After` hints on top of the wire boundary's uncapped parse, so
+  retained `ProviderRetryAfterHint` values keep their existing bounds.
 - Default the standard provider-call retry policy to one invocation with no
   auto-retry; opt-in retry remains on `CustomProviderCallRetryPolicy`.
 - Record `Retry-After` hints as bounded invocation evidence only; remove

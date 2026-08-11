@@ -30,10 +30,18 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "dr-http",
     "dr-serialize>=0.1.2,<0.2",
-    "httpx>=0.28.1",
     "pydantic>=2.13.4",
 ]
+
+[tool.uv.sources]
+# TODO(dr-http pin): swap to the git rev pin once dr-http's bounded-client-core
+# branch is pushed and merged. The intended pin is:
+#   dr-http = { git = "https://github.com/danielle-rothermel/dr-http", rev = "<post-merge main sha>" }
+# This path source resolves the same tree as dr-http e6354381c473 but is not
+# fetchable by CI, so this PR must not merge before that swap.
+dr-http = { path = "../dr-http" }
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]

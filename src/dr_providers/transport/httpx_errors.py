@@ -1,6 +1,19 @@
+"""Map wire failure kinds onto persisted transport failure vocabulary.
+
+``dr_http.WireFailureKind`` is an in-process description of one wire
+condition and is never persisted. The codes below are persisted: they
+land in ``ProviderTransportFailure.code`` inside stored invocation
+evidence, so each one is a recorded-data format pinned in
+``tests/outcomes/test_persisted_literals.py``.
+
+The mapping is exhaustive over ``WireFailureKind`` so a new wire
+condition cannot silently acquire a code that already means something
+else in recorded data.
+"""
+
 from __future__ import annotations
 
-import httpx
+from dr_http import WireFailureKind
 
 from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.outcomes.models import (
@@ -8,59 +21,89 @@ from dr_providers.outcomes.models import (
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
 )
-from dr_providers.transport.status import classify_status_code
 
 TRANSPORT_ERROR_CODE = "transport_error"
 TRANSPORT_PROTOCOL_ERROR_CODE = "transport_protocol_error"
 REMOTE_PROTOCOL_ERROR_CODE = "transport_remote_protocol_error"
 HTTP_STATUS_CODE_PREFIX = "http_status_"
+INVALID_BASE_URL_CODE = "invalid_base_url"
+REQUEST_TOO_LARGE_CODE = "request_body_too_large"
+RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
+
+TIMEOUT_KINDS = frozenset(
+    {
+        WireFailureKind.TIMEOUT,
+        WireFailureKind.STALLED_RESPONSE,
+        WireFailureKind.POOL_TIMEOUT,
+    }
+)
+"""Kinds whose failure states timeout containment explicitly."""
+
+WIRE_FAILURE_CLASSIFICATION: dict[
+    WireFailureKind, tuple[RecoverabilityClass, str]
+] = {
+    # Every native timeout is transient; the phase keeps its own code so
+    # local pool contention stays distinguishable from provider slowness.
+    WireFailureKind.TIMEOUT: (RecoverabilityClass.TRANSIENT, TIMEOUT_CODE),
+    WireFailureKind.STALLED_RESPONSE: (
+        RecoverabilityClass.TRANSIENT,
+        STALLED_RESPONSE_CODE,
+    ),
+    WireFailureKind.POOL_TIMEOUT: (
+        RecoverabilityClass.TRANSIENT,
+        POOL_TIMEOUT_CODE,
+    ),
+    WireFailureKind.INVALID_URL: (
+        RecoverabilityClass.PERMANENT,
+        INVALID_BASE_URL_CODE,
+    ),
+    # A server that disconnects mid-exchange, classically a dropped
+    # keepalive connection, is retryable in a way a local protocol
+    # violation is not.
+    WireFailureKind.REMOTE_PROTOCOL_ERROR: (
+        RecoverabilityClass.TRANSIENT,
+        REMOTE_PROTOCOL_ERROR_CODE,
+    ),
+    WireFailureKind.LOCAL_PROTOCOL_ERROR: (
+        RecoverabilityClass.PERMANENT,
+        TRANSPORT_PROTOCOL_ERROR_CODE,
+    ),
+    # Connect and wider network failures share one recorded code: both
+    # name an exchange that never completed against a reachable peer.
+    WireFailureKind.CONNECT_ERROR: (
+        RecoverabilityClass.TRANSIENT,
+        TRANSPORT_ERROR_CODE,
+    ),
+    WireFailureKind.NETWORK_ERROR: (
+        RecoverabilityClass.TRANSIENT,
+        TRANSPORT_ERROR_CODE,
+    ),
+    WireFailureKind.REQUEST_TOO_LARGE: (
+        RecoverabilityClass.RESOURCE_EXHAUSTION,
+        REQUEST_TOO_LARGE_CODE,
+    ),
+    WireFailureKind.RESPONSE_TOO_LARGE: (
+        RecoverabilityClass.RESOURCE_EXHAUSTION,
+        RESPONSE_TOO_LARGE_CODE,
+    ),
+    WireFailureKind.UNKNOWN: (
+        RecoverabilityClass.UNKNOWN,
+        TRANSPORT_ERROR_CODE,
+    ),
+}
 
 
-def timeout_code(error: httpx.TimeoutException) -> str:
-    """Name the timeout phase so local contention stays distinguishable.
-
-    Every caller that classifies a timeout uses this one mapping, so the
-    wire path and the exported classifier cannot disagree about which
-    phase a timeout names.
-    """
-    if isinstance(error, httpx.PoolTimeout):
-        return POOL_TIMEOUT_CODE
-    if isinstance(error, httpx.ReadTimeout):
-        return STALLED_RESPONSE_CODE
-    return TIMEOUT_CODE
-
-
-def classify_httpx_error(
-    error: httpx.HTTPError,
+def classify_wire_failure_kind(
+    kind: WireFailureKind,
 ) -> tuple[RecoverabilityClass, str]:
-    """Classify a non-timeout httpx wire error into recoverability and code.
+    """Classify one wire failure kind into recoverability and code.
 
-    Timeouts are handled here only as a guard: the wire path classifies them
-    earlier with containment evidence this function cannot supply.
+    Every member of the closed kind enum is mapped, so an unmapped kind
+    is a defect in this boundary rather than a wire condition and raises
+    instead of being recorded under a borrowed code.
     """
-    if isinstance(error, httpx.TimeoutException):
-        return RecoverabilityClass.TRANSIENT, timeout_code(error)
-    if isinstance(error, httpx.HTTPStatusError):
-        status_code = error.response.status_code
-        return (
-            classify_status_code(status_code),
-            f"{HTTP_STATUS_CODE_PREFIX}{status_code}",
-        )
-    if isinstance(error, httpx.RemoteProtocolError):
-        # A server that disconnects mid-exchange, classically a dropped
-        # keepalive connection, is retryable in a way a local protocol
-        # violation is not.
-        return RecoverabilityClass.TRANSIENT, REMOTE_PROTOCOL_ERROR_CODE
-    if isinstance(
-        error,
-        (
-            httpx.ProtocolError,
-            httpx.DecodingError,
-            httpx.UnsupportedProtocol,
-            httpx.TooManyRedirects,
-        ),
-    ):
-        return RecoverabilityClass.PERMANENT, TRANSPORT_PROTOCOL_ERROR_CODE
-    if isinstance(error, httpx.NetworkError | httpx.ProxyError):
-        return RecoverabilityClass.TRANSIENT, TRANSPORT_ERROR_CODE
-    return RecoverabilityClass.UNKNOWN, TRANSPORT_ERROR_CODE
+    classification = WIRE_FAILURE_CLASSIFICATION.get(kind)
+    if classification is None:
+        msg = f"unmapped wire failure kind: {kind}"
+        raise ValueError(msg)
+    return classification

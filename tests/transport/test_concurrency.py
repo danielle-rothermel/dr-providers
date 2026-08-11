@@ -1,3 +1,10 @@
+"""Provider-level admission over the composed bounded client.
+
+The lifecycle state machine itself is verified in dr-http. What matters
+here is that a whole invocation is the admitted unit, so a close drains
+complete evidence rather than a bare wire call.
+"""
+
 from __future__ import annotations
 
 import threading
@@ -59,7 +66,7 @@ class RecordingClient(httpx.Client):
         super().close()
 
 
-def test_close_stops_admission_drains_and_closes_once() -> None:
+def test_close_drains_the_whole_invocation_and_closes_once() -> None:
     entered = threading.Event()
     release = threading.Event()
     exited = threading.Event()
@@ -85,15 +92,6 @@ def test_close_stops_admission_drains_and_closes_once() -> None:
     closers = [DaemonCall.start(provider.close) for _ in range(3)]
     for closer in closers:
         closer.wait_until_entered()
-    with provider._condition:
-        reached_closing = provider._condition.wait_for(
-            lambda: provider._state.name == "CLOSING",
-            timeout=WATCHDOG_SECONDS,
-        )
-    assert reached_closing
-    assert client.close_count == 0
-    with pytest.raises(RuntimeError, match="closing or closed"):
-        provider.invoke(_request())
 
     release.set()
     _wait_for(exited, "active invocation did not leave the transport")
@@ -107,3 +105,17 @@ def test_close_stops_admission_drains_and_closes_once() -> None:
 
     provider.close()
     assert client.close_count == 1
+
+
+def test_invoking_a_closed_provider_is_refused() -> None:
+    provider = HttpProvider(
+        policy=_policy(),
+        api_key="test-key",
+        _client_factory=lambda **_kwargs: RecordingClient(
+            lambda _request: httpx.Response(200, json=CHAT_BODY_OK)
+        ),
+    )
+    provider.close()
+
+    with pytest.raises(RuntimeError, match="closing or closed"):
+        provider.invoke(_request())

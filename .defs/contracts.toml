@@ -124,27 +124,32 @@ date = "2026-08-08"
 check = "uv run pytest -q tests/transport/test_policy.py tests/transport/test_timeout.py tests/lifecycle/test_classification.py"
 
 [[contracts]]
-title = "Wire-path httpx errors are classified explicitly"
+title = "Wire results are mapped to persisted vocabulary at one boundary"
 statement = """
-Non-timeout httpx wire errors are classified by classify_httpx_error into \
-recoverability and code. Network and proxy failures are transient; a remote \
-protocol error, the classic dropped-keepalive server disconnect, is transient \
-under its own code; local protocol, decoding, unsupported-protocol, and \
-redirect-limit failures are permanent; HTTPStatusError uses the HTTP status \
-classifier; unknown errors are unknown. A timeout passed directly to \
-classify_httpx_error returns the same phase-named timeout classification the \
-wire path assigns, so pool starvation keeps its own code on both paths. The \
-statuses that name a new location are not followed and carry a redirect code \
-distinct from a provider status rejection; other 3xx statuses, which answer the \
-request rather than redirecting it, take the ordinary status classification. \
-HTTP 413 is resource exhaustion, matching the local request-size bound. Wire-path summary messages stay static and name the exception type in \
-metadata.exception_type."""
+The wire client reports one closed set of failure kinds, none of which is \
+persisted. One exhaustive mapping turns each kind into this package's recorded \
+recoverability and code: connect and network failures are transient under one \
+transport code; a remote protocol error, the classic dropped-keepalive server \
+disconnect, is transient under its own code; local protocol, decoding, \
+unsupported-protocol, and redirect-limit failures are permanent under one \
+protocol code; an undispatchable URL is permanent and never sent; request and \
+response byte refusals are resource exhaustion; unrecognized kinds are unknown. \
+Every timeout kind is transient, keeps its phase-named code so pool starvation \
+stays distinguishable, and states its containment. HTTP status is data, not a \
+wire failure: statuses that name a new location are not followed and carry a \
+redirect code distinct from a provider status rejection; other 3xx statuses, \
+which answer the request rather than redirecting it, take the ordinary status \
+classification. HTTP 413 is resource exhaustion, matching the local request-size \
+bound. Wire-path summary messages stay static and name the exception type in \
+metadata.exception_type. A Retry-After hint is parsed at the wire boundary \
+without caps and bounded here before it is retained."""
 rationale = """
-Explicit httpx taxonomy preserves retry and lifecycle semantics without \
-embedding exception detail in the summary message or relying on a single \
-transient bucket."""
+Keeping every persisted literal on this side of the boundary lets the wire \
+capability change its own vocabulary without rewriting recorded data, while an \
+exhaustive mapping stops a new wire condition from silently borrowing a code \
+that already means something else."""
 date = "2026-08-11"
-check = "uv run pytest -q tests/transport/test_httpx_errors.py tests/transport/test_status.py tests/transport/test_http.py"
+check = "uv run pytest -q tests/transport/test_status.py tests/transport/test_http.py tests/transport/test_timeout.py"
 
 [[contracts]]
 title = "Invocation evidence is normalized and byte-bounded"
@@ -274,35 +279,34 @@ date = "2026-08-08"
 check = "uv run pytest -q tests/lifecycle/test_reducer.py tests/lifecycle/test_handoff.py"
 
 [[contracts]]
-title = "HttpProvider owns one bounded reusable client lifecycle"
+title = "HttpProvider delegates its client lifecycle to dr-http"
 statement = """
-Each HttpProvider owns one long-lived synchronous HTTP client with explicit \
-identity-bearing connection and keep-alive limits and reuses it across \
-invocations. A clean close is two-phase: it stops offload admission, drains \
-offloaded work, stops invocation admission, drains active invocations, shuts \
-down any created executor, closes the client exactly once, rejects new \
-invocations, and leaves the provider terminal. Invocation admission stays open \
-to every caller, on any thread, until the offload drain finishes, so draining \
-work can complete its invocations. An exception escaping either drain wait \
-aborts the close: the provider still becomes terminal, admission stays \
-permanently refused so no later caller blocks on a closer that no longer \
-exists, and the executor and client are released without joining workers. An \
-aborted close makes no claim that the drain completed."""
+Each HttpProvider owns one bounded HTTP client from dr-http, built from the \
+transport policy's already-normalized identity-bearing timeout, connection, \
+keep-alive, and byte bounds, and reuses it across invocations. The client owns \
+the lifecycle state machine, the offload executor, and every wire bound; the \
+provider owns endpoint and credential resolution, payload encoding, the mapping \
+from wire results to persisted vocabulary, and evidence. One whole invocation is \
+the admitted unit, so a clean close drains complete invocations and their \
+evidence rather than bare wire calls. Provider close and offload delegate to \
+that client, and a closed provider refuses invocation and offload alike. \
+Timeout clamping stays in the transport policy because it changes recorded \
+policy identity."""
 rationale = """
-One bounded owned lifecycle preserves pooling and makes shutdown and ownership \
-auditable. Draining offloaded work before invocations lets work admitted \
-through the provider's own executor finish rather than fail at shutdown. A \
-terminal aborted close keeps an interrupt from stranding sockets, worker \
-threads, and every subsequent closer."""
+Isolating the wire capability behind a pinned package makes changes to bounds, \
+lifecycle, and shutdown a visible boundary crossing, while every literal that \
+lands in recorded evidence stays on this side where its format is pinned. \
+Admitting whole invocations keeps a close from severing a call between its wire \
+exchange and its evidence."""
 date = "2026-08-11"
 check = "uv run pytest -q tests/transport/test_http.py tests/transport/test_concurrency.py tests/transport/test_offload.py tests/transport/test_async_entry.py"
 
 [[contracts]]
 title = "Asynchronous provider calls are thread offload of the sync driver"
 statement = """
-The transport is one bounded synchronous httpx client. Asynchronous access is \
+The transport is one bounded synchronous HTTP client. Asynchronous access is \
 thread offload: the async entry point submits the unchanged synchronous local \
-driver to the provider-owned executor and awaits its future. That executor is \
+driver to the client-owned executor and awaits its future. That executor is \
 created on first offload and sized from the transport policy's \
 ``max_connections``, the same value bounding the client connection pool, and \
 there is no separate worker-count knob. The awaited future is shielded, so \

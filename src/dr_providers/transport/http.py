@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import os
-import threading
-import traceback
-from collections.abc import Callable, Mapping
-from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import UTC
-from email.utils import format_datetime, parsedate_to_datetime
-from enum import Enum, auto
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-import httpx
+from dr_http import (
+    BoundedHttpClient,
+    HttpClientConfig,
+    WireFailure,
+    WireRequest,
+    WireResponse,
+    is_dispatchable_url,
+)
 
 from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.modeling.route import Protocol
@@ -35,8 +35,8 @@ from dr_providers.translation.common import PARSE_ERROR_CODE
 from dr_providers.translation.request import build_payload, protocol_path
 from dr_providers.translation.response import parse_response
 from dr_providers.transport.httpx_errors import (
-    classify_httpx_error,
-    timeout_code,
+    TIMEOUT_KINDS,
+    classify_wire_failure_kind,
 )
 from dr_providers.transport.status import (
     classify_status_code,
@@ -44,6 +44,11 @@ from dr_providers.transport.status import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from concurrent.futures import Future
+
+    from dr_http import ParsedRetryAfter
+
     from dr_providers.modeling.call import ProviderCallConfig
     from dr_providers.modeling.request import ProviderCallRequest
     from dr_providers.transport.policy import ProviderTransportPolicy
@@ -61,59 +66,34 @@ HTTP_STATUS_CODE_PREFIX = "http_status_"
 REDIRECT_STATUS_CODE_PREFIX = "http_redirect_"
 REQUEST_TOO_LARGE_CODE = "request_body_too_large"
 RESPONSE_TOO_LARGE_CODE = "response_body_too_large"
-DISPATCH_URL_SCHEMES = frozenset({"http", "https"})
 
-RESPONSE_STREAM_CHUNK_BYTES = 64 * 1024
 SUCCESS_STATUS_FLOOR = 200
 SUCCESS_STATUS_CEILING = 300
-OFFLOAD_THREAD_NAME_PREFIX = "dr-providers-offload"
-_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG = "HttpProvider is closing or closed"
+POST_METHOD = "POST"
 
-
-class _ProviderState(Enum):
-    OPEN = auto()
-    DRAINING_OFFLOADS = auto()
-    CLOSING = auto()
-    CLOSED = auto()
-
-
-_CLOSING_STATES = frozenset(
-    {_ProviderState.DRAINING_OFFLOADS, _ProviderState.CLOSING}
+TRANSPORT_TIMEOUT_MESSAGE = "provider transport timeout"
+TRANSPORT_ERROR_MESSAGE = "provider transport error"
+INVALID_BASE_URL_MESSAGE = (
+    "transport policy base_url does not form a dispatchable http or https URL"
 )
 
 
-def _operational_timeout_seconds(timeout_seconds: float) -> float:
-    return min(timeout_seconds, threading.TIMEOUT_MAX)
+def _client_config(policy: ProviderTransportPolicy) -> HttpClientConfig:
+    """Carry the policy's already-normalized sizing to the wire client.
 
-
-def _httpx_timeout(policy: ProviderTransportPolicy) -> httpx.Timeout:
-    """Use direct native phase timeouts for the synchronous HTTP operation."""
-    operation_timeout = _operational_timeout_seconds(policy.timeout_seconds)
-    connect_timeout = _operational_timeout_seconds(
-        policy.connect_timeout_seconds
-    )
-    read_timeout = _operational_timeout_seconds(policy.idle_timeout_seconds)
-    return httpx.Timeout(
-        connect=connect_timeout,
-        read=read_timeout,
-        write=operation_timeout,
-        pool=operation_timeout,
-    )
-
-
-def _is_dispatchable_url(url: str) -> bool:
-    """Report whether httpx can dispatch this URL to a network peer.
-
-    A URL that fails this check never reaches the wire, so validating it
-    before dispatch keeps a malformed ``base_url`` inside typed evidence
-    instead of raising ``httpx.InvalidURL``, which is not an
-    ``httpx.HTTPError`` and would otherwise escape the invocation.
+    The policy clamps connect and idle timeouts to the general timeout
+    before this point, because that normalization changes recorded policy
+    identity and therefore belongs to the policy rather than the client.
     """
-    try:
-        parsed = httpx.URL(url)
-    except (httpx.InvalidURL, ValueError):
-        return False
-    return parsed.scheme in DISPATCH_URL_SCHEMES and bool(parsed.host)
+    return HttpClientConfig(
+        timeout_seconds=policy.timeout_seconds,
+        connect_timeout_seconds=policy.connect_timeout_seconds,
+        idle_timeout_seconds=policy.idle_timeout_seconds,
+        max_connections=policy.max_connections,
+        max_keepalive_connections=policy.max_keepalive_connections,
+        max_request_bytes=policy.max_request_bytes,
+        max_response_bytes=policy.max_response_bytes,
+    )
 
 
 def _is_never_sent_failure(outcome: ProviderTransportOutcome) -> bool:
@@ -128,46 +108,57 @@ def _is_never_sent_failure(outcome: ProviderTransportOutcome) -> bool:
     )
 
 
-def _exception_traceback(error: BaseException) -> str:
-    return "".join(
-        traceback.format_exception(type(error), error, error.__traceback__)
-    )
+def _bounded_retry_after_hint(
+    parsed: ParsedRetryAfter | None,
+) -> ProviderRetryAfterHint | None:
+    """Bound a parsed hint before it becomes retained evidence.
+
+    Wire-boundary parsing is pure and uncapped, so the evidence caps are
+    applied here: a delta or rendered date reaching past the retained
+    bound names no hint this package is willing to store, and is dropped
+    rather than recorded.
+    """
+    if parsed is None:
+        return None
+    if parsed.kind == "delta_seconds":
+        seconds = int(parsed.value)
+        if seconds > MAX_RETRY_AFTER_DELTA_SECONDS:
+            return None
+        return ProviderRetryAfterHint(kind="delta_seconds", value=seconds)
+    rendered = str(parsed.value)
+    if len(rendered.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES:
+        return None
+    return ProviderRetryAfterHint(kind="http_date", value=rendered)
 
 
-def _normalize_retry_after(value: str | None) -> ProviderRetryAfterHint | None:
+def _retry_after_hint(
+    parsed: ParsedRetryAfter | None,
+    raw_header_value: str | None,
+) -> ProviderRetryAfterHint | None:
+    """Drop an oversized header outright, then bound what it parsed to.
+
+    A header longer than the retained bound is not credible input, so it
+    yields no hint even when its prefix would have parsed.
+    """
     if (
-        value is None
-        or len(value.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES
+        raw_header_value is None
+        or len(raw_header_value.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES
     ):
         return None
-    normalized = value.strip()
-    if normalized.isascii() and normalized.isdigit():
-        seconds = int(normalized)
-        if seconds <= MAX_RETRY_AFTER_DELTA_SECONDS:
-            return ProviderRetryAfterHint(
-                kind="delta_seconds",
-                value=seconds,
-            )
-        return None
-    try:
-        parsed = parsedate_to_datetime(normalized)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    if parsed.tzinfo is None:
-        return None
-    return ProviderRetryAfterHint(
-        kind="http_date",
-        value=format_datetime(parsed.astimezone(UTC), usegmt=True),
-    )
+    return _bounded_retry_after_hint(parsed)
 
 
 class HttpProvider:
-    """Own and reuse one bounded synchronous HTTP client until closed.
+    """Turn one provider call into one bounded HTTP exchange and evidence.
 
-    Asynchronous callers reach the same synchronous client by offloading
-    work onto a provider-owned executor whose worker count is
-    ``policy.max_connections``, so thread count and connection-pool size
-    cannot disagree. The executor exists only once ``offload`` is called.
+    The wire capability, its lifecycle, and its resource bounds belong to
+    an owned ``BoundedHttpClient``; this class owns everything the record
+    keeps: endpoint and credential resolution, payload encoding, the
+    mapping from wire results to persisted transport vocabulary, and
+    invocation evidence.
+
+    Each invocation is admitted through the client, so a close drains
+    complete invocations rather than bare wire calls.
     """
 
     def __init__(
@@ -175,98 +166,18 @@ class HttpProvider:
         *,
         policy: ProviderTransportPolicy,
         api_key: str | None = None,
-        _client_factory: Callable[..., httpx.Client] | None = None,
+        _client_factory: Callable[..., Any] | None = None,
     ) -> None:
         self._policy = policy
         self._api_key = api_key
-        limits = httpx.Limits(
-            max_connections=policy.max_connections,
-            max_keepalive_connections=policy.max_keepalive_connections,
+        self._client = BoundedHttpClient(
+            _client_config(policy),
+            client_factory=_client_factory,
         )
-        client_factory = (
-            httpx.Client if _client_factory is None else _client_factory
-        )
-        self._client = client_factory(
-            limits=limits,
-            follow_redirects=False,
-        )
-        self._condition = threading.Condition()
-        self._state = _ProviderState.OPEN
-        self._active_invocations = 0
-        self._active_offloads = 0
-        self._executor: ThreadPoolExecutor | None = None
 
     def close(self) -> None:
-        """Drain offloaded work, drain invocations, and close exactly once.
-
-        Offloaded work keeps invoking the provider while it drains, so
-        invocation admission stays open until the offload drain finishes.
-
-        An exception escaping either drain wait, such as a keyboard
-        interrupt delivered to the closing thread, aborts the close: the
-        provider becomes terminal, admission stays refused, the executor
-        and client are released without joining workers, and the original
-        exception propagates. An aborted close does not complete the
-        drain. Only the closing thread that owns the drain aborts this
-        way; a caller interrupted while waiting for another closer to
-        finish re-raises without touching provider state.
-        """
-        became_primary = False
-        try:
-            with self._condition:
-                if self._state is _ProviderState.CLOSED:
-                    return
-                if self._state in _CLOSING_STATES:
-                    while self._state is not _ProviderState.CLOSED:
-                        self._condition.wait()
-                    return
-                became_primary = True
-                self._state = _ProviderState.DRAINING_OFFLOADS
-                self._condition.notify_all()
-                while self._active_offloads:
-                    self._condition.wait()
-                self._state = _ProviderState.CLOSING
-                self._condition.notify_all()
-                while self._active_invocations:
-                    self._condition.wait()
-                executor = self._executor
-        except BaseException:
-            if became_primary:
-                self._abort_close()
-            raise
-
-        try:
-            if executor is not None:
-                executor.shutdown(wait=True)
-        finally:
-            try:
-                self._client.close()
-            finally:
-                with self._condition:
-                    self._state = _ProviderState.CLOSED
-                    self._condition.notify_all()
-
-    def _abort_close(self) -> None:
-        """Make an interrupted close terminal and release OS resources.
-
-        The provider becomes terminal so no later caller blocks waiting on
-        a closer that no longer exists. Executor shutdown does not join
-        workers because the abort means the operator asked to stop.
-        Release errors are suppressed so the exception that aborted the
-        close is the one that propagates.
-        """
-        with self._condition:
-            self._state = _ProviderState.CLOSED
-            self._condition.notify_all()
-            executor = self._executor
-
-        try:
-            if executor is not None:
-                with contextlib.suppress(Exception):
-                    executor.shutdown(wait=False)
-        finally:
-            with contextlib.suppress(Exception):
-                self._client.close()
+        """Drain admitted invocations and release the wire client once."""
+        self._client.close()
 
     def __enter__(self) -> HttpProvider:
         return self
@@ -277,78 +188,22 @@ class HttpProvider:
     def invoke(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
-        self._begin_invocation()
-        try:
+        with self._client.admit():
             return self._invoke_admitted(request)
-        finally:
-            self._end_invocation()
 
     def offload[ResultT](self, fn: Callable[[], ResultT]) -> Future[ResultT]:
-        """Run ``fn`` on the provider-owned executor until closing begins.
+        """Run ``fn`` on the client-owned executor until closing begins.
 
-        The executor is created on first use with
-        ``policy.max_connections`` workers. A clean ``close`` drains
-        admitted work before it shuts the executor down and closes the
-        client; an aborted ``close`` releases resources without completing
-        that drain.
+        The executor is sized from ``policy.max_connections``, the same
+        value bounding the connection pool, so thread count and pool size
+        cannot disagree.
 
         Offloaded work must not call ``close`` or ``offload`` on the
         provider that runs it: closing from inside offloaded work waits
         forever on that same work, and offloaded work that blocks on a
         nested offload starves once every worker is held that way.
         """
-        with self._condition:
-            if self._state is not _ProviderState.OPEN:
-                raise RuntimeError(_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG)
-            if self._executor is None:
-                self._executor = ThreadPoolExecutor(
-                    max_workers=self._policy.max_connections,
-                    thread_name_prefix=OFFLOAD_THREAD_NAME_PREFIX,
-                )
-            self._active_offloads += 1
-            executor = self._executor
-
-        released = threading.Lock()
-
-        def release() -> None:
-            """Release this offload's hold on the drain exactly once."""
-            if released.acquire(blocking=False):
-                self._end_offload()
-
-        def run() -> ResultT:
-            try:
-                return fn()
-            finally:
-                release()
-
-        try:
-            future = executor.submit(run)
-        except BaseException:
-            release()
-            raise
-        future.add_done_callback(lambda _future: release())
-        return future
-
-    def _end_offload(self) -> None:
-        with self._condition:
-            self._active_offloads -= 1
-            if self._active_offloads == 0:
-                self._condition.notify_all()
-
-    def _begin_invocation(self) -> None:
-        with self._condition:
-            if self._state not in (
-                _ProviderState.OPEN,
-                _ProviderState.DRAINING_OFFLOADS,
-            ):
-                raise RuntimeError(_HTTP_PROVIDER_CLOSING_OR_CLOSED_MSG)
-            self._active_invocations += 1
-
-    def _end_invocation(self) -> None:
-        with self._condition:
-            self._active_invocations -= 1
-            if self._active_invocations == 0:
-                self._condition.notify_all()
+        return self._client.offload(fn)
 
     def _invoke_admitted(
         self, request: ProviderCallRequest
@@ -375,7 +230,7 @@ class HttpProvider:
                 http_request=None,
                 outcome=self._missing_base_url_failure(request.config),
             )
-        if not _is_dispatchable_url(url):
+        if not is_dispatchable_url(url):
             return ProviderInvocationEvidence.build(
                 request=request,
                 policy=self._policy,
@@ -433,96 +288,102 @@ class HttpProvider:
         int | None,
         ProviderRetryAfterHint | None,
     ]:
-        try:
-            with self._client.stream(
-                "POST",
-                url,
-                content=encoded_payload,
+        """Dispatch one exchange and translate its wire result to evidence."""
+        result = self._client.call(
+            WireRequest(
+                method=POST_METHOD,
+                url=url,
                 headers=headers,
-                timeout=_httpx_timeout(self._policy),
-                follow_redirects=False,
-            ) as http_response:
-                retry_after = _normalize_retry_after(
-                    http_response.headers.get("retry-after")
-                )
-                body, observed_bytes = self._read_response(http_response)
-                if body is None:
-                    return (
-                        self._response_too_large_failure(observed_bytes),
-                        observed_bytes,
-                        retry_after,
-                    )
-                return (
-                    self._outcome_from_response(
-                        request,
-                        http_response.status_code,
-                        body,
-                        url,
-                    ),
-                    observed_bytes,
-                    retry_after,
-                )
-        except httpx.TimeoutException as error:
-            return self._httpx_timeout_failure(error, url), None, None
-        except httpx.InvalidURL as error:
-            # httpx.InvalidURL is not an httpx.HTTPError, so without this
-            # guard a URL problem escapes invoke() with no typed evidence.
-            # The catch stays this narrow on purpose: InvalidURL is raised
-            # while httpx builds the request, so nothing reached the wire,
-            # whereas any other post-dispatch error is a defect of ours and
-            # must crash loudly rather than claim the request was never sent.
-            return (
-                ProviderTransportFailure(
-                    recoverability=RecoverabilityClass.PERMANENT,
-                    code=INVALID_BASE_URL_CODE,
-                    message=(
-                        "transport policy base_url does not form a "
-                        "dispatchable http or https URL"
-                    ),
-                    traceback=_exception_traceback(error),
-                    metadata={
-                        "url": url,
-                        "exception_type": type(error).__name__,
-                    },
-                ),
-                None,
-                None,
+                body=encoded_payload,
             )
-        except httpx.HTTPError as error:
-            recoverability, code = classify_httpx_error(error)
+        )
+        if isinstance(result, WireFailure):
+            return self._outcome_from_wire_failure(result, url)
+        return self._outcome_from_wire_response(result, request, url)
+
+    def _outcome_from_wire_response(
+        self,
+        response: WireResponse,
+        request: ProviderCallRequest,
+        url: str,
+    ) -> tuple[
+        ProviderTransportOutcome,
+        int | None,
+        ProviderRetryAfterHint | None,
+    ]:
+        retry_after = _retry_after_hint(
+            response.retry_after,
+            response.headers.get("retry-after"),
+        )
+        return (
+            self._outcome_from_response(
+                request,
+                response.status_code,
+                response.body,
+                url,
+            ),
+            len(response.body),
+            retry_after,
+        )
+
+    def _outcome_from_wire_failure(
+        self,
+        failure: WireFailure,
+        url: str,
+    ) -> tuple[
+        ProviderTransportOutcome,
+        int | None,
+        ProviderRetryAfterHint | None,
+    ]:
+        """Record one wire failure in this package's own vocabulary.
+
+        Byte-bound refusals are this provider's own sizing decision, so
+        they report the configured limit and the bytes observed rather
+        than an exception the wire raised.
+        """
+        recoverability, code = classify_wire_failure_kind(failure.kind)
+        if code == RESPONSE_TOO_LARGE_CODE:
+            return (
+                self._response_too_large_failure(failure.observed_bytes or 0),
+                failure.observed_bytes,
+                _bounded_retry_after_hint(failure.retry_after),
+            )
+        if failure.kind in TIMEOUT_KINDS:
+            return self._timeout_failure(code, failure, url), None, None
+        if code == INVALID_BASE_URL_CODE:
             return (
                 ProviderTransportFailure(
                     recoverability=recoverability,
                     code=code,
-                    message="provider transport error",
-                    traceback=_exception_traceback(error),
+                    message=INVALID_BASE_URL_MESSAGE,
+                    traceback=failure.traceback,
                     metadata={
                         "url": url,
-                        "exception_type": type(error).__name__,
+                        "exception_type": failure.exception_type,
                     },
                 ),
                 None,
                 None,
             )
+        return (
+            ProviderTransportFailure(
+                recoverability=recoverability,
+                code=code,
+                message=TRANSPORT_ERROR_MESSAGE,
+                traceback=failure.traceback,
+                metadata={
+                    "url": url,
+                    "exception_type": failure.exception_type,
+                },
+            ),
+            None,
+            None,
+        )
 
-    def _read_response(
+    def _timeout_failure(
         self,
-        http_response: httpx.Response,
-    ) -> tuple[bytearray | None, int]:
-        body = bytearray()
-        observed_bytes = 0
-        for chunk in http_response.iter_bytes(
-            chunk_size=RESPONSE_STREAM_CHUNK_BYTES
-        ):
-            observed_bytes += len(chunk)
-            if observed_bytes > self._policy.max_response_bytes:
-                return None, observed_bytes
-            body.extend(chunk)
-        return body, observed_bytes
-
-    def _httpx_timeout_failure(
-        self,
-        error: httpx.TimeoutException,
+        code: str,
+        failure: WireFailure,
         url: str,
     ) -> ProviderTransportFailure:
         """Every native timeout is contained because the HTTP call returned.
@@ -533,13 +394,13 @@ class HttpProvider:
         """
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.TRANSIENT,
-            code=timeout_code(error),
-            message="provider transport timeout",
-            traceback=_exception_traceback(error),
+            code=code,
+            message=TRANSPORT_TIMEOUT_MESSAGE,
+            traceback=failure.traceback,
             containment=TransportTimeoutContainment.CONTAINED,
             metadata={
                 "url": url,
-                "exception_type": type(error).__name__,
+                "exception_type": failure.exception_type,
                 "timeout_seconds": self._policy.timeout_seconds,
                 "connect_timeout_seconds": (
                     self._policy.connect_timeout_seconds
@@ -552,7 +413,7 @@ class HttpProvider:
         self,
         request: ProviderCallRequest,
         status_code: int,
-        response_bytes: bytearray,
+        response_bytes: bytes,
         url: str,
     ) -> ProviderTransportOutcome:
         if not SUCCESS_STATUS_FLOOR <= status_code < SUCCESS_STATUS_CEILING:
@@ -589,7 +450,7 @@ class HttpProvider:
     def _http_status_failure(
         self,
         status_code: int,
-        response_bytes: bytearray,
+        response_bytes: bytes,
         url: str,
     ) -> ProviderTransportFailure:
         try:
@@ -678,10 +539,7 @@ class HttpProvider:
         return ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,
             code=INVALID_BASE_URL_CODE,
-            message=(
-                "transport policy base_url does not form a dispatchable "
-                "http or https URL"
-            ),
+            message=INVALID_BASE_URL_MESSAGE,
             metadata={"url": url},
         )
 
