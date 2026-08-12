@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os.path
 from collections.abc import Mapping  # noqa: TC003 -- pydantic field type
 from functools import cached_property
 from typing import TYPE_CHECKING, Annotated, Any, Literal
@@ -64,16 +65,46 @@ def sanitize_headers(headers: dict[str, str] | None) -> dict[str, str]:
     }
 
 
+HOME_DIRECTORY_PLACEHOLDER = "~"
+
+
+def scrub_traceback(traceback: str | None) -> str | None:
+    """Replace the user home-directory prefix in captured traceback text.
+
+    A traceback captured on the wire path names absolute source paths
+    under the running user's home directory. Those paths are machine
+    state, not provider behavior, so they are collapsed to ``~`` before
+    the text enters the model.
+
+    This applies on the build path only, mirroring header redaction:
+    deserializing third-party evidence does not re-scrub it.
+    """
+    if not traceback:
+        return traceback
+    home_directory = os.path.expanduser("~")  # noqa: PTH111 -- exact prefix
+    if not home_directory:
+        return traceback
+    return traceback.replace(home_directory, HOME_DIRECTORY_PLACEHOLDER)
+
+
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 6
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 7
 ContentIdentityHash = Annotated[
     StrictStr,
     Field(pattern=r"^[0-9a-f]{64}$"),
 ]
 MAX_RETRY_AFTER_HEADER_BYTES = 128
 MAX_RETRY_AFTER_DELTA_SECONDS = 31_536_000
+
+EVIDENCE_IDENTITY_EXCLUDED_FAILURE_FIELDS = frozenset({"traceback", "message"})
+"""Persisted transport-failure fields kept out of the identity preimage.
+
+These names are a hash-preimage format, not merely field names: changing
+the set changes every evidence identity hash and therefore requires a
+schema-version bump.
+"""
 
 
 class ProviderHttpRequestEvidence(BaseModel):
@@ -243,6 +274,10 @@ class ProviderInvocationEvidence(BaseModel):
         failure = (
             outcome if isinstance(outcome, ProviderTransportFailure) else None
         )
+        if failure is not None and failure.traceback is not None:
+            failure = failure.model_copy(
+                update={"traceback": scrub_traceback(failure.traceback)}
+            )
         return cls(
             request_identity_hash=request.identity_hash,
             policy_identity=(
@@ -262,7 +297,38 @@ class ProviderInvocationEvidence(BaseModel):
         )
 
     def identity_payload(self) -> dict[str, Any]:
-        return self.model_dump(mode="json")
+        """Project the persisted record onto its identity-bearing fields.
+
+        Two fields stay fully persisted on the model but are excluded
+        from the hash preimage:
+
+        ``failure.traceback`` names absolute source paths of the machine
+        that captured it, so including it would fork the identity of one
+        provider behavior across machines and interpreter versions.
+
+        ``failure.message`` is human prose whose every fact already
+        appears in a typed field beside it — ``code``, ``recoverability``,
+        ``status_code``, ``containment``, and ``metadata``. Excluding it
+        is a decision, not an oversight: a summary message may be
+        reworded without rehashing already-recorded evidence. Every
+        failure this package builds sets a typed ``code``; a directly
+        constructed failure that relies on ``message`` alone to
+        distinguish itself from another shares that other's identity.
+
+        The projection is scoped to ``failure``: every other persisted
+        field is identity-bearing, including ``response.warnings[]``
+        messages, which this package generates deterministically and
+        which therefore discriminate rather than fork identity.
+        """
+        payload = self.model_dump(mode="json")
+        failure = payload.get("failure")
+        if isinstance(failure, dict):
+            payload["failure"] = {
+                key: value
+                for key, value in failure.items()
+                if key not in EVIDENCE_IDENTITY_EXCLUDED_FAILURE_FIELDS
+            }
+        return payload
 
     def identity_document(self) -> IdentityDocument:
         return build_identity_document(

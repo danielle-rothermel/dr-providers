@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+from typing import TYPE_CHECKING
+
 from dr_providers import (
     CostInfo,
     GenerationControls,
@@ -15,6 +18,11 @@ from dr_providers import (
     Transcript,
     openai_chat_config,
 )
+
+if TYPE_CHECKING:
+    from concurrent.futures import Future
+
+    from dr_providers.lifecycle.driver import OffloadingProvider
 
 MESSAGES = (
     PromptMessage(role=MessageRole.SYSTEM, content="be brief"),
@@ -148,3 +156,77 @@ class TestScriptedProvider:
         assert isinstance(outcome, ProviderTransportResponse)
         assert outcome.stop_reason is ProviderStopReason.STOP
         assert outcome.warnings == ()
+
+    def test_scripted_provider_satisfies_the_offloading_surface(self) -> None:
+        """The shipped testing surface drives the async entry point too."""
+        provider: OffloadingProvider = ScriptedProvider()
+        assert isinstance(provider, ScriptedProvider)
+
+        with provider:
+            worker = provider.offload(threading.get_ident).result()
+            evidence = provider.offload(
+                lambda: provider.invoke(
+                    request_for(openai_chat_config(model="m"))
+                )
+            ).result()
+
+        assert worker != threading.get_ident()
+        assert isinstance(evidence.outcome, ProviderTransportResponse)
+
+    def test_closing_releases_the_offload_worker_and_allows_reuse(
+        self,
+    ) -> None:
+        """Close releases the executor; a later offload builds a new one.
+
+        Thread identities are recycled after shutdown, so the released
+        executor object, not its worker's ident, is the sound signal.
+        """
+        provider = ScriptedProvider()
+
+        assert provider.offload(lambda: "first").result() == "first"
+        first_executor = provider._executor
+        provider.close()
+        assert provider._executor is None
+
+        assert provider.offload(lambda: "second").result() == "second"
+        assert provider._executor is not None
+        assert provider._executor is not first_executor
+        provider.close()
+
+    def test_concurrent_first_offloads_share_one_worker(self) -> None:
+        """Racing creations may not orphan a worker or run in parallel.
+
+        A barrier lines every caller up on the lazy-creation race; the
+        assertions are exact terminal state — one executor, one worker
+        thread ident across all work, no stray provider threads.
+        """
+        caller_count = 8
+        provider = ScriptedProvider()
+        barrier = threading.Barrier(caller_count)
+        futures: list[Future[int]] = []
+        futures_lock = threading.Lock()
+
+        def race_offload() -> None:
+            barrier.wait()
+            future = provider.offload(threading.get_ident)
+            with futures_lock:
+                futures.append(future)
+
+        callers = [
+            threading.Thread(target=race_offload) for _ in range(caller_count)
+        ]
+        for caller in callers:
+            caller.start()
+        for caller in callers:
+            caller.join()
+
+        worker_idents = {future.result() for future in futures}
+        assert len(worker_idents) == 1
+        live_workers = [
+            thread
+            for thread in threading.enumerate()
+            if thread.name.startswith("scripted-provider")
+        ]
+        assert len(live_workers) == 1
+        provider.close()
+        assert provider._executor is None

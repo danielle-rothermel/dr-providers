@@ -63,6 +63,12 @@ def _policy(**overrides: Any) -> ProviderTransportPolicy:
     return make_transport_policy(base_url="https://example.test", **overrides)
 
 
+def _assert_closed(provider: HttpProvider) -> None:
+    """A closed provider refuses admission, which is what callers observe."""
+    with pytest.raises(RuntimeError, match="closing or closed"):
+        provider.offload(lambda: None)
+
+
 def _provider(
     wire_requests: list[httpx.Request] | None = None,
     **policy_overrides: Any,
@@ -95,7 +101,7 @@ def test_async_entry_drives_a_real_http_provider() -> None:
     provider.close()
 
     assert result.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
-    assert provider._state.name == "CLOSED"
+    _assert_closed(provider)
 
 
 def test_cancelling_the_task_with_a_queued_offload_still_runs_and_closes() -> (
@@ -143,4 +149,4 @@ def test_cancelling_the_task_with_a_queued_offload_still_runs_and_closes() -> (
     closer.result()
 
     assert len(wire_requests) == 1
-    assert provider._state.name == "CLOSED"
+    _assert_closed(provider)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os.path
 from typing import Any
 
 import httpx
@@ -123,7 +124,7 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 6,
+        "schema_version": 7,
         "payload": {
             "request_identity_hash": "1" * 64,
             "policy_identity": {
@@ -200,7 +201,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 6
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 7
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -331,6 +332,7 @@ class TestInvocationEvidence:
         )
 
     def test_failure_document_shape(self) -> None:
+        """``message`` and ``traceback`` are persisted but not hashed."""
         assert evidence_for(
             failure=FAILURE
         ).identity_document().to_json_dict() == (
@@ -338,8 +340,6 @@ class TestInvocationEvidence:
                 failure={
                     "recoverability": "permanent",
                     "code": "invalid_request",
-                    "message": "bad request",
-                    "traceback": None,
                     "response_body": {"error": "bad"},
                     "status_code": 400,
                     "containment": None,
@@ -347,6 +347,9 @@ class TestInvocationEvidence:
                 }
             )
         )
+        persisted = evidence_for(failure=FAILURE).model_dump(mode="json")
+        assert persisted["failure"]["message"] == "bad request"
+        assert persisted["failure"]["traceback"] is None
 
     @pytest.mark.parametrize(
         "evidence",
@@ -356,14 +359,20 @@ class TestInvocationEvidence:
     def test_document_json_round_trip(
         self, evidence: ProviderInvocationEvidence
     ) -> None:
+        """The persisted record round-trips to the same identity document.
+
+        The identity document is a projection, so the persisted dump is
+        what restores a record; restoring it must reproduce the document
+        byte for byte.
+        """
         document = json.loads(
             json.dumps(evidence.identity_document().to_json_dict())
         )
-        restored = ProviderInvocationEvidence.model_validate(
-            document["payload"]
-        )
+        persisted = json.loads(evidence.model_dump_json())
+        restored = ProviderInvocationEvidence.model_validate(persisted)
 
         assert restored.identity_document().to_json_dict() == document
+        assert restored.model_dump(mode="json") == persisted
 
 
 def test_retry_after_hint_accepts_bounded_http_date_evidence() -> None:
@@ -398,3 +407,112 @@ def test_timeout_failure_requires_explicit_containment(code: str) -> None:
             containment=containment,
         )
         assert failure.containment is containment
+
+
+def _failure_evidence(
+    **failure_overrides: Any,
+) -> ProviderInvocationEvidence:
+    failure_fields: dict[str, Any] = {
+        "recoverability": RecoverabilityClass.TRANSIENT,
+        "code": "transport_error",
+        "message": "provider transport error",
+        "metadata": {"url": "https://example.test/v1"},
+    }
+    failure_fields.update(failure_overrides)
+    return ProviderInvocationEvidence(
+        request_identity_hash="1" * 64,
+        failure=ProviderTransportFailure(**failure_fields),
+    )
+
+
+class TestEvidenceIdentityProjection:
+    """Traceback and message are persisted evidence, not identity."""
+
+    def test_traceback_and_message_do_not_change_identity(self) -> None:
+        baseline = _failure_evidence()
+        reworded = _failure_evidence(
+            message="the provider transport reported an error",
+            traceback='  File "~/repo/x.py", line 1\nConnectError\n',
+        )
+
+        assert reworded.identity_hash == baseline.identity_hash
+        assert reworded.failure is not None
+        assert reworded.failure.message == (
+            "the provider transport reported an error"
+        )
+        assert reworded.failure.traceback is not None
+
+    @pytest.mark.parametrize(
+        "override",
+        [
+            {"code": "transport_protocol_error"},
+            {"recoverability": RecoverabilityClass.PERMANENT},
+            {"status_code": 500},
+            {"metadata": {"url": "https://other.test/v1"}},
+            {"response_body": {"error": "bad"}},
+        ],
+        ids=[
+            "code",
+            "recoverability",
+            "status-code",
+            "metadata",
+            "response-body",
+        ],
+    )
+    def test_typed_field_differences_do_change_identity(
+        self, override: dict[str, Any]
+    ) -> None:
+        assert (
+            _failure_evidence(**override).identity_hash
+            != _failure_evidence().identity_hash
+        )
+
+
+def test_build_scrubs_the_home_directory_from_a_traceback() -> None:
+    """A captured traceback names machine paths; identity must not."""
+    home_directory = os.path.expanduser("~")  # noqa: PTH111 -- exact prefix
+    captured = (
+        f'  File "{home_directory}/repos/dr-providers/src/x.py", line 3\n'
+        "    raise ConnectError\n"
+        "httpx.ConnectError: wire down\n"
+    )
+
+    evidence = ProviderInvocationEvidence.build(
+        request=openai_request(),
+        policy=None,
+        http_request=None,
+        outcome=ProviderTransportFailure(
+            recoverability=RecoverabilityClass.TRANSIENT,
+            code="transport_error",
+            message="provider transport error",
+            traceback=captured,
+        ),
+    )
+
+    failure = evidence.failure
+    assert failure is not None
+    assert failure.traceback is not None
+    assert home_directory not in failure.traceback
+    assert "~/repos/dr-providers/src/x.py" in failure.traceback
+    assert "httpx.ConnectError: wire down" in failure.traceback
+
+
+def test_deserialization_does_not_rescrub_a_traceback() -> None:
+    """Scrubbing is a build-path step, exactly like header redaction."""
+    home_directory = os.path.expanduser("~")  # noqa: PTH111 -- exact prefix
+    third_party = f'  File "{home_directory}/elsewhere.py", line 1\n'
+
+    restored = ProviderInvocationEvidence.model_validate(
+        {
+            "request_identity_hash": "1" * 64,
+            "failure": {
+                "recoverability": "transient",
+                "code": "transport_error",
+                "message": "provider transport error",
+                "traceback": third_party,
+            },
+        }
+    )
+
+    assert restored.failure is not None
+    assert restored.failure.traceback == third_party

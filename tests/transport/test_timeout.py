@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 from typing import Any
 
 import httpx
@@ -28,7 +27,7 @@ from dr_providers.outcomes.models import (
     STALLED_RESPONSE_CODE,
     TIMEOUT_CODE,
 )
-from dr_providers.transport.http import HttpProvider, _httpx_timeout
+from dr_providers.transport.http import HttpProvider, _client_config
 
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="hi"),)
 
@@ -56,33 +55,42 @@ def _policy(**overrides: Any) -> ProviderTransportPolicy:
     )
 
 
-def test_native_timeout_phases_are_explicit_and_saturated() -> None:
-    policy = _policy(
-        timeout_seconds=1e300,
-        connect_timeout_seconds=1e300,
-        idle_timeout_seconds=1e300,
-    )
-
-    timeout = _httpx_timeout(policy)
-
-    assert timeout.connect == threading.TIMEOUT_MAX
-    assert timeout.read == threading.TIMEOUT_MAX
-    assert timeout.write == threading.TIMEOUT_MAX
-    assert timeout.pool == threading.TIMEOUT_MAX
-    assert policy.timeout_seconds == 1e300
-    assert policy.connect_timeout_seconds == 1e300
-    assert policy.idle_timeout_seconds == 1e300
-
-
-def test_connect_timeout_comes_from_policy() -> None:
+def test_client_config_carries_every_policy_bound() -> None:
     policy = _policy(
         timeout_seconds=120.0,
         connect_timeout_seconds=45.0,
+        idle_timeout_seconds=90.0,
+        max_connections=4,
+        max_keepalive_connections=2,
+        max_request_bytes=2048,
+        max_response_bytes=4096,
     )
 
-    timeout = _httpx_timeout(policy)
+    config = _client_config(policy)
 
-    assert timeout.connect == 45.0
+    assert config.timeout_seconds == 120.0
+    assert config.connect_timeout_seconds == 45.0
+    assert config.idle_timeout_seconds == 90.0
+    assert config.max_connections == 4
+    assert config.max_keepalive_connections == 2
+    assert config.max_request_bytes == 2048
+    assert config.max_response_bytes == 4096
+
+
+def test_client_config_receives_policy_clamped_timeouts() -> None:
+    """Clamping is identity-bearing, so the policy owns it, not the client."""
+    policy = _policy(
+        timeout_seconds=10.0,
+        connect_timeout_seconds=30.0,
+        idle_timeout_seconds=30.0,
+    )
+
+    config = _client_config(policy)
+
+    assert policy.connect_timeout_seconds == 10.0
+    assert policy.idle_timeout_seconds == 10.0
+    assert config.connect_timeout_seconds == 10.0
+    assert config.idle_timeout_seconds == 10.0
 
 
 @pytest.mark.parametrize(

@@ -3,8 +3,8 @@
 [![CI](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml/badge.svg)](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/dr-providers.svg)](https://pypi.org/project/dr-providers/)
 
-| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) ([terms](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/terms.toml), [contracts](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/contracts.toml)) | [dr-serialize](https://github.com/danielle-rothermel/dr-serialize) |
-| --- | --- |
+| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) ([terms](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/terms.toml), [contracts](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/contracts.toml)) | [dr-serialize](https://github.com/danielle-rothermel/dr-serialize) | [dr-wire](https://github.com/danielle-rothermel/dr-wire) |
+| --- | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**
 It supports OpenRouter, OpenAI, Gemini, and Anthropic while keeping call
@@ -16,7 +16,7 @@ identity, provider translation, transport policy, and outcomes separate.
 | --- | --- |
 | `dr_providers.modeling` | Identity-bearing definitions, configs, requests, routes, controls, and transcripts |
 | `dr_providers.translation` | Pure provider request-body construction and parsed-response translation |
-| `dr_providers.transport` | Credentials, endpoints, timeout policy, and one-invocation HTTP execution |
+| `dr_providers.transport` | Credentials, endpoints, timeout policy, and one-invocation HTTP execution over the [dr-wire](https://github.com/danielle-rothermel/dr-wire) bounded client |
 | `dr_providers.outcomes` | Typed responses, expected failures, invocation evidence, and conformance warnings |
 | `dr_providers.lifecycle` | Invocation classification, serializable retry state, deterministic transitions, and terminal call results |
 | `dr_providers.core` | Shared provider protocol and failure vocabulary |
@@ -26,6 +26,16 @@ identity, provider translation, transport policy, and outcomes separate.
 The top-level `dr_providers` exports are the stable general import surface.
 Functional-area module paths primarily make ownership discoverable; they are
 not a second compatibility surface.
+
+[`.defs/terms.toml`](.defs/terms.toml) and its
+[rendered defs site](https://danielle-rothermel.github.io/dr-providers/) are the
+authoritative reference for that public surface: every export is mapped to a
+term there and checked by `scripts/check_defs.py`. This README illustrates
+common paths rather than enumerating them, so an export it does not mention is
+supported, not unsupported.
+
+[Potential future features](docs/future-features.md) records directions this
+package deliberately does not build today.
 
 ## Install
 
@@ -207,9 +217,9 @@ provider effects.
 The exact encoded request body and decompressed response body are bounded by
 identity-bearing transport policy limits. Complete in-limit response bodies are
 retained as JSON when possible or as text otherwise; over-limit responses retain
-no partial body. Failure summary messages are unbudgeted. Wire-path httpx
-exceptions retain the underlying exception traceback in invocation evidence;
-other transport failures leave `traceback` unset. Original HTTP wire bytes are
+no partial body. Failure summary messages are unbudgeted. Wire-path failures
+retain the underlying exception traceback in invocation evidence; other
+transport failures leave `traceback` unset. Original HTTP wire bytes are
 not retained. The standard HTTP path redacts known credential header names.
 Direct `ProviderHttpRequestEvidence` construction and deserialization remain
 trusted-data paths.

@@ -113,9 +113,6 @@ from dr_providers.translation.responses import (
     UNKNOWN_DIAGNOSTIC_CATEGORY,
 )
 from dr_providers.transport.http import (
-    HTTP_STATUS_CODE_PREFIX as TRANSPORT_HTTP_STATUS_CODE_PREFIX,
-)
-from dr_providers.transport.http import (
     INVALID_BASE_URL_CODE as TRANSPORT_INVALID_BASE_URL_CODE,
 )
 from dr_providers.transport.http import (
@@ -129,10 +126,8 @@ from dr_providers.transport.http import (
     REQUEST_TOO_LARGE_CODE,
     RESPONSE_TOO_LARGE_CODE,
 )
-from dr_providers.transport.httpx_errors import (
-    HTTP_STATUS_CODE_PREFIX as HTTPX_ERRORS_HTTP_STATUS_CODE_PREFIX,
-)
-from dr_providers.transport.httpx_errors import (
+from dr_providers.transport.wire_failures import (
+    HTTP_STATUS_CODE_PREFIX,
     REMOTE_PROTOCOL_ERROR_CODE,
     TRANSPORT_ERROR_CODE,
     TRANSPORT_PROTOCOL_ERROR_CODE,
@@ -326,10 +321,8 @@ def test_conformance_warning_codes_are_pinned() -> None:
 
 
 def test_http_status_code_format_is_pinned() -> None:
-    assert HTTPX_ERRORS_HTTP_STATUS_CODE_PREFIX == "http_status_"
-    assert TRANSPORT_HTTP_STATUS_CODE_PREFIX == "http_status_"
-    assert f"{HTTPX_ERRORS_HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
-    assert f"{TRANSPORT_HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
+    assert HTTP_STATUS_CODE_PREFIX == "http_status_"
+    assert f"{HTTP_STATUS_CODE_PREFIX}429" == "http_status_429"
     assert HTTP_STATUS_402_CODE == "http_status_402"
     assert REDIRECT_STATUS_CODE_PREFIX == "http_redirect_"
     assert f"{REDIRECT_STATUS_CODE_PREFIX}302" == "http_redirect_302"
@@ -427,7 +420,7 @@ def test_identity_schema_names_are_pinned() -> None:
 
 
 def test_persisted_schema_versions_are_pinned() -> None:
-    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 6
+    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 7
     assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 2
     assert PROVIDER_CALL_CONFIG_SCHEMA_VERSION == 1
     assert PROVIDER_CALL_REQUEST_SCHEMA_VERSION == 1

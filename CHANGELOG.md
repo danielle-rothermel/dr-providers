@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] - 2026-08-12
 
 ### Added
 
@@ -19,9 +19,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Pin every persisted enum value, failure code, wire-format prefix, identity
   schema name, and schema version with golden tests against hand-written
   literals, and record the pinning rule as a standing contract.
+- Add `ScriptedProvider.offload()` and `close()`, so the shipped network-free
+  testing surface satisfies the `OffloadingProvider` surface and drives the
+  asynchronous entry point directly. The executor is a single owned worker
+  created on first offload, keeping scripted offloaded calls serial.
+- Add `docs/future-features.md`, recording directions this package
+  deliberately does not build today, linked from the README.
 
 ### Removed
 
+- Remove the public `classify_httpx_error` export; wire-error classification is
+  now the internal kind-to-code boundary mapping.
+- Remove the unused `httpx2` development dependency.
+- Remove `TIMEOUT_KINDS`; the wire-failure boundary matches timeout kinds
+  structurally instead.
+- Remove `httpx` as a runtime dependency; it remains a dev dependency for
+  `MockTransport`-based tests.
 - Remove `dr_providers.surfaces.serve` and the `[serve]` optional extra
   (FastAPI/uvicorn).
 - Remove post-build wheel install/smoke verification from CI and release
@@ -39,6 +52,47 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Rename `dr_providers.transport.httpx_errors` to
+  `dr_providers.transport.wire_failures`; the module maps wire failure kinds and
+  no longer touches httpx. Every literal it defines is unchanged.
+- Dispatch the wire-failure boundary on the structured `WireFailureKind` rather
+  than on persisted code strings, and record an explicit `REQUEST_TOO_LARGE`
+  branch shaped like the response-size one.
+- Record in the boundary map and its contract that `CONNECT_ERROR` and
+  `NETWORK_ERROR` both map to the single literal `transport_error` with
+  `TRANSIENT` recoverability, and `UNKNOWN` maps to `transport_error` with
+  `UNKNOWN` recoverability, so the collapse is a standing obligation.
+- Cap `pydantic` below 3, matching the frozen-package convention.
+- Correct the `provider call retry policy`, `provider HTTP request evidence`,
+  and `provider transport policy` terms: the standard retry policy declares only
+  a one-invocation limit, header redaction is a `build()` step rather than a
+  type invariant, and transport policy records connect and idle timeouts after
+  clamping them to the general timeout.
+- Advance Provider Invocation Evidence to schema version 7: `identity_payload()`
+  is an explicit projection that excludes transport-failure `traceback` and
+  `message` from the hash preimage. Both fields remain fully persisted on the
+  model; excluding them keeps one provider behavior's identity stable across
+  machines and lets a summary message be reworded without rehashing recorded
+  evidence.
+- Scrub the user home-directory prefix to `~` in captured transport-failure
+  tracebacks when evidence is built, mirroring header redaction: deserializing
+  third-party evidence does not re-scrub it.
+- Report an offloaded provider call that raises after its awaiting task was
+  cancelled, at `ERROR` on the `dr_providers.lifecycle.driver` logger, so a
+  systematic driver defect stays visible in an unattended run.
+- Depend on `dr-wire` for the bounded HTTP client core. `HttpProvider` now
+  composes `dr_wire.BoundedHttpClient`, which owns the lifecycle state machine,
+  the offload executor, connection-pool and byte bounds, native timeout phases,
+  and wire-error detection. `dr_providers` no longer imports `httpx` anywhere
+  in `src/`.
+- Admit one whole invocation through the client rather than one wire call, so a
+  clean close drains complete invocations and their evidence.
+- Map `dr_wire.WireFailureKind` to persisted recoverability and failure codes at
+  one exhaustive boundary; every recorded literal is unchanged.
+- Bound `Retry-After` hints on top of the wire boundary's uncapped parse with
+  one rule applied wherever a hint arrives, so retained
+  `ProviderRetryAfterHint` values keep their existing bounds — an oversized raw
+  header is refused whether the body was read or refused for size.
 - Default the standard provider-call retry policy to one invocation with no
   auto-retry; opt-in retry remains on `CustomProviderCallRetryPolicy`.
 - Record `Retry-After` hints as bounded invocation evidence only; remove

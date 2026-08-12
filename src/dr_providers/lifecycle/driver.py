@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from threading import TIMEOUT_MAX
 from typing import TYPE_CHECKING, Protocol
@@ -28,6 +29,18 @@ if TYPE_CHECKING:
     from dr_providers.core.provider import Provider
     from dr_providers.modeling.request import ProviderCallRequest
     from dr_providers.outcomes.evidence import ProviderInvocationEvidence
+
+
+_logger = logging.getLogger(__name__)
+"""The one deliberate logging touchpoint in this package.
+
+Every other failure in dr-providers is returned as a value: expected
+transport and protocol failures are evidence, and unexpected ones
+propagate to the caller. One case has no caller left to receive it —
+an offloaded driver that raises after its awaiting task was cancelled —
+so it is reported here rather than discarded. Adding a second logging
+site is a deliberate design change, not a local edit.
+"""
 
 
 class ProviderRetryWait(Protocol):
@@ -122,6 +135,12 @@ async def run_local_provider_call_async(
     completing that drain. The caller must not await this entry point
     from work already offloaded onto the same provider, which starves
     once every worker is held that way.
+
+    A cancelled await leaves nobody to retrieve the still-running
+    offloaded call's exception, so this entry point attaches a callback
+    that reports one at ERROR when the offloaded driver raises. That
+    keeps a systematic driver defect visible in an unattended run
+    instead of producing no output at all.
     """
     future = provider.offload(
         lambda: run_local_provider_call(
@@ -132,4 +151,27 @@ async def run_local_provider_call_async(
             retry_wait=retry_wait,
         )
     )
-    return await asyncio.shield(asyncio.wrap_future(future))
+    try:
+        return await asyncio.shield(asyncio.wrap_future(future))
+    except asyncio.CancelledError:
+        future.add_done_callback(_report_orphaned_offload_failure)
+        raise
+
+
+def _report_orphaned_offload_failure(
+    future: Future[ProviderCallResult],
+) -> None:
+    """Report an offloaded driver failure no awaiting task can receive.
+
+    Retrieving the exception here also marks it retrieved, so a shielded
+    future outliving its cancelled await neither loses the failure nor
+    reports it twice.
+    """
+    if future.cancelled():
+        return
+    error = future.exception()
+    if error is not None:
+        _logger.error(
+            "offloaded provider call failed after its await was cancelled",
+            exc_info=error,
+        )
