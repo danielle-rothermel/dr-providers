@@ -38,7 +38,7 @@ dependencies = [
 [tool.uv.sources]
 # Pinned to the head of dr-http PR #1 (bounded-client-core). Bump to the
 # post-merge main sha when that PR merges, before this one does.
-dr-http = { git = "https://github.com/danielle-rothermel/dr-http", rev = "f25083936722d6f6bcd284f26fff8b802cdc06be" }
+dr-http = { git = "https://github.com/danielle-rothermel/dr-http", rev = "9553c05b6bbeee9842a6dac8779784fb7072be6e" }
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]

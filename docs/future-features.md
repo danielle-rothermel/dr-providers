@@ -85,13 +85,6 @@ that would need them.
 - **Typed client-factory protocol.** The client factory seam is currently an
   untyped callable, which tests use to inject a transport. A precise protocol
   would let a consumer implement it against a checked contract.
-- **`HttpClientConfig` phase-timeout validator.** A configuration whose connect
-  or idle timeout exceeds its general timeout is accepted by the client today;
-  dr-providers avoids it by clamping in its transport policy before construction.
-  Moving that check into the client would make the invariant hold for every
-  consumer. **This one needs ratification before it is built:** clamping and
-  rejecting are different contracts, and dr-providers depends on clamping
-  because the clamped value is what its recorded policy identity commits to.
 - **Bounded incremental decompression.** The response byte cap bounds retained
   decoded bytes and stops at the first crossing chunk, but httpx decodes each
   raw transport chunk fully before the bound sees decoded output, so transient
