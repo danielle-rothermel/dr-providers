@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from dr_http import (
@@ -40,6 +41,7 @@ from dr_providers.transport.status import (
     is_redirect_status,
 )
 from dr_providers.transport.wire_failures import (
+    HTTP_STATUS_CODE_PREFIX,
     INVALID_BASE_URL_CODE,
     REQUEST_TOO_LARGE_CODE,
     RESPONSE_TOO_LARGE_CODE,
@@ -64,7 +66,6 @@ CONTENT_TYPE_HEADER = "Content-Type"
 JSON_CONTENT_TYPE = "application/json"
 MISSING_API_KEY_CODE = "missing_api_key"
 MISSING_BASE_URL_CODE = "missing_base_url"
-HTTP_STATUS_CODE_PREFIX = "http_status_"
 REDIRECT_STATUS_CODE_PREFIX = "http_redirect_"
 
 SUCCESS_STATUS_FLOOR = 200
@@ -136,6 +137,15 @@ def _retry_after_hint(
     if len(rendered.encode("utf-8")) > MAX_RETRY_AFTER_HEADER_BYTES:
         return None
     return ProviderRetryAfterHint(kind="http_date", value=rendered)
+
+
+@dataclass(frozen=True, slots=True)
+class _WireCallResult:
+    """What one dispatched exchange contributes to invocation evidence."""
+
+    outcome: ProviderTransportOutcome
+    response_bytes: int | None = None
+    retry_after: ProviderRetryAfterHint | None = None
 
 
 class HttpProvider:
@@ -248,12 +258,13 @@ class HttpProvider:
                 http_request=None,
                 outcome=self._request_too_large_failure(len(encoded_payload)),
             )
-        outcome, response_bytes, retry_after = self._wire_call(
+        result = self._wire_call(
             request,
             url,
             headers,
             encoded_payload,
         )
+        outcome = result.outcome
         if isinstance(outcome, ProviderTransportResponse):
             outcome = with_conformance_warnings(request, outcome)
         return ProviderInvocationEvidence.build(
@@ -263,8 +274,8 @@ class HttpProvider:
                 None if _is_never_sent_failure(outcome) else http_request
             ),
             outcome=outcome,
-            response_bytes=response_bytes,
-            retry_after=retry_after,
+            response_bytes=result.response_bytes,
+            retry_after=result.retry_after,
         )
 
     def _wire_call(
@@ -273,11 +284,7 @@ class HttpProvider:
         url: str,
         headers: dict[str, str],
         encoded_payload: bytes,
-    ) -> tuple[
-        ProviderTransportOutcome,
-        int | None,
-        ProviderRetryAfterHint | None,
-    ]:
+    ) -> _WireCallResult:
         """Dispatch one exchange and translate its wire result to evidence."""
         result = self._client.call(
             WireRequest(
@@ -296,35 +303,26 @@ class HttpProvider:
         response: WireResponse,
         request: ProviderCallRequest,
         url: str,
-    ) -> tuple[
-        ProviderTransportOutcome,
-        int | None,
-        ProviderRetryAfterHint | None,
-    ]:
-        retry_after = _retry_after_hint(
-            response.retry_after,
-            response.headers.get("retry-after"),
-        )
-        return (
-            self._outcome_from_response(
+    ) -> _WireCallResult:
+        return _WireCallResult(
+            outcome=self._outcome_from_response(
                 request,
                 response.status_code,
                 response.body,
                 url,
             ),
-            len(response.body),
-            retry_after,
+            response_bytes=len(response.body),
+            retry_after=_retry_after_hint(
+                response.retry_after,
+                response.headers.get("retry-after"),
+            ),
         )
 
     def _outcome_from_wire_failure(
         self,
         failure: WireFailure,
         url: str,
-    ) -> tuple[
-        ProviderTransportOutcome,
-        int | None,
-        ProviderRetryAfterHint | None,
-    ]:
+    ) -> _WireCallResult:
         """Record one wire failure in this package's own vocabulary.
 
         Dispatch is on the structured ``WireFailureKind``, never on the
@@ -339,12 +337,12 @@ class HttpProvider:
         recoverability, code = classify_wire_failure_kind(failure.kind)
         match failure.kind:
             case WireFailureKind.RESPONSE_TOO_LARGE:
-                return (
-                    self._response_too_large_failure(
+                return _WireCallResult(
+                    outcome=self._response_too_large_failure(
                         failure.observed_bytes or 0
                     ),
-                    failure.observed_bytes,
-                    _retry_after_hint(
+                    response_bytes=failure.observed_bytes,
+                    retry_after=_retry_after_hint(
                         failure.retry_after,
                         failure.retry_after_header,
                     ),
@@ -355,21 +353,29 @@ class HttpProvider:
                 # has no request left to refuse. Shaped symmetrically
                 # with the response branch so the wire client gaining
                 # its own request bound records the same evidence.
-                return (
-                    self._request_too_large_failure(
+                return _WireCallResult(
+                    outcome=self._request_too_large_failure(
                         failure.observed_bytes or 0
-                    ),
-                    None,
-                    None,
+                    )
                 )
             case (
                 WireFailureKind.TIMEOUT
                 | WireFailureKind.STALLED_RESPONSE
                 | WireFailureKind.POOL_TIMEOUT
             ):
-                return self._timeout_failure(code, failure, url), None, None
+                return _WireCallResult(
+                    outcome=self._timeout_failure(code, failure, url)
+                )
             case WireFailureKind.INVALID_URL:
-                message = INVALID_BASE_URL_MESSAGE
+                return _WireCallResult(
+                    outcome=self._error_failure(
+                        recoverability,
+                        code,
+                        INVALID_BASE_URL_MESSAGE,
+                        failure,
+                        url,
+                    )
+                )
             case (
                 WireFailureKind.CONNECT_ERROR
                 | WireFailureKind.NETWORK_ERROR
@@ -377,23 +383,45 @@ class HttpProvider:
                 | WireFailureKind.LOCAL_PROTOCOL_ERROR
                 | WireFailureKind.UNKNOWN
             ):
-                message = TRANSPORT_ERROR_MESSAGE
+                return _WireCallResult(
+                    outcome=self._error_failure(
+                        recoverability,
+                        code,
+                        TRANSPORT_ERROR_MESSAGE,
+                        failure,
+                        url,
+                    )
+                )
             case _:
+                # Structural guard for a future enum member; unreachable
+                # today because classify_wire_failure_kind raises first
+                # on any unmapped kind.
                 msg = f"unmapped wire failure kind: {failure.kind}"
                 raise ValueError(msg)
-        return (
-            ProviderTransportFailure(
-                recoverability=recoverability,
-                code=code,
-                message=message,
-                traceback=failure.traceback,
-                metadata={
-                    "url": url,
-                    "exception_type": failure.exception_type,
-                },
-            ),
-            None,
-            None,
+
+    def _error_failure(
+        self,
+        recoverability: RecoverabilityClass,
+        code: str,
+        message: str,
+        failure: WireFailure,
+        url: str,
+    ) -> ProviderTransportFailure:
+        """Record a wire error under its classified code and summary.
+
+        The exception detail a consumer reads instead of the collapsed
+        code lives in metadata, so branches sharing one code stay
+        distinguishable in recorded evidence.
+        """
+        return ProviderTransportFailure(
+            recoverability=recoverability,
+            code=code,
+            message=message,
+            traceback=failure.traceback,
+            metadata={
+                "url": url,
+                "exception_type": failure.exception_type,
+            },
         )
 
     def _timeout_failure(

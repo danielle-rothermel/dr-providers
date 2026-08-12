@@ -193,12 +193,11 @@ def test_wire_failure_evidence_shape_is_pinned_per_kind(
         _client_factory=lambda **_kwargs: None,
     )
 
-    outcome, _response_bytes, _retry_after = (
-        provider._outcome_from_wire_failure(
-            _wire_failure(kind),
-            URL,
-        )
+    result = provider._outcome_from_wire_failure(
+        _wire_failure(kind),
+        URL,
     )
+    outcome = result.outcome
 
     expected_recoverability, expected_code = EXPECTED_CLASSIFICATION[kind]
     assert isinstance(outcome, ProviderTransportFailure)
