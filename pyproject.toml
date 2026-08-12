@@ -35,11 +35,6 @@ dependencies = [
     "pydantic>=2.13.4,<3",
 ]
 
-[tool.uv.sources]
-# Pinned to the head of dr-wire PR #1 (bounded-client-core). Bump to the
-# post-merge main sha when that PR merges, before this one does.
-dr-wire = { git = "https://github.com/danielle-rothermel/dr-wire", rev = "5b5f070444e6aeddbbbd8ce0f54d8fda279b30fd" }
-
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
 

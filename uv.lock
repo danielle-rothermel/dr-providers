@@ -97,7 +97,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "dr-serialize", specifier = ">=0.1.2,<0.2" },
-    { name = "dr-wire", git = "https://github.com/danielle-rothermel/dr-wire?rev=5b5f070444e6aeddbbbd8ce0f54d8fda279b30fd" },
+    { name = "dr-wire", specifier = ">=0.1.0,<0.2" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.26.7" },
 ]
@@ -128,9 +128,13 @@ wheels = [
 [[package]]
 name = "dr-wire"
 version = "0.1.0"
-source = { git = "https://github.com/danielle-rothermel/dr-wire?rev=5b5f070444e6aeddbbbd8ce0f54d8fda279b30fd#5b5f070444e6aeddbbbd8ce0f54d8fda279b30fd" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/94/17/88031541fd25828c4fb6727f30a8caaf7a5145f9bdd4423760b86d153685/dr_wire-0.1.0.tar.gz", hash = "sha256:bca315e64c7f54a02cb2b2f6fd3fca0ce1d9ff1ab5ef90d807a5f71ac359b2a4", size = 13720, upload-time = "2026-08-12T03:48:44.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/3d/a5ffbda2b174b12f00b4991b441235f959266ea4589f10ce7cd18c234c76/dr_wire-0.1.0-py3-none-any.whl", hash = "sha256:94e9d04d44aef241900941cee2a340981e175abd18010a5cb3c14b6383ec94a1", size = 16299, upload-time = "2026-08-12T03:48:42.811Z" },
 ]
 
 [[package]]
