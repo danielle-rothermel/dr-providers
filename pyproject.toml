@@ -36,12 +36,9 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-# TODO(dr-http pin): swap to the git rev pin once dr-http's bounded-client-core
-# branch is pushed and merged. The intended pin is:
-#   dr-http = { git = "https://github.com/danielle-rothermel/dr-http", rev = "<post-merge main sha>" }
-# This path source resolves the same tree as dr-http 43d3113 but is not
-# fetchable by CI, so this PR must not merge before that swap.
-dr-http = { path = "../dr-http" }
+# Pinned to the head of dr-http PR #1 (bounded-client-core). Bump to the
+# post-merge main sha when that PR merges, before this one does.
+dr-http = { git = "https://github.com/danielle-rothermel/dr-http", rev = "4798e1cde23dc732d0c70fac5d4649080d40a0f4" }
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
