@@ -92,3 +92,19 @@ that would need them.
   consumer. **This one needs ratification before it is built:** clamping and
   rejecting are different contracts, and dr-providers depends on clamping
   because the clamped value is what its recorded policy identity commits to.
+- **Bounded incremental decompression.** The response byte cap bounds retained
+  decoded bytes and stops at the first crossing chunk, but httpx decodes each
+  raw transport chunk fully before the bound sees decoded output, so transient
+  decode memory for one raw chunk can exceed the cap by up to the codec's
+  ratio. Reading raw bytes through a bounded incremental decoder would close
+  that gap; it means reimplementing response decoding, and the providers this
+  package calls are not an adversarial-decompression threat model, so it is
+  recorded rather than built.
+- **Cleanup-error-tolerant complete reads.** A determined wire result (a size
+  refusal, or a response whose body finished) survives an error raised while
+  the stream closes afterward. A stream that fails during its final
+  exhaustion, where httpx entangles the trailing-chunk flush with the close,
+  still reports as a wire failure even when nearly all bytes arrived —
+  recovering the complete body there requires decoding raw chunks in this
+  package's own frame via httpx internals, which the frozen wire core
+  deliberately avoids.
