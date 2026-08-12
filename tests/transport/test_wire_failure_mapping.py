@@ -13,7 +13,7 @@ from _policy import (
     TEST_MAX_RESPONSE_BYTES,
     make_transport_policy,
 )
-from dr_http import WireFailure, WireFailureKind
+from dr_wire import WireFailure, WireFailureKind
 
 from dr_providers import ProviderTransportFailure, RecoverabilityClass
 from dr_providers.transport.http import HttpProvider

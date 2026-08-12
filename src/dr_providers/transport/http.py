@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from dr_http import (
+from dr_wire import (
     BoundedHttpClient,
     HttpClientConfig,
     WireFailure,
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from concurrent.futures import Future
 
-    from dr_http import ParsedRetryAfter
+    from dr_wire import ParsedRetryAfter
 
     from dr_providers.modeling.call import ProviderCallConfig
     from dr_providers.modeling.request import ProviderCallRequest

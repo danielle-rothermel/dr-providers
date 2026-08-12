@@ -294,9 +294,9 @@ date = "2026-08-08"
 check = "uv run pytest -q tests/lifecycle/test_reducer.py tests/lifecycle/test_handoff.py"
 
 [[contracts]]
-title = "HttpProvider delegates its client lifecycle to dr-http"
+title = "HttpProvider delegates its client lifecycle to dr-wire"
 statement = """
-Each HttpProvider owns one bounded HTTP client from dr-http, built from the \
+Each HttpProvider owns one bounded HTTP client from dr-wire, built from the \
 transport policy's already-normalized identity-bearing timeout, connection, \
 keep-alive, and byte bounds, and reuses it across invocations. The client owns \
 the lifecycle state machine, the offload executor, and every wire bound; the \

@@ -3,7 +3,7 @@
 [![CI](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml/badge.svg)](https://github.com/danielle-rothermel/dr-providers/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/dr-providers.svg)](https://pypi.org/project/dr-providers/)
 
-| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) ([terms](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/terms.toml), [contracts](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/contracts.toml)) | [dr-serialize](https://github.com/danielle-rothermel/dr-serialize) | [dr-http](https://github.com/danielle-rothermel/dr-http) |
+| [Repo Definitions](https://danielle-rothermel.github.io/dr-providers/) ([terms](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/terms.toml), [contracts](https://github.com/danielle-rothermel/dr-providers/blob/main/.defs/contracts.toml)) | [dr-serialize](https://github.com/danielle-rothermel/dr-serialize) | [dr-wire](https://github.com/danielle-rothermel/dr-wire) |
 | --- | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**
@@ -16,7 +16,7 @@ identity, provider translation, transport policy, and outcomes separate.
 | --- | --- |
 | `dr_providers.modeling` | Identity-bearing definitions, configs, requests, routes, controls, and transcripts |
 | `dr_providers.translation` | Pure provider request-body construction and parsed-response translation |
-| `dr_providers.transport` | Credentials, endpoints, timeout policy, and one-invocation HTTP execution over the [dr-http](https://github.com/danielle-rothermel/dr-http) bounded client |
+| `dr_providers.transport` | Credentials, endpoints, timeout policy, and one-invocation HTTP execution over the [dr-wire](https://github.com/danielle-rothermel/dr-wire) bounded client |
 | `dr_providers.outcomes` | Typed responses, expected failures, invocation evidence, and conformance warnings |
 | `dr_providers.lifecycle` | Invocation classification, serializable retry state, deterministic transitions, and terminal call results |
 | `dr_providers.core` | Shared provider protocol and failure vocabulary |

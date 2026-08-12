@@ -1,7 +1,7 @@
 """Provider-level offload delegation over the composed bounded client.
 
 Executor sizing, one-shot drain release, abort semantics, and the close
-state machine are verified in dr-http against the client that owns them.
+state machine are verified in dr-wire against the client that owns them.
 What is verified here is that the provider delegates to that client, so
 offloaded work reaches the same lifecycle a direct invocation does.
 """

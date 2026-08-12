@@ -1,6 +1,6 @@
 """Map wire failure kinds onto persisted transport failure vocabulary.
 
-``dr_http.WireFailureKind`` is an in-process description of one wire
+``dr_wire.WireFailureKind`` is an in-process description of one wire
 condition and is never persisted. The codes below are persisted: they
 land in ``ProviderTransportFailure.code`` inside stored invocation
 evidence, so each one is a recorded-data format pinned in
@@ -31,7 +31,7 @@ refinement.
 
 from __future__ import annotations
 
-from dr_http import WireFailureKind
+from dr_wire import WireFailureKind
 
 from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.outcomes.models import (

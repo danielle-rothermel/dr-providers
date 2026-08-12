@@ -72,9 +72,9 @@ It stays out of the frozen surface until the grouping and comparison a consumer
 actually wants are known, because a premature shape here would be harder to
 correct than its absence.
 
-## dr-http surface candidates
+## dr-wire surface candidates
 
-These belong to [dr-http](https://github.com/danielle-rothermel/dr-http), which
+These belong to [dr-wire](https://github.com/danielle-rothermel/dr-wire), which
 owns the wire capability. dr-providers records them because it is the consumer
 that would need them.
 

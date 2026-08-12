@@ -80,14 +80,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Report an offloaded provider call that raises after its awaiting task was
   cancelled, at `ERROR` on the `dr_providers.lifecycle.driver` logger, so a
   systematic driver defect stays visible in an unattended run.
-- Depend on `dr-http` for the bounded HTTP client core. `HttpProvider` now
-  composes `dr_http.BoundedHttpClient`, which owns the lifecycle state machine,
+- Depend on `dr-wire` for the bounded HTTP client core. `HttpProvider` now
+  composes `dr_wire.BoundedHttpClient`, which owns the lifecycle state machine,
   the offload executor, connection-pool and byte bounds, native timeout phases,
   and wire-error detection. `dr_providers` no longer imports `httpx` anywhere
   in `src/`.
 - Admit one whole invocation through the client rather than one wire call, so a
   clean close drains complete invocations and their evidence.
-- Map `dr_http.WireFailureKind` to persisted recoverability and failure codes at
+- Map `dr_wire.WireFailureKind` to persisted recoverability and failure codes at
   one exhaustive boundary; every recorded literal is unchanged.
 - Bound `Retry-After` hints on top of the wire boundary's uncapped parse with
   one rule applied wherever a hint arrives, so retained

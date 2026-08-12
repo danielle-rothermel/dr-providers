@@ -1,6 +1,6 @@
 """Provider-level admission over the composed bounded client.
 
-The lifecycle state machine itself is verified in dr-http. What matters
+The lifecycle state machine itself is verified in dr-wire. What matters
 here is that a whole invocation is the admitted unit, so a close drains
 complete evidence rather than a bare wire call.
 """
