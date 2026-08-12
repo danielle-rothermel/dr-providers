@@ -72,7 +72,7 @@ wheels = [
 [[package]]
 name = "dr-http"
 version = "0.1.0"
-source = { git = "https://github.com/danielle-rothermel/dr-http?rev=4798e1cde23dc732d0c70fac5d4649080d40a0f4#4798e1cde23dc732d0c70fac5d4649080d40a0f4" }
+source = { git = "https://github.com/danielle-rothermel/dr-http?rev=1f9dfb8b706ec0a4080f86a867e410e9b9e6ed84#1f9dfb8b706ec0a4080f86a867e410e9b9e6ed84" }
 dependencies = [
     { name = "httpx" },
 ]
@@ -104,7 +104,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dr-http", git = "https://github.com/danielle-rothermel/dr-http?rev=4798e1cde23dc732d0c70fac5d4649080d40a0f4" },
+    { name = "dr-http", git = "https://github.com/danielle-rothermel/dr-http?rev=1f9dfb8b706ec0a4080f86a867e410e9b9e6ed84" },
     { name = "dr-serialize", specifier = ">=0.1.2,<0.2" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.26.7" },
