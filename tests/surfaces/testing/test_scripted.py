@@ -20,6 +20,8 @@ from dr_providers import (
 )
 
 if TYPE_CHECKING:
+    from concurrent.futures import Future
+
     from dr_providers.lifecycle.driver import OffloadingProvider
 
 MESSAGES = (
@@ -190,3 +192,41 @@ class TestScriptedProvider:
         assert provider._executor is not None
         assert provider._executor is not first_executor
         provider.close()
+
+    def test_concurrent_first_offloads_share_one_worker(self) -> None:
+        """Racing creations may not orphan a worker or run in parallel.
+
+        A barrier lines every caller up on the lazy-creation race; the
+        assertions are exact terminal state — one executor, one worker
+        thread ident across all work, no stray provider threads.
+        """
+        caller_count = 8
+        provider = ScriptedProvider()
+        barrier = threading.Barrier(caller_count)
+        futures: list[Future[int]] = []
+        futures_lock = threading.Lock()
+
+        def race_offload() -> None:
+            barrier.wait()
+            future = provider.offload(threading.get_ident)
+            with futures_lock:
+                futures.append(future)
+
+        callers = [
+            threading.Thread(target=race_offload) for _ in range(caller_count)
+        ]
+        for caller in callers:
+            caller.start()
+        for caller in callers:
+            caller.join()
+
+        worker_idents = {future.result() for future in futures}
+        assert len(worker_idents) == 1
+        live_workers = [
+            thread
+            for thread in threading.enumerate()
+            if thread.name.startswith("scripted-provider")
+        ]
+        assert len(live_workers) == 1
+        provider.close()
+        assert provider._executor is None
