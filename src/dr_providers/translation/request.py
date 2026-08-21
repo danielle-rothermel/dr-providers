@@ -6,7 +6,6 @@ from dr_providers.core.frozen import _thaw
 from dr_providers.modeling.controls import (
     GenerationControls,
     ReasoningRequestShape,
-    RequestControl,
 )
 from dr_providers.modeling.route import Protocol
 from dr_providers.modeling.transcript import MessageRole
@@ -57,18 +56,14 @@ def build_payload(request: ProviderCallRequest) -> dict[str, Any]:
 def _set_controls(payload: dict[str, Any], config: ProviderCallConfig) -> None:
     constraints = config.definition.constraints
     controls = config.controls
-    if controls.temperature is not None and constraints.supports(
-        RequestControl.TEMPERATURE
-    ):
+    if controls.temperature is not None:
         payload["temperature"] = controls.temperature
-    if controls.top_p is not None and constraints.supports(
-        RequestControl.TOP_P
-    ):
+    if controls.top_p is not None:
         payload["top_p"] = controls.top_p
-    if controls.token_limit is not None and constraints.supports(
-        RequestControl.TOKEN_LIMIT
-    ):
+    if controls.token_limit is not None:
         payload[constraints.token_limit_parameter.value] = controls.token_limit
+    if controls.seed is not None:
+        payload["seed"] = controls.seed
     _set_reasoning(payload, config, controls)
     # Thaw for JSON encoding; Config validation prevents core-field overrides.
     payload.update(_thaw(config.extensions.extra_body))
@@ -81,7 +76,7 @@ def _set_reasoning(
 ) -> None:
     constraints = config.definition.constraints
     effort = controls.reasoning
-    if effort is None or not constraints.supports(RequestControl.REASONING):
+    if effort is None:
         return
     if config.route.protocol is Protocol.ANTHROPIC_MESSAGES:
         # Anthropic nests effort under output_config, not reasoning.

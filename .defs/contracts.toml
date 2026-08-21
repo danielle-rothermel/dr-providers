@@ -19,9 +19,11 @@ statement = """
 Controls reject coercive and non-finite values; provider body extensions are \
 strict finite JSON, deeply isolated, declared by the definition, and unable \
 to replace core wire fields. Every advertised control has a usable wire \
-mapping. Missing required controls and unmappable values for supported \
-controls always fail; unsupported controls fail unless unsupported-control \
-dropping is explicitly enabled."""
+mapping. Missing required controls, unmappable values for supported \
+controls, and unsupported controls always fail. A definition may not \
+advertise seed on a protocol that has no seed wire key (Responses, \
+Anthropic Messages). A constructable ProviderCallConfig transports every \
+control it carries; there is no drop mode."""
 rationale = """
 Identity and wire encoding must consume the same validated meaning. Allowing \
 coercion, mutable aliases, undeclared extensions, or core-field replacement \

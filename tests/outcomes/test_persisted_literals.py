@@ -160,6 +160,7 @@ EXPECTED_REQUEST_CONTROL_LITERALS = [
     "top_p",
     "token_limit",
     "reasoning",
+    "seed",
 ]
 EXPECTED_TOKEN_LIMIT_PARAMETER_LITERALS = [
     "max_tokens",
@@ -250,7 +251,7 @@ def test_control_literals_are_pinned() -> None:
     assert [member.value for member in RequestControl] == (
         EXPECTED_REQUEST_CONTROL_LITERALS
     )
-    assert len(RequestControl) == 4
+    assert len(RequestControl) == 5
     assert [member.value for member in TokenLimitParameter] == (
         EXPECTED_TOKEN_LIMIT_PARAMETER_LITERALS
     )
@@ -420,8 +421,8 @@ def test_identity_schema_names_are_pinned() -> None:
 
 
 def test_persisted_schema_versions_are_pinned() -> None:
-    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 7
-    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 2
+    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 8
+    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 3
     assert PROVIDER_CALL_CONFIG_SCHEMA_VERSION == 1
     assert PROVIDER_CALL_REQUEST_SCHEMA_VERSION == 1
     assert PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION == 1

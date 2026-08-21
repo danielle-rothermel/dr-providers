@@ -38,10 +38,14 @@ from dr_providers.modeling.route import (
 )
 
 PROVIDER_CALL_DEFINITION_SCHEMA = "dr_providers.provider_call_definition"
-PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 2
+PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 3
 
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 1
+
+_SEEDLESS_PROTOCOLS = frozenset(
+    {Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}
+)
 
 _ANTHROPIC_REASONING_EFFORTS = frozenset(
     {
@@ -94,6 +98,30 @@ class ProviderCallDefinition(BaseModel):
                     ),
                     metadata={
                         "controls": sorted(c.value for c in unsupported),
+                    },
+                )
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _seed_requires_protocol_wire_key(self) -> ProviderCallDefinition:
+        if (
+            self.constraints.supports(RequestControl.SEED)
+            and self.route.protocol in _SEEDLESS_PROTOCOLS
+        ):
+            raise ControlValidationError(
+                failure_record(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code="seed_protocol_unsupported",
+                    message=(
+                        f"definition {self.definition_id!r} advertises seed "
+                        f"but protocol {self.route.protocol.value!r} has no "
+                        "seed wire key"
+                    ),
+                    metadata={
+                        "protocol": self.route.protocol.value,
+                        "control": RequestControl.SEED.value,
+                        "definition_id": self.definition_id,
                     },
                 )
             )
@@ -155,8 +183,6 @@ class ProviderCallConfig(BaseModel):
             is_set = getattr(self.controls, attr) is not None
             supported = constraints.supports(control)
             if is_set and not supported:
-                if constraints.allow_unsupported_control_drop:
-                    continue
                 self._raise_unsupported(control)
             if control in self.definition.required_controls and not is_set:
                 self._raise_missing(control)
@@ -229,6 +255,7 @@ class ProviderCallConfig(BaseModel):
             "reasoning",
             "reasoning_effort",
             "output_config",
+            "seed",
             constraints.token_limit_parameter.value,
         }
 

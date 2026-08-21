@@ -129,6 +129,7 @@ class ProviderTransportResponse(BaseModel):
     stop_reason: ProviderStopReason | None = None
     response_id: StrictStr | None = None
     model: StrictStr | None = None
+    system_fingerprint: StrictStr | None = None
     diagnostics: ResponsesDiagnostics | None = None
 
     def model_post_init(self, _context: Any) -> None:

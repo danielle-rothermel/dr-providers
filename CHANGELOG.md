@@ -4,6 +4,40 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-20
+
+### Added
+
+- Add first-class `RequestControl.SEED` and `GenerationControls.seed`. Seed
+  participates in config identity when set, uses the single wire key `seed`,
+  and is reserved against `extra_body` smuggling. OpenAI Chat Completions,
+  OpenRouter, and Gemini OpenAI-compat advertise it; Anthropic Messages and
+  OpenAI Responses do not. Definitions that advertise seed on a protocol
+  with no seed wire key raise `seed_protocol_unsupported`.
+- Record `system_fingerprint` on `ProviderTransportResponse` when an
+  OpenAI-protocol body supplies it, so seed-plus-fingerprint audit can read
+  a typed field rather than scraping `response_body`.
+
+### Removed
+
+- Remove `allow_unsupported_control_drop`. Construction is unconditionally
+  loud: any set control the definition cannot transport raises
+  `ControlValidationError(code="unsupported_control")`. A constructable
+  `ProviderCallConfig` transports every control it carries; there is no drop
+  mode.
+
+### Changed
+
+- Advance provider-call definition schema 2 to 3 because the constraints
+  identity payload no longer carries a drop-mode flag. Every definition and
+  config identity hash changes; recorded evidence keyed by old hashes is
+  historical.
+- Translate every set control unconditionally. Validation is the sole
+  enforcement point that a config cannot carry an unsupported control.
+- Advance Provider Invocation Evidence to schema version 8: transport
+  responses persist `system_fingerprint`. Every success-response evidence
+  identity hash changes.
+
 ## [0.3.1] - 2026-08-12
 
 ### Added

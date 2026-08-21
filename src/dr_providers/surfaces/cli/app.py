@@ -65,6 +65,7 @@ TOKEN_LIMIT_OPTION = typer.Option(
         "Max output/completion tokens. Required when --provider is anthropic."
     ),
 )
+SEED_OPTION = typer.Option("--seed", help="Sampling seed.")
 app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
 
 
@@ -78,6 +79,7 @@ def query(  # noqa: PLR0913
     temperature: Annotated[float | None, TEMPERATURE_OPTION] = None,
     top_p: Annotated[float | None, TOP_P_OPTION] = None,
     token_limit: Annotated[int | None, TOKEN_LIMIT_OPTION] = None,
+    seed: Annotated[int | None, SEED_OPTION] = None,
 ) -> None:
     """Run a single-shot provider query and print the response text."""
     factory = FACTORY_BY_KIND[_CHOICE_TO_FACTORY_KIND[provider]]
@@ -89,6 +91,7 @@ def query(  # noqa: PLR0913
                 top_p=top_p,
                 token_limit=token_limit,
                 reasoning=effort,
+                seed=seed,
             ),
         )
     except ControlValidationError as exc:
