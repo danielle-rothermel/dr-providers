@@ -68,11 +68,22 @@ class TestConfigPresets:
         presets = (
             openrouter_chat_config(model="m"),
             openai_chat_config(model="m"),
-            openai_responses_config(model="m"),
             gemini_chat_config(model="m"),
         )
         for config in presets:
             assert config.definition.constraints.supports(RequestControl.SEED)
+
+    def test_openai_responses_preset_rejects_seed(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            openai_responses_config(
+                model="m",
+                controls=GenerationControls(seed=7),
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
+        assert exc_info.value.failure.metadata["control"] == "seed"
+        assert not openai_responses_config(
+            model="m"
+        ).definition.constraints.supports(RequestControl.SEED)
 
     def test_anthropic_preset_rejects_seed(self) -> None:
         with pytest.raises(ControlValidationError) as exc_info:

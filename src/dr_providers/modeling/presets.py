@@ -30,6 +30,14 @@ _OPENAI_COMPAT_CONTROLS: frozenset[RequestControl] = frozenset(
         RequestControl.SEED,
     }
 )
+_RESPONSES_CONTROLS: frozenset[RequestControl] = frozenset(
+    {
+        RequestControl.TEMPERATURE,
+        RequestControl.TOP_P,
+        RequestControl.TOKEN_LIMIT,
+        RequestControl.REASONING,
+    }
+)
 _ANTHROPIC_CONTROLS: frozenset[RequestControl] = frozenset(
     {
         RequestControl.TEMPERATURE,
@@ -150,7 +158,7 @@ def openai_responses_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
             reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
-            supported_controls=_OPENAI_COMPAT_CONTROLS,
+            supported_controls=_RESPONSES_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,

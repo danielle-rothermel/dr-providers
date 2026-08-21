@@ -10,8 +10,9 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Add first-class `RequestControl.SEED` and `GenerationControls.seed`. Seed
   participates in config identity when set, uses the single wire key `seed`,
-  and is reserved against `extra_body` smuggling. OpenAI-compatible presets
-  advertise it; Anthropic Messages does not.
+  and is reserved against `extra_body` smuggling. OpenAI Chat Completions,
+  OpenRouter, and Gemini OpenAI-compat advertise it; Anthropic Messages and
+  OpenAI Responses do not.
 
 ### Removed
 
