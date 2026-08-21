@@ -124,7 +124,7 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 7,
+        "schema_version": 8,
         "payload": {
             "request_identity_hash": "1" * 64,
             "policy_identity": {
@@ -201,7 +201,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 7
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 8
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -263,6 +263,14 @@ class TestInvocationEvidence:
         assert evidence.response.response_body == CHAT_BODY_OK
         assert evidence.http_request is not None
         assert evidence.http_request.body["model"] == "m"
+
+    def test_evidence_records_chat_system_fingerprint(self) -> None:
+        body = {**CHAT_BODY_OK, "system_fingerprint": "fp_abc"}
+        provider = mock_provider(lambda _req: httpx.Response(200, json=body))
+        evidence = provider.invoke(openai_request())
+
+        assert evidence.response is not None
+        assert evidence.response.system_fingerprint == "fp_abc"
 
     def test_evidence_retains_complete_failure_body(self) -> None:
         long_message = "x" * 5000
@@ -326,6 +334,7 @@ class TestInvocationEvidence:
                     "stop_reason": None,
                     "response_id": None,
                     "model": None,
+                    "system_fingerprint": None,
                     "diagnostics": None,
                 }
             )

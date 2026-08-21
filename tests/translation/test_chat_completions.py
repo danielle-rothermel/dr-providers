@@ -53,7 +53,55 @@ def test_chat_body_parses_parts() -> None:
     assert response.cost.total_cost == 0.001
     assert response.model == "m-actual"
     assert response.stop_reason is ProviderStopReason.STOP
+    assert response.system_fingerprint is None
     assert response.response_body == body
+
+
+def test_chat_body_retains_system_fingerprint() -> None:
+    body = {
+        "id": "chatcmpl-1",
+        "system_fingerprint": "fp_123",
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": "hi"},
+                "finish_reason": "stop",
+            }
+        ],
+    }
+
+    response = parse_chat_completions_body(
+        body, config=openai_chat_config(model="m")
+    )
+
+    assert isinstance(response, ProviderTransportResponse)
+    assert response.system_fingerprint == "fp_123"
+
+
+@pytest.mark.parametrize(
+    "fingerprint",
+    [None, 12, True, {"fp": "x"}],
+    ids=["missing", "int", "bool", "object"],
+)
+def test_chat_body_ignores_non_string_system_fingerprint(
+    fingerprint: object,
+) -> None:
+    body: dict[str, object] = {
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": "hi"},
+                "finish_reason": "stop",
+            }
+        ],
+    }
+    if fingerprint is not None:
+        body["system_fingerprint"] = fingerprint
+
+    response = parse_chat_completions_body(
+        body, config=openai_chat_config(model="m")
+    )
+
+    assert isinstance(response, ProviderTransportResponse)
+    assert response.system_fingerprint is None
 
 
 @pytest.mark.parametrize(

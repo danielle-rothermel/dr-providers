@@ -90,7 +90,7 @@ def scrub_traceback(traceback: str | None) -> str | None:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 7
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 8
 ContentIdentityHash = Annotated[
     StrictStr,
     Field(pattern=r"^[0-9a-f]{64}$"),

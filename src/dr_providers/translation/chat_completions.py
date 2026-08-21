@@ -81,6 +81,7 @@ def parse_chat_completions_body(
         stop_reason=stop_reason,
         response_id=optional_str(body.get("id")),
         model=optional_str(body.get("model")) or config.route.model,
+        system_fingerprint=optional_str(body.get("system_fingerprint")),
     )
 
 

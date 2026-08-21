@@ -195,8 +195,9 @@ exported_symbols = [
 name = "provider transport response"
 definition = """
 A typed transport success containing extracted text, a decoded response \
-mapping, usage, cost, warnings, typed stop reason, and diagnostics without \
-asserting semantic acceptance or byte fidelity."""
+mapping, usage, cost, warnings, typed stop reason, optional OpenAI-protocol \
+system fingerprint, and diagnostics without asserting semantic acceptance \
+or byte fidelity."""
 exported_symbols = [
   "ProviderTransportResponse",
   "ProviderStopReason",

@@ -43,6 +43,10 @@ PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 3
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 1
 
+_SEEDLESS_PROTOCOLS = frozenset(
+    {Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}
+)
+
 _ANTHROPIC_REASONING_EFFORTS = frozenset(
     {
         ReasoningEffort.LOW,
@@ -94,6 +98,30 @@ class ProviderCallDefinition(BaseModel):
                     ),
                     metadata={
                         "controls": sorted(c.value for c in unsupported),
+                    },
+                )
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _seed_requires_protocol_wire_key(self) -> ProviderCallDefinition:
+        if (
+            self.constraints.supports(RequestControl.SEED)
+            and self.route.protocol in _SEEDLESS_PROTOCOLS
+        ):
+            raise ControlValidationError(
+                failure_record(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code="seed_protocol_unsupported",
+                    message=(
+                        f"definition {self.definition_id!r} advertises seed "
+                        f"but protocol {self.route.protocol.value!r} has no "
+                        "seed wire key"
+                    ),
+                    metadata={
+                        "protocol": self.route.protocol.value,
+                        "control": RequestControl.SEED.value,
+                        "definition_id": self.definition_id,
                     },
                 )
             )

@@ -219,6 +219,54 @@ class TestDefinitionValidation:
 
         assert exc_info.value.failure.code == "reasoning_mapping_missing"
 
+    @pytest.mark.parametrize(
+        ("provider", "protocol", "token_limit_parameter"),
+        [
+            (
+                ProviderKind.OPENAI,
+                Protocol.RESPONSES,
+                TokenLimitParameter.MAX_OUTPUT_TOKENS,
+            ),
+            (
+                ProviderKind.ANTHROPIC,
+                Protocol.ANTHROPIC_MESSAGES,
+                TokenLimitParameter.MAX_TOKENS,
+            ),
+        ],
+        ids=["responses", "anthropic-messages"],
+    )
+    def test_advertised_seed_refused_on_seedless_protocol(
+        self,
+        provider: ProviderKind,
+        protocol: Protocol,
+        token_limit_parameter: TokenLimitParameter,
+    ) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            ProviderCallDefinition(
+                definition_id="test.seedless",
+                route=ModelRoute(
+                    provider=provider,
+                    protocol=protocol,
+                    model="m",
+                ),
+                constraints=ControlConstraints(
+                    supported_controls=frozenset({RequestControl.SEED}),
+                    token_limit_parameter=token_limit_parameter,
+                ),
+            )
+        failure = exc_info.value.failure
+        assert failure.code == "seed_protocol_unsupported"
+        assert failure.metadata["protocol"] == protocol.value
+        assert failure.metadata["control"] == "seed"
+        assert failure.metadata["definition_id"] == "test.seedless"
+
+    def test_advertised_seed_constructs_on_chat_completions(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.SEED})
+        )
+        config = definition.materialize(controls=GenerationControls(seed=7))
+        assert config.controls.seed == 7
+
     def test_required_control_must_be_assigned(self) -> None:
         definition = self._constrained_definition(
             frozenset({RequestControl.TOKEN_LIMIT}),

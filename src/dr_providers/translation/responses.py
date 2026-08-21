@@ -117,6 +117,7 @@ def parse_responses_body(
         stop_reason=_stop_reason_from_responses_body(body),
         response_id=optional_str(body.get("id")),
         model=optional_str(body.get("model")) or config.route.model,
+        system_fingerprint=optional_str(body.get("system_fingerprint")),
         diagnostics=walk.diagnostics,
     )
 
