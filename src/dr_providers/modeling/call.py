@@ -38,7 +38,7 @@ from dr_providers.modeling.route import (
 )
 
 PROVIDER_CALL_DEFINITION_SCHEMA = "dr_providers.provider_call_definition"
-PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 2
+PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 3
 
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 1
@@ -155,8 +155,6 @@ class ProviderCallConfig(BaseModel):
             is_set = getattr(self.controls, attr) is not None
             supported = constraints.supports(control)
             if is_set and not supported:
-                if constraints.allow_unsupported_control_drop:
-                    continue
                 self._raise_unsupported(control)
             if control in self.definition.required_controls and not is_set:
                 self._raise_missing(control)
@@ -229,6 +227,7 @@ class ProviderCallConfig(BaseModel):
             "reasoning",
             "reasoning_effort",
             "output_config",
+            "seed",
             constraints.token_limit_parameter.value,
         }
 

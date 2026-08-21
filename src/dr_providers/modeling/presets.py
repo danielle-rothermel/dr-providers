@@ -21,13 +21,33 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+_OPENAI_COMPAT_CONTROLS: frozenset[RequestControl] = frozenset(
+    {
+        RequestControl.TEMPERATURE,
+        RequestControl.TOP_P,
+        RequestControl.TOKEN_LIMIT,
+        RequestControl.REASONING,
+        RequestControl.SEED,
+    }
+)
+_ANTHROPIC_CONTROLS: frozenset[RequestControl] = frozenset(
+    {
+        RequestControl.TEMPERATURE,
+        RequestControl.TOP_P,
+        RequestControl.TOKEN_LIMIT,
+        RequestControl.REASONING,
+    }
+)
+
+
 def _chat_constraints(
     *,
     token_limit_parameter: TokenLimitParameter,
     reasoning_shape: ReasoningRequestShape,
+    supported_controls: frozenset[RequestControl],
 ) -> ControlConstraints:
     return ControlConstraints(
-        supported_controls=frozenset(RequestControl),
+        supported_controls=supported_controls,
         token_limit_parameter=token_limit_parameter,
         reasoning_shape=reasoning_shape,
     )
@@ -78,6 +98,7 @@ def openrouter_chat_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
+            supported_controls=_OPENAI_COMPAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
@@ -103,6 +124,7 @@ def openai_chat_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
+            supported_controls=_OPENAI_COMPAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
@@ -128,6 +150,7 @@ def openai_responses_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_OUTPUT_TOKENS,
             reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
+            supported_controls=_OPENAI_COMPAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
@@ -155,6 +178,7 @@ def gemini_chat_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
+            supported_controls=_OPENAI_COMPAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
@@ -182,6 +206,7 @@ def anthropic_messages_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_TOKENS,
             reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
+            supported_controls=_ANTHROPIC_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,

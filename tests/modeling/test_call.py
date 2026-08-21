@@ -62,6 +62,26 @@ class TestConfigPresets:
         assert config.route.protocol is Protocol.ANTHROPIC_MESSAGES
         param = config.definition.constraints.token_limit_parameter
         assert param is TokenLimitParameter.MAX_TOKENS
+        assert not config.definition.constraints.supports(RequestControl.SEED)
+
+    def test_openai_compat_presets_advertise_seed(self) -> None:
+        presets = (
+            openrouter_chat_config(model="m"),
+            openai_chat_config(model="m"),
+            openai_responses_config(model="m"),
+            gemini_chat_config(model="m"),
+        )
+        for config in presets:
+            assert config.definition.constraints.supports(RequestControl.SEED)
+
+    def test_anthropic_preset_rejects_seed(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            anthropic_messages_config(
+                model="claude",
+                controls=GenerationControls(token_limit=64, seed=7),
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
+        assert exc_info.value.failure.metadata["control"] == "seed"
 
     def test_anthropic_messages_requires_token_limit(self) -> None:
         with pytest.raises(ControlValidationError) as exc_info:
@@ -111,7 +131,6 @@ class TestDefinitionValidation:
         self,
         supported: frozenset[RequestControl],
         *,
-        allow_drop: bool = False,
         required: frozenset[RequestControl] = frozenset(),
     ) -> ProviderCallDefinition:
         return ProviderCallDefinition(
@@ -126,7 +145,6 @@ class TestDefinitionValidation:
                 token_limit_parameter=(
                     TokenLimitParameter.MAX_COMPLETION_TOKENS
                 ),
-                allow_unsupported_control_drop=allow_drop,
             ),
             required_controls=required,
         )
@@ -141,18 +159,19 @@ class TestDefinitionValidation:
             )
         assert exc_info.value.failure.metadata["control"] == "temperature"
 
-    def test_unsupported_control_drop_opt_in_accepts_construction(
+    def test_unsupported_control_always_refuses_construction(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.TOKEN_LIMIT})
+        )
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(
+                controls=GenerationControls(temperature=0.5)
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
+
+    def test_unsupported_anthropic_reasoning_refuses_construction(
         self,
     ) -> None:
-        definition = self._constrained_definition(
-            frozenset({RequestControl.TOKEN_LIMIT}), allow_drop=True
-        )
-        config = definition.materialize(
-            controls=GenerationControls(temperature=0.5)
-        )
-        assert config.controls.temperature == 0.5
-
-    def test_unsupported_anthropic_reasoning_can_be_dropped(self) -> None:
         definition = ProviderCallDefinition(
             definition_id="test.anthropic",
             route=ModelRoute(
@@ -163,15 +182,14 @@ class TestDefinitionValidation:
             constraints=ControlConstraints(
                 supported_controls=frozenset({RequestControl.TOKEN_LIMIT}),
                 token_limit_parameter=TokenLimitParameter.MAX_TOKENS,
-                allow_unsupported_control_drop=True,
             ),
         )
 
-        config = definition.materialize(
-            controls=GenerationControls(reasoning=ReasoningEffort.NONE)
-        )
-
-        assert config.controls.reasoning is ReasoningEffort.NONE
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(
+                controls=GenerationControls(reasoning=ReasoningEffort.NONE)
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
 
     def test_default_constraints_do_not_advertise_reasoning(self) -> None:
         constraints = ControlConstraints(
@@ -236,6 +254,25 @@ class TestDefinitionValidation:
                 extension_keys=frozenset({"model"}),
             )
         assert exc_info.value.failure.code == "reserved_extension_key"
+
+    def test_seed_extra_body_is_reserved(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(extra_body={"seed": 7}),
+                extension_keys=frozenset({"seed"}),
+            )
+        assert exc_info.value.failure.code == "reserved_extension_key"
+
+    def test_required_seed_must_be_assigned(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.SEED}),
+            required=frozenset({RequestControl.SEED}),
+        )
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(controls=GenerationControls())
+        assert exc_info.value.failure.code == "missing_required_control"
+        assert exc_info.value.failure.metadata["control"] == "seed"
 
     def test_config_validates_on_direct_construction(self) -> None:
         definition = self._constrained_definition(

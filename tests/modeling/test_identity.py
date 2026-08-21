@@ -63,13 +63,13 @@ def _fixed_request() -> ProviderCallRequest:
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "00e72ae621c1e526567e89bb0b1dec4e11ef5a847e18b8732e2c4b173c2cd7ae"
+    "2eab8d7c6bce1270fcf8a3ea62982a991f4ac1f9ee2452cadadbafd2ffb83213"
 )
 GOLDEN_CONFIG_HASH = (
-    "dfac8821edc52cdf9c60339d03f5714744f6051624c2aedfd9c674d2e148be0d"
+    "67f37b794c0817ce8dc3c4b7719b075a9b06008ab55756734ed23e833ceb5463"
 )
 GOLDEN_REQUEST_HASH = (
-    "abc1fbbf03d898550e500fc8d29e46353a7ebfd88c90f48aed4d0535440ece2a"
+    "9a2c5bae768e1629fcc26e3081338d3b25fec309ac2c1e96f1a9657bfeddf7f3"
 )
 
 
@@ -88,7 +88,7 @@ class TestDefinitionSchemaVersionOwnership:
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         definition = _fixed_definition()
 
-        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 2
+        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 3
         assert "schema_version" not in ProviderCallDefinition.model_fields
         properties = ProviderCallDefinition.model_json_schema()["properties"]
         assert "schema_version" not in properties
@@ -165,14 +165,13 @@ def _changed_payload_paths(
             ("constraints", "reasoning_shape"),
             ReasoningRequestShape.EFFORT_FIELD,
         ),
-        (("constraints", "allow_unsupported_control_drop"), True),
         (
             ("required_controls",),
             frozenset(
                 {RequestControl.TEMPERATURE, RequestControl.TOKEN_LIMIT}
             ),
         ),
-        (("extension_keys",), frozenset({"seed"})),
+        (("extension_keys",), frozenset({"user"})),
     ],
     ids=(
         "definition-id",
@@ -182,7 +181,6 @@ def _changed_payload_paths(
         "supported-controls",
         "token-limit-parameter",
         "reasoning-shape",
-        "unsupported-drop-policy",
         "required-controls",
         "extension-keys",
     ),
@@ -233,19 +231,20 @@ class TestOutputAffectingControlsAreIdentity:
             GenerationControls(top_p=0.5),
             GenerationControls(token_limit=32),
             GenerationControls(reasoning=ReasoningEffort.LOW),
+            GenerationControls(seed=7),
         ]
         hashes = {base.identity_hash}
         for controls in variants:
             hashes.add(
                 openai_chat_config(model="m", controls=controls).identity_hash
             )
-        assert len(hashes) == 5
+        assert len(hashes) == 6
 
     def test_body_extension_changes_config_identity(self) -> None:
         base = openai_chat_config(model="m")
         extended = openai_chat_config(
             model="m",
-            extensions=ProviderBodyExtensions(extra_body={"seed": 7}),
+            extensions=ProviderBodyExtensions(extra_body={"user": "eval"}),
         )
         assert base.identity_hash != extended.identity_hash
 

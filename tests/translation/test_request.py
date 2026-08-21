@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from dr_providers import (
     ControlConstraints,
+    ControlValidationError,
     GenerationControls,
     MessageRole,
     ModelRoute,
@@ -144,7 +147,7 @@ class TestBuildPayload:
         )
         assert build_payload(request)["top_p"] == 0.9
 
-    def test_opted_in_unsupported_control_is_omitted_from_wire(self) -> None:
+    def test_unsupported_control_refuses_construction(self) -> None:
         definition = ProviderCallDefinition(
             definition_id="test.chat",
             route=ModelRoute(
@@ -157,29 +160,31 @@ class TestBuildPayload:
                 token_limit_parameter=(
                     TokenLimitParameter.MAX_COMPLETION_TOKENS
                 ),
-                allow_unsupported_control_drop=True,
             ),
         )
-        config = definition.materialize(
-            controls=GenerationControls(temperature=0.5)
-        )
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(
+                controls=GenerationControls(temperature=0.5)
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
 
-        assert build_payload(request_for(config)) == {
-            "model": "m",
-            "messages": [
-                {"role": "system", "content": "be brief"},
-                {"role": "user", "content": "write add"},
-            ],
-        }
+    def test_seed_transported(self) -> None:
+        request = request_for(
+            openai_chat_config(
+                model="m",
+                controls=GenerationControls(seed=7),
+            )
+        )
+        assert build_payload(request)["seed"] == 7
 
     def test_extra_body_merged_into_payload(self) -> None:
         request = request_for(
             openai_chat_config(
                 model="m",
-                extensions=ProviderBodyExtensions(extra_body={"seed": 7}),
+                extensions=ProviderBodyExtensions(extra_body={"user": "eval"}),
             )
         )
-        assert build_payload(request)["seed"] == 7
+        assert build_payload(request)["user"] == "eval"
 
     def test_nested_extra_body_payload_is_json_serializable(self) -> None:
         request = request_for(

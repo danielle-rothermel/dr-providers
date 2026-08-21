@@ -33,6 +33,7 @@ class RequestControl(StrEnum):
     TOP_P = "top_p"
     TOKEN_LIMIT = "token_limit"  # noqa: S105 -- knob name, not a secret
     REASONING = "reasoning"
+    SEED = "seed"
 
 
 CONTROL_ATTR: dict[RequestControl, str] = {
@@ -79,6 +80,7 @@ class GenerationControls(BaseModel):
     )
     token_limit: StrictInt | None = None
     reasoning: ReasoningEffort | None = None
+    seed: StrictInt | None = None
 
     def identity_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {}
@@ -90,6 +92,8 @@ class GenerationControls(BaseModel):
             payload["token_limit"] = self.token_limit
         if self.reasoning is not None:
             payload["reasoning"] = self.reasoning.value
+        if self.seed is not None:
+            payload["seed"] = self.seed
         return payload
 
 
@@ -110,7 +114,6 @@ class ControlConstraints(BaseModel):
     supported_controls: frozenset[RequestControl] = DEFAULT_SUPPORTED_CONTROLS
     token_limit_parameter: TokenLimitParameter
     reasoning_shape: ReasoningRequestShape = ReasoningRequestShape.NONE
-    allow_unsupported_control_drop: bool = False
 
     @model_validator(mode="after")
     def _require_mapping_for_supported_reasoning(self) -> ControlConstraints:
@@ -147,9 +150,6 @@ class ControlConstraints(BaseModel):
             ),
             "token_limit_parameter": self.token_limit_parameter.value,
             "reasoning_shape": self.reasoning_shape.value,
-            "allow_unsupported_control_drop": (
-                self.allow_unsupported_control_drop
-            ),
         }
 
 

@@ -31,13 +31,13 @@ EXPECTED_JSON_DUMP = {
     "constraints": {
         "supported_controls": [
             "reasoning",
+            "seed",
             "temperature",
             "token_limit",
             "top_p",
         ],
         "token_limit_parameter": "max_completion_tokens",
         "reasoning_shape": "effort_field",
-        "allow_unsupported_control_drop": False,
     },
     "required_controls": ["temperature", "top_p"],
     "extension_keys": ["alpha", "middle", "zeta"],
