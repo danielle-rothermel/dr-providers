@@ -55,7 +55,7 @@ def _classify(body: dict) -> ProviderInvocationOutcome:
     """Classify a wire body through the real parse and classify path."""
     outcome = parse_anthropic_messages_body(body, config=_config())
     evidence = ProviderInvocationEvidence(
-        request_identity_hash="a" * 64,
+        request_hash="a" * 64,
         response=outcome if is_response(outcome) else None,
         failure=outcome if is_failure(outcome) else None,
     )

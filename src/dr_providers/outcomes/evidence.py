@@ -90,7 +90,7 @@ def scrub_traceback(traceback: str | None) -> str | None:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 8
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 9
 ContentIdentityHash = Annotated[
     StrictStr,
     Field(pattern=r"^[0-9a-f]{64}$"),
@@ -191,7 +191,7 @@ class ProviderInvocationEvidence(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    request_identity_hash: ContentIdentityHash
+    request_hash: ContentIdentityHash
     policy_identity: Mapping[str, Any] | None = None
     max_request_bytes: StrictInt | None = Field(default=None, gt=0)
     max_response_bytes: StrictInt | None = Field(default=None, gt=0)
@@ -279,7 +279,7 @@ class ProviderInvocationEvidence(BaseModel):
                 update={"traceback": scrub_traceback(failure.traceback)}
             )
         return cls(
-            request_identity_hash=request.identity_hash,
+            request_hash=request.identity_hash,
             policy_identity=(
                 None if policy is None else policy.identity_payload()
             ),

@@ -152,6 +152,12 @@ uv run dr-providers --provider anthropic \
 
 ## Outcome and evidence boundaries
 
+Identity references use `definition_hash` in config identity payloads,
+`config_hash` in request identity payloads, and `request_hash`,
+`retry_policy_hash`, `call_hash`, and `evidence_hash` in the lifecycle and
+evidence records that carry them. `provider_call_hash()` computes call
+identity; models expose their own identity through `identity_hash`.
+
 `HttpProvider.invoke()` makes at most one provider wire request and returns
 versioned serializable `ProviderInvocationEvidence`. The evidence binds the
 request identity hash and transport-policy identity to structured HTTP request

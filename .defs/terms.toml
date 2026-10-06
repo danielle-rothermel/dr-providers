@@ -330,7 +330,7 @@ exported_symbols = [
   "PROVIDER_CALL_SCHEMA",
   "PROVIDER_CALL_SCHEMA_VERSION",
   "provider_call_identity_document",
-  "provider_call_identity_hash",
+  "provider_call_hash",
 ]
 part_of = ["provider call result"]
 

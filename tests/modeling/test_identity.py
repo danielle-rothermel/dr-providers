@@ -67,10 +67,10 @@ GOLDEN_DEFINITION_HASH = (
     "2eab8d7c6bce1270fcf8a3ea62982a991f4ac1f9ee2452cadadbafd2ffb83213"
 )
 GOLDEN_CONFIG_HASH = (
-    "67f37b794c0817ce8dc3c4b7719b075a9b06008ab55756734ed23e833ceb5463"
+    "83cc279f56b7285a264314e2bbf24c31f19cc7114122e324bcece27375080805"
 )
 GOLDEN_REQUEST_HASH = (
-    "9a2c5bae768e1629fcc26e3081338d3b25fec309ac2c1e96f1a9657bfeddf7f3"
+    "6d9c6d3a8b7f26df67516ef25d73f7467980e62fcfab8036809a1df825f9640b"
 )
 
 
@@ -208,13 +208,13 @@ class TestDefinitionVersusConfig:
         assert "controls" not in definition.identity_payload()
         assert "controls" in config.identity_payload()
 
-    def test_config_embeds_definition_identity_hash(self) -> None:
+    def test_config_embeds_definition_hash(self) -> None:
         definition = _fixed_definition()
         config = definition.materialize(
             controls=GenerationControls(token_limit=64)
         )
         payload = config.identity_payload()
-        assert payload["definition_identity_hash"] == definition.identity_hash
+        assert payload["definition_hash"] == definition.identity_hash
 
     def test_config_carries_typed_definition_reference(self) -> None:
         config = _fixed_definition().materialize(
@@ -296,8 +296,8 @@ class TestRequestIdentity:
         )
         request = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
         payload = request.identity_payload()
-        assert set(payload) == {"config_identity_hash", "transcript"}
-        assert payload["config_identity_hash"] == config.identity_hash
+        assert set(payload) == {"config_hash", "transcript"}
+        assert payload["config_hash"] == config.identity_hash
         assert payload["transcript"] == [{"role": "user", "content": "hi"}]
 
     def test_request_hash_changes_with_transcript(self) -> None:

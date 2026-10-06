@@ -40,32 +40,30 @@ from dr_providers.lifecycle import (
     transition_provider_call,
 )
 
-REQUEST_IDENTITY_HASH = (
-    "751a27c43410660013d405fcc789e9f932fd7a7135cb8e7fd8a21356ea5143a5"
+REQUEST_HASH = (
+    "6d0f96a3b8185a934d7cd420c1285c77c38338bc100d8200132f982017b6d017"
 )
-POLICY_IDENTITY_HASH = (
+RETRY_POLICY_HASH = (
     "a465bcf528ec87cfacd1fe842849ee13880bc236f3693268caf6555aeba7c4cc"
 )
-CALL_IDENTITY_HASH = (
-    "ed664cc8217f909e73a2ba07b1e8baa699b7511c333d16c796f86f673780611f"
-)
-FIRST_EVIDENCE_IDENTITY_HASH = (
-    "ddd166717f06a08b4a41c7ad8e49637ec0f026cae6eead51693539c1401f90e0"
+CALL_HASH = "188f43f9c1f8e701074c09d393009296643f128e43d74a83974ec62f20f9f100"
+FIRST_EVIDENCE_HASH = (
+    "453cf42930a97f9dc84be55d233d30f7111889412e6bbab56480474e6d625dd9"
 )
 FIRST_OBSERVATION_IDENTITY_HASH = (
-    "9b0b4cd1e952d45a457edef36421bd17d60913dbee964623b331f0de1fa9312d"
+    "f423cbc36c905129504aa8f9b1c4d49c2eb81342122f4ac2b4b8c3badf42fe8d"
 )
 FIRST_RECORD_IDENTITY_HASH = (
-    "2e604ae5b2fb44f2acd07e370d6d031b0041656b77c9432bbbc665af2384b6a3"
+    "4d26a79e819ec8d80d9f17c66ff0a7721bf72aee6162841ad6bbdd9ede2b19ac"
 )
 SECOND_RECORD_IDENTITY_HASH = (
-    "3755c292d9d35e0432bdd9001ca9f57d5bcf69ddb8f72b886606486ccff0ac82"
+    "a4cd1a419b2bb9e5077837824f42ea8dc0511bf3d2230e398a487e1724ca0c4c"
 )
 RESULT_IDENTITY_HASH = (
-    "00e9d88b22b3b59b2332c00a5ae4f56c65c4e48029c5efceafbd0e1cef6822bf"
+    "56e578e8d5dc2de86f1531f3b988db3ccece46a56dbf2401995690dbdbf66ba9"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "78581d34f5d7467b1bd1776a975867317209ff79fd867e8e0754c5c1b6cd9d5f"
+    "7768224e1915592fca84ddc1c4f9eb2388b3e051e79d6b0a024f66771e9ad6dd"
 )
 
 
@@ -124,9 +122,9 @@ def _observation(
 ) -> CompletedProviderInvocationObservation:
     return CompletedProviderInvocationObservation(
         invocation_ordinal=state.next_invocation_ordinal,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         evidence=evidence,
-        evidence_identity_hash=evidence.identity_hash,
+        evidence_hash=evidence.identity_hash,
         outcome=classify_provider_invocation(
             evidence, AcceptAllSemanticResponseClassifier()
         ),
@@ -203,7 +201,7 @@ def _golden_trace() -> tuple[
         body_bytes=57,
     )
     first_evidence = ProviderInvocationEvidence(
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         policy_identity={
             "provider_kind": "openai",
             "transport_fixture": "v1",
@@ -221,9 +219,9 @@ def _golden_trace() -> tuple[
     )
     first_observation = CompletedProviderInvocationObservation(
         invocation_ordinal=1,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         evidence=first_evidence,
-        evidence_identity_hash=first_evidence.identity_hash,
+        evidence_hash=first_evidence.identity_hash,
         outcome=(
             ProviderInvocationOutcome.TRANSIENT_PROVIDER_OR_NETWORK_FAILURE
         ),
@@ -232,7 +230,7 @@ def _golden_trace() -> tuple[
     assert isinstance(instruction, ProviderRetryInstruction)
 
     second_evidence = ProviderInvocationEvidence(
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         policy_identity={
             "provider_kind": "openai",
             "transport_fixture": "v1",
@@ -248,9 +246,9 @@ def _golden_trace() -> tuple[
     )
     second_observation = CompletedProviderInvocationObservation(
         invocation_ordinal=2,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         evidence=second_evidence,
-        evidence_identity_hash=second_evidence.identity_hash,
+        evidence_hash=second_evidence.identity_hash,
         outcome=ProviderInvocationOutcome.SUCCESS,
     )
     result = transition_provider_call(
@@ -270,15 +268,15 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
     policy_payload = state.retry_policy.model_dump(mode="json")
     evidence_payload = first_observation.evidence.model_dump(mode="json")
     observation_payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "invocation_ordinal": 1,
-        "request_identity_hash": REQUEST_IDENTITY_HASH,
+        "request_hash": REQUEST_HASH,
         "evidence": evidence_payload,
-        "evidence_identity_hash": FIRST_EVIDENCE_IDENTITY_HASH,
+        "evidence_hash": FIRST_EVIDENCE_HASH,
         "outcome": "transient_provider_or_network_failure",
     }
     first_record_payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "observation": observation_payload,
         "retry_decision": {
             "source": "provider_call_retry_policy",
@@ -286,13 +284,13 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
         },
     }
     initial_state_payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "request": request_payload,
-        "request_identity_hash": REQUEST_IDENTITY_HASH,
+        "request_hash": REQUEST_HASH,
         "retry_policy": policy_payload,
-        "retry_policy_identity_hash": POLICY_IDENTITY_HASH,
+        "retry_policy_hash": RETRY_POLICY_HASH,
         "classifier_identifier": "semantic-v1",
-        "call_identity_hash": CALL_IDENTITY_HASH,
+        "call_hash": CALL_HASH,
         "completed_invocations": [],
         "completed_invocation_record_hashes": [],
         "next_invocation_ordinal": 1,
@@ -308,20 +306,20 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
     assert first_observation.model_dump(mode="json") == observation_payload
     assert first_record.model_dump(mode="json") == first_record_payload
     assert instruction.model_dump(mode="json") == {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": "provider_call_retry_policy",
         "delay_seconds": 1.0,
         "next_invocation_ordinal": 2,
         "next_state": next_state_payload,
     }
     assert result.model_dump(mode="json") == {
-        "schema_version": 1,
+        "schema_version": 2,
         "request": request_payload,
-        "request_identity_hash": REQUEST_IDENTITY_HASH,
+        "request_hash": REQUEST_HASH,
         "retry_policy": policy_payload,
-        "retry_policy_identity_hash": POLICY_IDENTITY_HASH,
+        "retry_policy_hash": RETRY_POLICY_HASH,
         "classifier_identifier": "semantic-v1",
-        "call_identity_hash": CALL_IDENTITY_HASH,
+        "call_hash": CALL_HASH,
         "completed_invocations": [
             first_record_payload,
             result.completed_invocations[1].model_dump(mode="json"),
@@ -333,13 +331,13 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
         "outcome": {"kind": "accepted", "invocation_outcome": "success"},
     }
     assert cancellation.model_dump(mode="json") == {
-        "schema_version": 1,
+        "schema_version": 2,
         "request": request_payload,
-        "request_identity_hash": REQUEST_IDENTITY_HASH,
+        "request_hash": REQUEST_HASH,
         "retry_policy": policy_payload,
-        "retry_policy_identity_hash": POLICY_IDENTITY_HASH,
+        "retry_policy_hash": RETRY_POLICY_HASH,
         "classifier_identifier": "semantic-v1",
-        "call_identity_hash": CALL_IDENTITY_HASH,
+        "call_hash": CALL_HASH,
         "completed_invocations": [first_record_payload],
         "completed_invocation_record_hashes": [FIRST_RECORD_IDENTITY_HASH],
         "outcome": {
@@ -348,12 +346,10 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
         },
     }
 
-    assert state.request_identity_hash == REQUEST_IDENTITY_HASH
-    assert state.retry_policy_identity_hash == POLICY_IDENTITY_HASH
-    assert state.call_identity_hash == CALL_IDENTITY_HASH
-    assert first_observation.evidence_identity_hash == (
-        FIRST_EVIDENCE_IDENTITY_HASH
-    )
+    assert state.request_hash == REQUEST_HASH
+    assert state.retry_policy_hash == RETRY_POLICY_HASH
+    assert state.call_hash == CALL_HASH
+    assert first_observation.evidence_hash == (FIRST_EVIDENCE_HASH)
     assert first_observation.identity_hash == FIRST_OBSERVATION_IDENTITY_HASH
     assert first_record.identity_hash == FIRST_RECORD_IDENTITY_HASH
     assert result.identity_hash == RESULT_IDENTITY_HASH
@@ -385,9 +381,9 @@ def test_restored_pending_state_cancels_identically() -> None:
 @pytest.mark.parametrize(
     ("field_name", "replacement", "message"),
     [
-        ("request_identity_hash", "0" * 64, "request identity hash"),
-        ("retry_policy_identity_hash", "0" * 64, "policy identity hash"),
-        ("call_identity_hash", "0" * 64, "call identity hash"),
+        ("request_hash", "0" * 64, "request identity hash"),
+        ("retry_policy_hash", "0" * 64, "policy identity hash"),
+        ("call_hash", "0" * 64, "call identity hash"),
         ("classifier_identifier", "semantic-v2", "call identity hash"),
     ],
 )
@@ -427,12 +423,12 @@ def test_terminal_history_cannot_be_restored_as_continuable_state(
     state = _state()
     if outcome is ProviderInvocationOutcome.SUCCESS:
         evidence = ProviderInvocationEvidence(
-            request_identity_hash=state.request_identity_hash,
+            request_hash=state.request_hash,
             response=ProviderTransportResponse(text="accepted"),
         )
     else:
         evidence = ProviderInvocationEvidence(
-            request_identity_hash=state.request_identity_hash,
+            request_hash=state.request_hash,
             failure=ProviderTransportFailure(
                 recoverability=RecoverabilityClass.TRANSIENT,
                 code="stalled_response",
@@ -442,9 +438,9 @@ def test_terminal_history_cannot_be_restored_as_continuable_state(
         )
     observation = CompletedProviderInvocationObservation(
         invocation_ordinal=1,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         evidence=evidence,
-        evidence_identity_hash=evidence.identity_hash,
+        evidence_hash=evidence.identity_hash,
         outcome=outcome,
     )
     terminal = transition_provider_call(state, observation)

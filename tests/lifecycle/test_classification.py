@@ -40,7 +40,7 @@ def _failure_evidence(
     containment: TransportTimeoutContainment | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
-        request_identity_hash=REQUEST_HASH,
+        request_hash=REQUEST_HASH,
         failure=ProviderTransportFailure(
             recoverability=recoverability,
             code=code,
@@ -162,7 +162,7 @@ def test_empty_generation_precedes_semantic_classifier() -> None:
             )
 
     evidence = ProviderInvocationEvidence(
-        request_identity_hash=REQUEST_HASH,
+        request_hash=REQUEST_HASH,
         response=ProviderTransportResponse(text="  "),
     )
 

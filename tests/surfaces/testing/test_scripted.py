@@ -96,7 +96,7 @@ class TestScriptedProvider:
         ]
         assert evidence.http_request is None
         assert evidence.policy_identity is None
-        assert evidence.request_identity_hash == request.identity_hash
+        assert evidence.request_hash == request.identity_hash
 
     def test_outcomes_are_consumed_in_order_then_last_repeats(self) -> None:
         provider = ScriptedProvider(

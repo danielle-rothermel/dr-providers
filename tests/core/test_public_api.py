@@ -36,6 +36,7 @@ PURE_MODULES = (
 
 
 def test_public_api_exports() -> None:
+    assert "provider_call_hash" in dr_providers.__all__
     for name in dr_providers.__all__:
         assert getattr(dr_providers, name) is not None
 

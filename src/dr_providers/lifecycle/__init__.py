@@ -31,8 +31,8 @@ from dr_providers.lifecycle.models import (
     ProviderRetryDecision,
     ProviderRetryDelaySource,
     ProviderRetryInstruction,
+    provider_call_hash,
     provider_call_identity_document,
-    provider_call_identity_hash,
 )
 from dr_providers.lifecycle.outcomes import (
     ProviderCallOutcome,
@@ -87,8 +87,8 @@ __all__ = [
     "cancel_provider_call",
     "classify_provider_invocation",
     "classify_semantic_response",
+    "provider_call_hash",
     "provider_call_identity_document",
-    "provider_call_identity_hash",
     "run_local_provider_call",
     "run_local_provider_call_async",
     "transition_provider_call",
