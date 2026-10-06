@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-10-06
+
+### Added
+
+- Add first-class `RequestControl.VERBOSITY`, the `Verbosity` enum (`low`,
+  `medium`, `high`), and `GenerationControls.verbosity`. Verbosity
+  participates in config identity when set, uses the single top-level wire
+  key `verbosity`, and is reserved against `extra_body` smuggling. OpenAI
+  Chat Completions and OpenRouter advertise it; Gemini OpenAI-compat,
+  Anthropic Messages, and OpenAI Responses (which nests verbosity under
+  `text`) do not. Definitions that advertise verbosity on Responses or
+  Anthropic Messages raise `verbosity_protocol_unsupported`.
+- Add `--verbosity` to the `query` CLI command.
+
+### Changed
+
+- The `openai.chat_completions` and `openrouter.chat_completions` preset
+  definitions now advertise verbosity, so their definition identity hashes
+  and every downstream config, request, call, and evidence hash change.
+  Definition and evidence schema versions are unchanged.
+
 ## [0.3.2] - 2026-08-20
 
 ### Added
