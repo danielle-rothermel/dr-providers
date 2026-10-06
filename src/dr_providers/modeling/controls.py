@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from enum import StrEnum
+from enum import UNIQUE, StrEnum, verify
 from typing import Any
 
 from dr_serialize import (
@@ -26,6 +26,14 @@ from dr_providers.core.failures import (
     failure_record,
 )
 from dr_providers.core.frozen import _deep_freeze, _FrozenMap, _thaw
+
+
+@verify(UNIQUE)
+class PromptRendering(StrEnum):
+    """Definition-owned rendering of transcript content into provider input."""
+
+    ROLE_MESSAGES = "role_messages"
+    FLAT_TEXT = "flat_text"
 
 
 class RequestControl(StrEnum):

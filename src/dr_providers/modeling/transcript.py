@@ -22,7 +22,7 @@ class PromptMessage(BaseModel):
         return {"role": self.role.value, "content": self.content}
 
     def identity_payload(self) -> dict[str, str]:
-        # Request identity intentionally reuses the exact wire shape.
+        # Identity retains roles and content independently of prompt rendering.
         return self.provider_dict()
 
 

@@ -12,6 +12,7 @@ from dr_providers import (
     MessageRole,
     ModelRoute,
     PromptMessage,
+    PromptRendering,
     Protocol,
     ProviderBodyExtensions,
     ProviderCallDefinition,
@@ -237,3 +238,221 @@ class TestBuildPayload:
                 model="m", controls=GenerationControls(token_limit=64)
             )
         ) == ("/messages")
+
+
+@pytest.mark.parametrize(
+    ("config_factory", "expected_body"),
+    [
+        (
+            openai_chat_config,
+            {
+                "model": "m",
+                "messages": [
+                    {"role": "user", "content": "systemuserassistant"}
+                ],
+                "max_completion_tokens": 64,
+                "reasoning_effort": "low",
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "user": "eval",
+            },
+        ),
+        (
+            openai_responses_config,
+            {
+                "model": "m",
+                "input": [{"role": "user", "content": "systemuserassistant"}],
+                "max_output_tokens": 64,
+                "reasoning": {"effort": "low"},
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "user": "eval",
+            },
+        ),
+        (
+            anthropic_messages_config,
+            {
+                "model": "m",
+                "messages": [
+                    {"role": "user", "content": "systemuserassistant"}
+                ],
+                "max_tokens": 64,
+                "output_config": {"effort": "low"},
+                "temperature": 0.2,
+                "top_p": 0.9,
+                "user": "eval",
+            },
+        ),
+    ],
+    ids=["chat-completions", "responses", "anthropic-messages"],
+)
+def test_flat_text_body_preserves_controls_and_extensions(
+    config_factory: Callable[..., ProviderCallConfig],
+    expected_body: dict[str, object],
+) -> None:
+    request = request_for(
+        config_factory(
+            model="m",
+            prompt_rendering=PromptRendering.FLAT_TEXT,
+            controls=GenerationControls(
+                token_limit=64,
+                reasoning=ReasoningEffort.LOW,
+                temperature=0.2,
+                top_p=0.9,
+            ),
+            extensions=ProviderBodyExtensions(extra_body={"user": "eval"}),
+        ),
+        messages=(
+            PromptMessage(role=MessageRole.SYSTEM, content="system"),
+            PromptMessage(role=MessageRole.USER, content="user"),
+            PromptMessage(role=MessageRole.ASSISTANT, content="assistant"),
+        ),
+    )
+    payload = build_payload(request)
+
+    assert payload == expected_body
+    assert "instructions" not in payload
+    assert "system" not in payload
+
+
+def test_flat_text_single_message_preserves_content_bytes() -> None:
+    content = " \tPréfixe\r\n🙂\n\nSuffixe  "
+    request = request_for(
+        openai_chat_config(
+            model="m", prompt_rendering=PromptRendering.FLAT_TEXT
+        ),
+        messages=(PromptMessage(role=MessageRole.SYSTEM, content=content),),
+    )
+
+    payload = build_payload(request)
+
+    assert payload == {
+        "model": "m",
+        "messages": [{"role": "user", "content": content}],
+    }
+    assert payload["messages"][0]["content"].encode("utf-8") == content.encode(
+        "utf-8"
+    )
+
+
+def test_flat_text_inserts_no_separator_between_any_message_roles() -> None:
+    request = request_for(
+        openai_chat_config(
+            model="m", prompt_rendering=PromptRendering.FLAT_TEXT
+        ),
+        messages=(
+            PromptMessage(role=MessageRole.SYSTEM, content="a"),
+            PromptMessage(role=MessageRole.USER, content="b"),
+            PromptMessage(role=MessageRole.TOOL, content="c"),
+            PromptMessage(role=MessageRole.ASSISTANT, content="d"),
+        ),
+    )
+
+    assert build_payload(request) == {
+        "model": "m",
+        "messages": [{"role": "user", "content": "abcd"}],
+    }
+
+
+@pytest.mark.parametrize(
+    ("config_factory", "expected_body"),
+    [
+        (
+            openai_chat_config,
+            {
+                "model": "m",
+                "messages": [
+                    {"role": "system", "content": "system"},
+                    {"role": "user", "content": "user"},
+                    {"role": "assistant", "content": "assistant"},
+                ],
+                "max_completion_tokens": 64,
+            },
+        ),
+        (
+            openai_responses_config,
+            {
+                "model": "m",
+                "instructions": "system",
+                "input": [
+                    {"role": "user", "content": "user"},
+                    {"role": "assistant", "content": "assistant"},
+                ],
+                "max_output_tokens": 64,
+            },
+        ),
+        (
+            anthropic_messages_config,
+            {
+                "model": "m",
+                "system": "system",
+                "messages": [
+                    {"role": "user", "content": "user"},
+                    {"role": "assistant", "content": "assistant"},
+                ],
+                "max_tokens": 64,
+            },
+        ),
+    ],
+    ids=["chat-completions", "responses", "anthropic-messages"],
+)
+def test_role_messages_preserves_assistant_ending_transcript(
+    config_factory: Callable[..., ProviderCallConfig],
+    expected_body: dict[str, object],
+) -> None:
+    request = request_for(
+        config_factory(model="m", controls=GenerationControls(token_limit=64)),
+        messages=(
+            PromptMessage(role=MessageRole.SYSTEM, content="system"),
+            PromptMessage(role=MessageRole.USER, content="user"),
+            PromptMessage(role=MessageRole.ASSISTANT, content="assistant"),
+        ),
+    )
+
+    assert build_payload(request) == expected_body
+
+
+@pytest.mark.parametrize(
+    ("config_factory", "message_key", "expected_controls"),
+    [
+        (openai_chat_config, "messages", {"max_completion_tokens": 64}),
+        (openai_responses_config, "input", {"max_output_tokens": 64}),
+        (anthropic_messages_config, "messages", {"max_tokens": 64}),
+    ],
+    ids=["chat-completions", "responses", "anthropic-messages"],
+)
+@pytest.mark.parametrize(
+    ("rendering", "expected_messages"),
+    [
+        (PromptRendering.ROLE_MESSAGES, []),
+        (PromptRendering.FLAT_TEXT, [{"role": "user", "content": ""}]),
+    ],
+    ids=["role-messages", "flat-text"],
+)
+def test_empty_transcript_rendering_is_explicit(
+    config_factory: Callable[..., ProviderCallConfig],
+    message_key: str,
+    expected_controls: dict[str, int],
+    rendering: PromptRendering,
+    expected_messages: list[dict[str, str]],
+) -> None:
+    request = request_for(
+        config_factory(
+            model="m",
+            controls=GenerationControls(token_limit=64),
+            prompt_rendering=rendering,
+        ),
+        messages=(),
+    )
+
+    payload = build_payload(request)
+
+    assert payload == {
+        "model": "m",
+        message_key: expected_messages,
+        **expected_controls,
+    }
+    assert "instructions" not in payload
+    assert "system" not in payload
+    assert request.transcript.messages == ()
+    assert request.identity_payload()["transcript"] == []

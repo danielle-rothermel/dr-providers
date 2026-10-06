@@ -125,9 +125,11 @@ name = "provider call definition"
 definition = """
 A variable-bearing definition declaring a model route, supported and \
 required controls, usable wire mappings for advertised controls, extension \
-keys, and identity effects."""
+keys, and identity effects. PromptRendering selects role-preserving messages \
+or separator-free flat text sent as one user message."""
 exported_symbols = [
   "ProviderCallDefinition",
+  "PromptRendering",
   "PROVIDER_CALL_DEFINITION_SCHEMA",
   "PROVIDER_CALL_DEFINITION_SCHEMA_VERSION",
   "ControlConstraints",

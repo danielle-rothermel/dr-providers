@@ -62,6 +62,7 @@ from dr_providers.modeling.call import (
 from dr_providers.modeling.controls import (
     ControlConstraints,
     GenerationControls,
+    PromptRendering,
     ProviderBodyExtensions,
     ReasoningEffort,
     ReasoningRequestShape,
@@ -189,6 +190,7 @@ __all__ = [
     "ModelRoute",
     "OffloadingProvider",
     "PromptMessage",
+    "PromptRendering",
     "Protocol",
     "Provider",
     "ProviderBaseUrl",

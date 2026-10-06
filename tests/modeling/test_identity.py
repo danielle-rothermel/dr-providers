@@ -12,6 +12,7 @@ from dr_providers import (
     MessageRole,
     ModelRoute,
     PromptMessage,
+    PromptRendering,
     Protocol,
     ProviderBaseUrl,
     ProviderBodyExtensions,
@@ -26,6 +27,7 @@ from dr_providers import (
     TokenLimitParameter,
     Transcript,
     Verbosity,
+    build_payload,
     openai_chat_config,
 )
 from dr_providers.modeling.call import (
@@ -64,13 +66,13 @@ def _fixed_request() -> ProviderCallRequest:
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "2eab8d7c6bce1270fcf8a3ea62982a991f4ac1f9ee2452cadadbafd2ffb83213"
+    "4acb3899f212a6babb98854c6c5c3c98935ba99ffc4119bbd6ed09d6e6c3885c"
 )
 GOLDEN_CONFIG_HASH = (
-    "83cc279f56b7285a264314e2bbf24c31f19cc7114122e324bcece27375080805"
+    "8d7bc15a327d0cee2470d1cfc185d1de3253d673da7d239052a82852a22b0488"
 )
 GOLDEN_REQUEST_HASH = (
-    "6d9c6d3a8b7f26df67516ef25d73f7467980e62fcfab8036809a1df825f9640b"
+    "9690da69ff909abc9339f45b929f9c0cbfae5b7c952ed1e7b706b212760ac6f8"
 )
 
 
@@ -89,7 +91,7 @@ class TestDefinitionSchemaVersionOwnership:
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         definition = _fixed_definition()
 
-        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 3
+        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 4
         assert "schema_version" not in ProviderCallDefinition.model_fields
         properties = ProviderCallDefinition.model_json_schema()["properties"]
         assert "schema_version" not in properties
@@ -173,6 +175,7 @@ def _changed_payload_paths(
             ),
         ),
         (("extension_keys",), frozenset({"user"})),
+        (("prompt_rendering",), PromptRendering.FLAT_TEXT),
     ],
     ids=(
         "definition-id",
@@ -184,6 +187,7 @@ def _changed_payload_paths(
         "reasoning-shape",
         "required-controls",
         "extension-keys",
+        "prompt-rendering",
     ),
 )
 def test_every_definition_dimension_changes_identity(
@@ -339,6 +343,75 @@ class TestRequestIdentity:
             config=openai_chat_config(model="other"), transcript=transcript
         )
         assert a.identity_hash != b.identity_hash
+
+
+class TestPromptRenderingIdentity:
+    def test_rendering_changes_identity_only_through_definition_reference(
+        self,
+    ) -> None:
+        role = ProviderCallRequest(
+            config=openai_chat_config(model="m"), transcript=TRANSCRIPT
+        )
+        flat = ProviderCallRequest(
+            config=openai_chat_config(
+                model="m", prompt_rendering=PromptRendering.FLAT_TEXT
+            ),
+            transcript=TRANSCRIPT,
+        )
+
+        assert (
+            role.config.definition.identity_hash
+            != flat.config.definition.identity_hash
+        )
+        assert _changed_payload_paths(
+            role.config.identity_payload(), flat.config.identity_payload()
+        ) == {"definition_hash"}
+        assert _changed_payload_paths(
+            role.identity_payload(), flat.identity_payload()
+        ) == {"config_hash"}
+        assert (
+            role.identity_payload()["transcript"]
+            == flat.identity_payload()["transcript"]
+        )
+        assert role.identity_hash != flat.identity_hash
+
+    def test_default_and_explicit_role_messages_have_same_identity(
+        self,
+    ) -> None:
+        default = openai_chat_config(model="m")
+        explicit = openai_chat_config(
+            model="m", prompt_rendering=PromptRendering.ROLE_MESSAGES
+        )
+
+        assert (
+            default.definition.identity_payload()["prompt_rendering"]
+            == "role_messages"
+        )
+        assert default.identity_hash == explicit.identity_hash
+
+    def test_flat_text_keeps_role_distinctions_in_transcript_identity(
+        self,
+    ) -> None:
+        config = openai_chat_config(
+            model="m", prompt_rendering=PromptRendering.FLAT_TEXT
+        )
+        user = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
+        assistant = ProviderCallRequest(
+            config=config,
+            transcript=Transcript(
+                messages=(
+                    PromptMessage(role=MessageRole.ASSISTANT, content="hi"),
+                )
+            ),
+        )
+        before = assistant.identity_payload()
+
+        assert build_payload(user) == build_payload(assistant)
+        assert assistant.identity_payload() == before
+        assert assistant.identity_payload()["transcript"] == [
+            {"role": "assistant", "content": "hi"}
+        ]
+        assert user.identity_hash != assistant.identity_hash
 
 
 if __name__ == "__main__":  # pragma: no cover -- golden-hash regeneration

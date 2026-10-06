@@ -10,6 +10,7 @@ from dr_providers.modeling.call import (
 from dr_providers.modeling.controls import (
     ControlConstraints,
     GenerationControls,
+    PromptRendering,
     ProviderBodyExtensions,
     ReasoningRequestShape,
     RequestControl,
@@ -74,6 +75,7 @@ def _config_from_route(  # noqa: PLR0913 -- explicit keyword-only builder
     controls: GenerationControls | None,
     extensions: ProviderBodyExtensions | None,
     required_controls: frozenset[RequestControl] = frozenset(),
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
     # Definition identity includes the explicit or derived extension-key set.
@@ -87,6 +89,7 @@ def _config_from_route(  # noqa: PLR0913 -- explicit keyword-only builder
         definition_id=definition_id,
         route=route,
         constraints=constraints,
+        prompt_rendering=prompt_rendering,
         required_controls=required_controls,
         extension_keys=declared_keys,
     )
@@ -98,6 +101,7 @@ def openrouter_chat_config(
     model: str,
     controls: GenerationControls | None = None,
     extensions: ProviderBodyExtensions | None = None,
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
     route = ModelRoute(
@@ -115,6 +119,7 @@ def openrouter_chat_config(
         ),
         controls=controls,
         extensions=extensions,
+        prompt_rendering=prompt_rendering,
         extension_keys=extension_keys,
     )
 
@@ -124,6 +129,7 @@ def openai_chat_config(
     model: str,
     controls: GenerationControls | None = None,
     extensions: ProviderBodyExtensions | None = None,
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
     route = ModelRoute(
@@ -141,6 +147,7 @@ def openai_chat_config(
         ),
         controls=controls,
         extensions=extensions,
+        prompt_rendering=prompt_rendering,
         extension_keys=extension_keys,
     )
 
@@ -150,6 +157,7 @@ def openai_responses_config(
     model: str,
     controls: GenerationControls | None = None,
     extensions: ProviderBodyExtensions | None = None,
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
     route = ModelRoute(
@@ -167,6 +175,7 @@ def openai_responses_config(
         ),
         controls=controls,
         extensions=extensions,
+        prompt_rendering=prompt_rendering,
         extension_keys=extension_keys,
     )
 
@@ -176,6 +185,7 @@ def gemini_chat_config(
     model: str,
     controls: GenerationControls | None = None,
     extensions: ProviderBodyExtensions | None = None,
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
     """Use Google's OpenAI-compatible endpoint with an AI Studio key."""
@@ -195,6 +205,7 @@ def gemini_chat_config(
         ),
         controls=controls,
         extensions=extensions,
+        prompt_rendering=prompt_rendering,
         extension_keys=extension_keys,
     )
 
@@ -204,6 +215,7 @@ def anthropic_messages_config(
     model: str,
     controls: GenerationControls | None = None,
     extensions: ProviderBodyExtensions | None = None,
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
     extension_keys: frozenset[str] | None = None,
 ) -> ProviderCallConfig:
     """Require ``TOKEN_LIMIT`` for Anthropic's ``max_tokens`` field."""
@@ -224,6 +236,7 @@ def anthropic_messages_config(
         controls=controls,
         extensions=extensions,
         required_controls=frozenset({RequestControl.TOKEN_LIMIT}),
+        prompt_rendering=prompt_rendering,
         extension_keys=extension_keys,
     )
 

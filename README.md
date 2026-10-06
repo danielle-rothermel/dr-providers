@@ -132,6 +132,25 @@ Expected transport failures are retained in invocation evidence and classified
 into the terminal `ProviderCallResult`. Unexpected programming or infrastructure
 errors can still raise.
 
+`PromptRendering.ROLE_MESSAGES` is the default and preserves message roles.
+Select `FLAT_TEXT` to concatenate every message's content in order, inserting
+nothing, and send the result as one user message. Callers own whitespace;
+system content and assistant-ending prefills become plain prompt text.
+Transcript identity still retains the original roles; rendering participates
+in definition identity and therefore changes config and request hashes.
+An empty transcript produces an empty message list under `ROLE_MESSAGES`
+and one user message with empty content under `FLAT_TEXT`; translation does
+not validate whether a provider accepts empty input.
+
+```python
+from dr_providers import PromptRendering, openai_responses_config
+
+config = openai_responses_config(
+    model="gpt-5-mini",
+    prompt_rendering=PromptRendering.FLAT_TEXT,
+)
+```
+
 ## CLI
 
 Install and run the one-shot CLI:
@@ -142,6 +161,11 @@ uv run dr-providers --provider openai-responses \
   --model gpt-5-mini \
   --token-limit 256 \
   -m 'Say hello in one word.'
+
+# Flatten system and user content; include any separator in the content:
+uv run dr-providers --provider openai-responses \
+  --model gpt-5-mini --prompt-rendering flat_text \
+  --system 'Be brief. ' -m 'Say hello in one word.'
 
 # Anthropic requires --token-limit:
 uv run dr-providers --provider anthropic \

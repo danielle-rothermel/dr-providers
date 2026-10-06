@@ -5,15 +5,15 @@ from typing import TYPE_CHECKING, Any
 from dr_providers.core.frozen import _thaw
 from dr_providers.modeling.controls import (
     GenerationControls,
+    PromptRendering,
     ReasoningRequestShape,
 )
 from dr_providers.modeling.route import Protocol
-from dr_providers.modeling.transcript import MessageRole
+from dr_providers.modeling.transcript import MessageRole, PromptMessage
 
 if TYPE_CHECKING:
     from dr_providers.modeling.call import ProviderCallConfig
     from dr_providers.modeling.request import ProviderCallRequest
-    from dr_providers.modeling.transcript import PromptMessage
 
 CHAT_COMPLETIONS_PATH = "/chat/completions"
 RESPONSES_PATH = "/responses"
@@ -31,9 +31,26 @@ def protocol_path(config: ProviderCallConfig) -> str:
 
 
 def build_payload(request: ProviderCallRequest) -> dict[str, Any]:
+    """Render the transcript and construct a protocol-specific wire body.
+
+    A transcript ending in an assistant message preserves its prefill under
+    ROLE_MESSAGES; FLAT_TEXT turns it into plain prompt text for continuation.
+    Callers own all whitespace between concatenated message contents.
+
+    Empty transcripts are passed through intentionally: ROLE_MESSAGES emits
+    an empty message list; FLAT_TEXT emits one user message with empty content.
+    Translation does not validate whether a provider accepts empty input.
+    """
     config = request.config
     protocol = config.route.protocol
     messages = request.transcript.messages
+    if config.definition.prompt_rendering is PromptRendering.FLAT_TEXT:
+        messages = (
+            PromptMessage(
+                role=MessageRole.USER,
+                content="".join(message.content for message in messages),
+            ),
+        )
     if protocol is Protocol.CHAT_COMPLETIONS:
         payload: dict[str, Any] = {
             "model": config.route.model,

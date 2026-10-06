@@ -1,9 +1,9 @@
 [[contracts]]
 title = "Provider-call identity is layered by reference"
 statement = """
-Definition identity covers its identifier, route, constraints, required \
-controls, and extension keys; config identity references the full definition \
-hash and adds assigned controls and extensions; request identity references \
+Definition identity covers its identifier, route, prompt rendering, constraints, \
+required controls, and extension keys; config identity references the full \
+definition hash and adds assigned controls and extensions; request identity references \
 the full config hash and adds the ordered transcript. Transport policy is \
 absent from all three identities."""
 rationale = """

@@ -64,6 +64,7 @@ from dr_providers.modeling.call import (
     PROVIDER_CALL_DEFINITION_SCHEMA_VERSION,
 )
 from dr_providers.modeling.controls import (
+    PromptRendering,
     ReasoningEffort,
     ReasoningRequestShape,
     RequestControl,
@@ -429,7 +430,7 @@ def test_identity_schema_names_are_pinned() -> None:
 
 def test_persisted_schema_versions_are_pinned() -> None:
     assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 9
-    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 3
+    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 4
     assert PROVIDER_CALL_CONFIG_SCHEMA_VERSION == 2
     assert PROVIDER_CALL_REQUEST_SCHEMA_VERSION == 2
     assert PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION == 1
@@ -439,3 +440,9 @@ def test_persisted_schema_versions_are_pinned() -> None:
     assert PROVIDER_CALL_STATE_SCHEMA_VERSION == 2
     assert PROVIDER_CALL_RESULT_SCHEMA_VERSION == 2
     assert PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION == 2
+
+
+def test_prompt_rendering_values_are_pinned() -> None:
+    assert PromptRendering.ROLE_MESSAGES.value == "role_messages"
+    assert PromptRendering.FLAT_TEXT.value == "flat_text"
+    assert len(PromptRendering) == 2

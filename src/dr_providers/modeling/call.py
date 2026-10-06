@@ -27,6 +27,7 @@ from dr_providers.modeling.controls import (
     CONTROL_ATTR,
     ControlConstraints,
     GenerationControls,
+    PromptRendering,
     ProviderBodyExtensions,
     ReasoningEffort,
     RequestControl,
@@ -38,7 +39,7 @@ from dr_providers.modeling.route import (
 )
 
 PROVIDER_CALL_DEFINITION_SCHEMA = "dr_providers.provider_call_definition"
-PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 3
+PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 4
 
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 2
@@ -77,6 +78,7 @@ class ProviderCallDefinition(BaseModel):
     definition_id: StrictStr
     route: ModelRoute
     constraints: ControlConstraints
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES
     required_controls: frozenset[RequestControl] = frozenset()
     extension_keys: frozenset[StrictStr] = frozenset()
 
@@ -146,6 +148,7 @@ class ProviderCallDefinition(BaseModel):
         return {
             "definition_id": self.definition_id,
             "route": self.route.identity_payload(),
+            "prompt_rendering": self.prompt_rendering.value,
             "constraints": self.constraints.identity_payload(),
             "required_controls": sorted(
                 c.value for c in self.required_controls
