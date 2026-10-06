@@ -39,17 +39,17 @@ from dr_providers.outcomes.evidence import (  # noqa: TC001 -- pydantic field
 )
 
 PROVIDER_CALL_SCHEMA = "dr_providers.provider_call"
-PROVIDER_CALL_SCHEMA_VERSION = 1
+PROVIDER_CALL_SCHEMA_VERSION = 2
 COMPLETED_INVOCATION_OBSERVATION_SCHEMA = (
     "dr_providers.completed_invocation_observation"
 )
-COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION = 1
+COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION = 2
 DECIDED_INVOCATION_RECORD_SCHEMA = "dr_providers.decided_invocation_record"
-DECIDED_INVOCATION_RECORD_SCHEMA_VERSION = 1
-PROVIDER_CALL_STATE_SCHEMA_VERSION = 1
-PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION = 1
+DECIDED_INVOCATION_RECORD_SCHEMA_VERSION = 2
+PROVIDER_CALL_STATE_SCHEMA_VERSION = 2
+PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION = 2
 PROVIDER_CALL_RESULT_SCHEMA = "dr_providers.provider_call_result"
-PROVIDER_CALL_RESULT_SCHEMA_VERSION = 1
+PROVIDER_CALL_RESULT_SCHEMA_VERSION = 2
 
 ContentIdentityHash = Annotated[
     StrictStr,
@@ -59,8 +59,8 @@ ContentIdentityHash = Annotated[
 
 def provider_call_identity_document(
     *,
-    request_identity_hash: str,
-    retry_policy_identity_hash: str,
+    request_hash: str,
+    retry_policy_hash: str,
     classifier_identifier: SemanticResponseClassifierIdentifier,
 ) -> IdentityDocument:
     return build_identity_document(
@@ -68,23 +68,23 @@ def provider_call_identity_document(
         schema_version=PROVIDER_CALL_SCHEMA_VERSION,
         payload={
             "provider_call_schema_version": PROVIDER_CALL_SCHEMA_VERSION,
-            "request_identity_hash": request_identity_hash,
-            "retry_policy_identity_hash": retry_policy_identity_hash,
+            "request_hash": request_hash,
+            "retry_policy_hash": retry_policy_hash,
             "classifier_identifier": classifier_identifier.root,
         },
     )
 
 
-def provider_call_identity_hash(
+def provider_call_hash(
     *,
-    request_identity_hash: str,
-    retry_policy_identity_hash: str,
+    request_hash: str,
+    retry_policy_hash: str,
     classifier_identifier: SemanticResponseClassifierIdentifier,
 ) -> str:
     return identity_document_hash(
         provider_call_identity_document(
-            request_identity_hash=request_identity_hash,
-            retry_policy_identity_hash=retry_policy_identity_hash,
+            request_hash=request_hash,
+            retry_policy_hash=retry_policy_hash,
             classifier_identifier=classifier_identifier,
         )
     )
@@ -108,18 +108,18 @@ class CompletedProviderInvocationObservation(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[1] = (
+    schema_version: Literal[2] = (
         COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION
     )
     invocation_ordinal: StrictInt = Field(gt=0)
-    request_identity_hash: ContentIdentityHash
+    request_hash: ContentIdentityHash
     evidence: ProviderInvocationEvidence
-    evidence_identity_hash: ContentIdentityHash
+    evidence_hash: ContentIdentityHash
     outcome: ProviderInvocationOutcome
 
     @model_validator(mode="after")
     def _validate_observation(self) -> CompletedProviderInvocationObservation:
-        if self.evidence_identity_hash != self.evidence.identity_hash:
+        if self.evidence_hash != self.evidence.identity_hash:
             msg = "evidence identity hash does not match embedded evidence"
             raise ValueError(msg)
         response_outcomes = {
@@ -151,8 +151,8 @@ class CompletedProviderInvocationObservation(BaseModel):
         return {
             "schema_version": self.schema_version,
             "invocation_ordinal": self.invocation_ordinal,
-            "request_identity_hash": self.request_identity_hash,
-            "evidence_identity_hash": self.evidence_identity_hash,
+            "request_hash": self.request_hash,
+            "evidence_hash": self.evidence_hash,
             "outcome": self.outcome.value,
         }
 
@@ -173,7 +173,7 @@ class DecidedProviderInvocationRecord(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[1] = DECIDED_INVOCATION_RECORD_SCHEMA_VERSION
+    schema_version: Literal[2] = DECIDED_INVOCATION_RECORD_SCHEMA_VERSION
     observation: CompletedProviderInvocationObservation
     retry_decision: ProviderRetryDecision | None = None
 
@@ -203,24 +203,24 @@ class DecidedProviderInvocationRecord(BaseModel):
 def _validate_components(  # noqa: PLR0913 -- validates one component set
     *,
     request: ProviderCallRequest,
-    request_identity_hash: str,
+    request_hash: str,
     retry_policy: ProviderCallRetryPolicy,
-    retry_policy_identity_hash: str,
+    retry_policy_hash: str,
     classifier_identifier: SemanticResponseClassifierIdentifier,
-    call_identity_hash: str,
+    call_hash: str,
 ) -> None:
-    if request_identity_hash != request.identity_hash:
+    if request_hash != request.identity_hash:
         msg = "request identity hash does not match embedded request"
         raise ValueError(msg)
-    if retry_policy_identity_hash != retry_policy.identity_hash:
+    if retry_policy_hash != retry_policy.identity_hash:
         msg = "retry policy identity hash does not match embedded policy"
         raise ValueError(msg)
-    expected_call_identity_hash = provider_call_identity_hash(
-        request_identity_hash=request_identity_hash,
-        retry_policy_identity_hash=retry_policy_identity_hash,
+    expected_call_hash = provider_call_hash(
+        request_hash=request_hash,
+        retry_policy_hash=retry_policy_hash,
         classifier_identifier=classifier_identifier,
     )
-    if call_identity_hash != expected_call_identity_hash:
+    if call_hash != expected_call_hash:
         msg = "provider call identity hash does not match call components"
         raise ValueError(msg)
 
@@ -229,7 +229,7 @@ def _validate_records(
     *,
     records: tuple[DecidedProviderInvocationRecord, ...],
     record_hashes: tuple[str, ...],
-    request_identity_hash: str,
+    request_hash: str,
     retry_policy: ProviderCallRetryPolicy,
 ) -> None:
     if len(records) != len(record_hashes):
@@ -246,10 +246,10 @@ def _validate_records(
         if observation.invocation_ordinal != expected_ordinal:
             msg = "completed invocation ordinals must be contiguous from one"
             raise ValueError(msg)
-        if observation.request_identity_hash != request_identity_hash:
+        if observation.request_hash != request_hash:
             msg = "completed observation has a different request identity"
             raise ValueError(msg)
-        if observation.evidence.request_identity_hash != request_identity_hash:
+        if observation.evidence.request_hash != request_hash:
             msg = "invocation evidence has a different request identity"
             raise ValueError(msg)
         if declared_hash != record.identity_hash:
@@ -285,13 +285,13 @@ class ProviderCallState(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[1] = PROVIDER_CALL_STATE_SCHEMA_VERSION
+    schema_version: Literal[2] = PROVIDER_CALL_STATE_SCHEMA_VERSION
     request: ProviderCallRequest
-    request_identity_hash: ContentIdentityHash
+    request_hash: ContentIdentityHash
     retry_policy: ProviderCallRetryPolicy
-    retry_policy_identity_hash: ContentIdentityHash
+    retry_policy_hash: ContentIdentityHash
     classifier_identifier: SemanticResponseClassifierIdentifier
-    call_identity_hash: ContentIdentityHash
+    call_hash: ContentIdentityHash
     completed_invocations: tuple[DecidedProviderInvocationRecord, ...] = ()
     completed_invocation_record_hashes: tuple[ContentIdentityHash, ...] = ()
     next_invocation_ordinal: StrictInt = Field(gt=0)
@@ -308,13 +308,13 @@ class ProviderCallState(BaseModel):
         retry_policy_hash = retry_policy.identity_hash
         return cls(
             request=request,
-            request_identity_hash=request_hash,
+            request_hash=request_hash,
             retry_policy=retry_policy,
-            retry_policy_identity_hash=retry_policy_hash,
+            retry_policy_hash=retry_policy_hash,
             classifier_identifier=classifier_identifier,
-            call_identity_hash=provider_call_identity_hash(
-                request_identity_hash=request_hash,
-                retry_policy_identity_hash=retry_policy_hash,
+            call_hash=provider_call_hash(
+                request_hash=request_hash,
+                retry_policy_hash=retry_policy_hash,
                 classifier_identifier=classifier_identifier,
             ),
             next_invocation_ordinal=1,
@@ -324,16 +324,16 @@ class ProviderCallState(BaseModel):
     def _validate_state(self) -> ProviderCallState:
         _validate_components(
             request=self.request,
-            request_identity_hash=self.request_identity_hash,
+            request_hash=self.request_hash,
             retry_policy=self.retry_policy,
-            retry_policy_identity_hash=self.retry_policy_identity_hash,
+            retry_policy_hash=self.retry_policy_hash,
             classifier_identifier=self.classifier_identifier,
-            call_identity_hash=self.call_identity_hash,
+            call_hash=self.call_hash,
         )
         _validate_records(
             records=self.completed_invocations,
             record_hashes=self.completed_invocation_record_hashes,
-            request_identity_hash=self.request_identity_hash,
+            request_hash=self.request_hash,
             retry_policy=self.retry_policy,
         )
         if self.next_invocation_ordinal != len(self.completed_invocations) + 1:
@@ -359,7 +359,7 @@ class ProviderRetryInstruction(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[1] = PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION
+    schema_version: Literal[2] = PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION
     source: Literal[ProviderRetryDelaySource.PROVIDER_CALL_RETRY_POLICY] = (
         ProviderRetryDelaySource.PROVIDER_CALL_RETRY_POLICY
     )
@@ -396,13 +396,13 @@ class ProviderCallResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[1] = PROVIDER_CALL_RESULT_SCHEMA_VERSION
+    schema_version: Literal[2] = PROVIDER_CALL_RESULT_SCHEMA_VERSION
     request: ProviderCallRequest
-    request_identity_hash: ContentIdentityHash
+    request_hash: ContentIdentityHash
     retry_policy: ProviderCallRetryPolicy
-    retry_policy_identity_hash: ContentIdentityHash
+    retry_policy_hash: ContentIdentityHash
     classifier_identifier: SemanticResponseClassifierIdentifier
-    call_identity_hash: ContentIdentityHash
+    call_hash: ContentIdentityHash
     completed_invocations: tuple[DecidedProviderInvocationRecord, ...]
     completed_invocation_record_hashes: tuple[ContentIdentityHash, ...]
     outcome: ProviderCallOutcome
@@ -411,16 +411,16 @@ class ProviderCallResult(BaseModel):
     def _validate_result(self) -> ProviderCallResult:
         _validate_components(
             request=self.request,
-            request_identity_hash=self.request_identity_hash,
+            request_hash=self.request_hash,
             retry_policy=self.retry_policy,
-            retry_policy_identity_hash=self.retry_policy_identity_hash,
+            retry_policy_hash=self.retry_policy_hash,
             classifier_identifier=self.classifier_identifier,
-            call_identity_hash=self.call_identity_hash,
+            call_hash=self.call_hash,
         )
         _validate_records(
             records=self.completed_invocations,
             record_hashes=self.completed_invocation_record_hashes,
-            request_identity_hash=self.request_identity_hash,
+            request_hash=self.request_hash,
             retry_policy=self.retry_policy,
         )
         self._validate_terminal_shape()
@@ -481,9 +481,9 @@ class ProviderCallResult(BaseModel):
     def identity_payload(self) -> dict[str, object]:
         return {
             "schema_version": self.schema_version,
-            "call_identity_hash": self.call_identity_hash,
-            "request_identity_hash": self.request_identity_hash,
-            "retry_policy_identity_hash": self.retry_policy_identity_hash,
+            "call_hash": self.call_hash,
+            "request_hash": self.request_hash,
+            "retry_policy_hash": self.retry_policy_hash,
             "classifier_identifier": self.classifier_identifier.root,
             "completed_invocation_record_hashes": list(
                 self.completed_invocation_record_hashes

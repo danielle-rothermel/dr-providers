@@ -106,7 +106,7 @@ def evidence_for(
     failure: ProviderTransportFailure | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
-        request_identity_hash="1" * 64,
+        request_hash="1" * 64,
         policy_identity={
             "provider_kind": "openai",
             "policy": "policy-1",
@@ -124,9 +124,9 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 8,
+        "schema_version": 9,
         "payload": {
-            "request_identity_hash": "1" * 64,
+            "request_hash": "1" * 64,
             "policy_identity": {
                 "provider_kind": "openai",
                 "policy": "policy-1",
@@ -190,7 +190,7 @@ class TestInvocationEvidence:
             match="policy_identity requires a supported provider_kind",
         ):
             ProviderInvocationEvidence(
-                request_identity_hash="1" * 64,
+                request_hash="1" * 64,
                 policy_identity=policy_identity,
                 response=ProviderTransportResponse(text="ok"),
             )
@@ -201,7 +201,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 8
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 9
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -256,7 +256,7 @@ class TestInvocationEvidence:
         evidence = provider.invoke(request)
 
         payload = evidence.identity_payload()
-        assert payload["request_identity_hash"] == request.identity_hash
+        assert payload["request_hash"] == request.identity_hash
         assert payload["policy_identity"] == OPENAI_POLICY.identity_payload()
         assert isinstance(evidence.outcome, ProviderTransportResponse)
         assert evidence.response is not None
@@ -429,7 +429,7 @@ def _failure_evidence(
     }
     failure_fields.update(failure_overrides)
     return ProviderInvocationEvidence(
-        request_identity_hash="1" * 64,
+        request_hash="1" * 64,
         failure=ProviderTransportFailure(**failure_fields),
     )
 
@@ -513,7 +513,7 @@ def test_deserialization_does_not_rescrub_a_traceback() -> None:
 
     restored = ProviderInvocationEvidence.model_validate(
         {
-            "request_identity_hash": "1" * 64,
+            "request_hash": "1" * 64,
             "failure": {
                 "recoverability": "transient",
                 "code": "transport_error",

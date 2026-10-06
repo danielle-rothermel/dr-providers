@@ -40,6 +40,7 @@ EXPECTED_JSON_DUMP = {
         "token_limit_parameter": "max_completion_tokens",
         "reasoning_shape": "effort_field",
     },
+    "prompt_rendering": "role_messages",
     "required_controls": ["temperature", "top_p"],
     "extension_keys": ["alpha", "middle", "zeta"],
 }

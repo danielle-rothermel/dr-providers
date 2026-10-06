@@ -343,7 +343,7 @@ def test_byte_accounting_and_hint_keys_are_pinned() -> None:
     payload = provider.invoke(REQUEST).identity_payload()
 
     assert set(payload) == {
-        "request_identity_hash",
+        "request_hash",
         "policy_identity",
         "max_request_bytes",
         "max_response_bytes",

@@ -56,11 +56,11 @@ def transition_provider_call(
         )
         next_state = ProviderCallState(
             request=state.request,
-            request_identity_hash=state.request_identity_hash,
+            request_hash=state.request_hash,
             retry_policy=state.retry_policy,
-            retry_policy_identity_hash=state.retry_policy_identity_hash,
+            retry_policy_hash=state.retry_policy_hash,
             classifier_identifier=state.classifier_identifier,
-            call_identity_hash=state.call_identity_hash,
+            call_hash=state.call_hash,
             completed_invocations=records,
             completed_invocation_record_hashes=record_hashes,
             next_invocation_ordinal=observation.invocation_ordinal + 1,
@@ -104,11 +104,11 @@ def cancel_provider_call(
         )
     return ProviderCallResult(
         request=state.request,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         retry_policy=state.retry_policy,
-        retry_policy_identity_hash=state.retry_policy_identity_hash,
+        retry_policy_hash=state.retry_policy_hash,
         classifier_identifier=state.classifier_identifier,
-        call_identity_hash=state.call_identity_hash,
+        call_hash=state.call_hash,
         completed_invocations=records,
         completed_invocation_record_hashes=record_hashes,
         outcome=ProviderCallOutcome(
@@ -124,13 +124,10 @@ def _validate_observation_for_state(
     if observation.invocation_ordinal != state.next_invocation_ordinal:
         msg = "completed observation ordinal does not match next invocation"
         raise ValueError(msg)
-    if observation.request_identity_hash != state.request_identity_hash:
+    if observation.request_hash != state.request_hash:
         msg = "completed observation request does not match provider call"
         raise ValueError(msg)
-    if (
-        observation.evidence.request_identity_hash
-        != state.request_identity_hash
-    ):
+    if observation.evidence.request_hash != state.request_hash:
         msg = "completed evidence request does not match provider call"
         raise ValueError(msg)
 
@@ -147,11 +144,11 @@ def _terminal_result(
     )
     return ProviderCallResult(
         request=state.request,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         retry_policy=state.retry_policy,
-        retry_policy_identity_hash=state.retry_policy_identity_hash,
+        retry_policy_hash=state.retry_policy_hash,
         classifier_identifier=state.classifier_identifier,
-        call_identity_hash=state.call_identity_hash,
+        call_hash=state.call_hash,
         completed_invocations=records,
         completed_invocation_record_hashes=record_hashes,
         outcome=outcome,

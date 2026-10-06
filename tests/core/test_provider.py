@@ -102,7 +102,7 @@ def test_provider_returns_common_typed_success(
 
     assert isinstance(outcome, ProviderTransportResponse)
     assert outcome.text == "hello"
-    assert evidence.request_identity_hash == REQUEST.identity_hash
+    assert evidence.request_hash == REQUEST.identity_hash
 
 
 @pytest.mark.parametrize(

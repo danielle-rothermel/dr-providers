@@ -16,7 +16,7 @@ from dr_providers.modeling.call import (  # noqa: TC001 -- pydantic field
 from dr_providers.modeling.transcript import Transcript  # noqa: TC001
 
 PROVIDER_CALL_REQUEST_SCHEMA = "dr_providers.provider_call_request"
-PROVIDER_CALL_REQUEST_SCHEMA_VERSION = 1
+PROVIDER_CALL_REQUEST_SCHEMA_VERSION = 2
 
 
 class ProviderCallRequest(BaseModel):
@@ -29,7 +29,7 @@ class ProviderCallRequest(BaseModel):
 
     def identity_payload(self) -> dict[str, Any]:
         return {
-            "config_identity_hash": self.config.identity_hash,
+            "config_hash": self.config.identity_hash,
             "transcript": self.transcript.identity_payload(),
         }
 

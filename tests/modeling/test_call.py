@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from pydantic import ValidationError
@@ -9,6 +9,7 @@ from dr_providers import (
     ControlConstraints,
     ControlValidationError,
     GenerationControls,
+    PromptRendering,
     Protocol,
     ProviderBodyExtensions,
     ProviderCallConfig,
@@ -26,6 +27,9 @@ from dr_providers import (
     openrouter_chat_config,
 )
 from dr_providers.modeling.route import ModelRoute
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class TestConfigPresets:
@@ -537,3 +541,38 @@ class TestDefinitionValidation:
 
         assert config.extensions.identity_payload() == payload_before
         assert config.identity_hash == hash_before
+
+
+@pytest.mark.parametrize(
+    "config_factory",
+    [
+        openrouter_chat_config,
+        openai_chat_config,
+        openai_responses_config,
+        gemini_chat_config,
+        anthropic_messages_config,
+    ],
+)
+@pytest.mark.parametrize("rendering", [None, PromptRendering.FLAT_TEXT])
+def test_presets_thread_prompt_rendering_to_definition(
+    config_factory: Callable[..., ProviderCallConfig],
+    rendering: PromptRendering | None,
+) -> None:
+    kwargs = {} if rendering is None else {"prompt_rendering": rendering}
+    config = config_factory(
+        model="m", controls=GenerationControls(token_limit=64), **kwargs
+    )
+
+    expected = (
+        PromptRendering.ROLE_MESSAGES if rendering is None else rendering
+    )
+    assert config.definition.prompt_rendering is expected
+
+
+def test_definition_rejects_unknown_prompt_rendering() -> None:
+    data = openai_chat_config(model="m").definition.model_dump(mode="json")
+
+    with pytest.raises(ValidationError, match="prompt_rendering"):
+        ProviderCallDefinition.model_validate(
+            {**data, "prompt_rendering": "other"}
+        )

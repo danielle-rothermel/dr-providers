@@ -98,9 +98,9 @@ def run_local_provider_call(
         outcome = classify_provider_invocation(evidence, classifier)
         observation = CompletedProviderInvocationObservation(
             invocation_ordinal=current_state.next_invocation_ordinal,
-            request_identity_hash=current_state.request_identity_hash,
+            request_hash=current_state.request_hash,
             evidence=evidence,
-            evidence_identity_hash=evidence.identity_hash,
+            evidence_hash=evidence.identity_hash,
             outcome=outcome,
         )
 

@@ -12,6 +12,7 @@ from dr_providers import (
     MessageRole,
     ModelRoute,
     PromptMessage,
+    PromptRendering,
     Protocol,
     ProviderBaseUrl,
     ProviderBodyExtensions,
@@ -26,6 +27,7 @@ from dr_providers import (
     TokenLimitParameter,
     Transcript,
     Verbosity,
+    build_payload,
     openai_chat_config,
 )
 from dr_providers.modeling.call import (
@@ -64,13 +66,13 @@ def _fixed_request() -> ProviderCallRequest:
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "2eab8d7c6bce1270fcf8a3ea62982a991f4ac1f9ee2452cadadbafd2ffb83213"
+    "4acb3899f212a6babb98854c6c5c3c98935ba99ffc4119bbd6ed09d6e6c3885c"
 )
 GOLDEN_CONFIG_HASH = (
-    "67f37b794c0817ce8dc3c4b7719b075a9b06008ab55756734ed23e833ceb5463"
+    "8d7bc15a327d0cee2470d1cfc185d1de3253d673da7d239052a82852a22b0488"
 )
 GOLDEN_REQUEST_HASH = (
-    "9a2c5bae768e1629fcc26e3081338d3b25fec309ac2c1e96f1a9657bfeddf7f3"
+    "9690da69ff909abc9339f45b929f9c0cbfae5b7c952ed1e7b706b212760ac6f8"
 )
 
 
@@ -89,7 +91,7 @@ class TestDefinitionSchemaVersionOwnership:
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         definition = _fixed_definition()
 
-        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 3
+        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 4
         assert "schema_version" not in ProviderCallDefinition.model_fields
         properties = ProviderCallDefinition.model_json_schema()["properties"]
         assert "schema_version" not in properties
@@ -173,6 +175,7 @@ def _changed_payload_paths(
             ),
         ),
         (("extension_keys",), frozenset({"user"})),
+        (("prompt_rendering",), PromptRendering.FLAT_TEXT),
     ],
     ids=(
         "definition-id",
@@ -184,6 +187,7 @@ def _changed_payload_paths(
         "reasoning-shape",
         "required-controls",
         "extension-keys",
+        "prompt-rendering",
     ),
 )
 def test_every_definition_dimension_changes_identity(
@@ -208,13 +212,13 @@ class TestDefinitionVersusConfig:
         assert "controls" not in definition.identity_payload()
         assert "controls" in config.identity_payload()
 
-    def test_config_embeds_definition_identity_hash(self) -> None:
+    def test_config_embeds_definition_hash(self) -> None:
         definition = _fixed_definition()
         config = definition.materialize(
             controls=GenerationControls(token_limit=64)
         )
         payload = config.identity_payload()
-        assert payload["definition_identity_hash"] == definition.identity_hash
+        assert payload["definition_hash"] == definition.identity_hash
 
     def test_config_carries_typed_definition_reference(self) -> None:
         config = _fixed_definition().materialize(
@@ -296,8 +300,8 @@ class TestRequestIdentity:
         )
         request = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
         payload = request.identity_payload()
-        assert set(payload) == {"config_identity_hash", "transcript"}
-        assert payload["config_identity_hash"] == config.identity_hash
+        assert set(payload) == {"config_hash", "transcript"}
+        assert payload["config_hash"] == config.identity_hash
         assert payload["transcript"] == [{"role": "user", "content": "hi"}]
 
     def test_request_hash_changes_with_transcript(self) -> None:
@@ -339,6 +343,75 @@ class TestRequestIdentity:
             config=openai_chat_config(model="other"), transcript=transcript
         )
         assert a.identity_hash != b.identity_hash
+
+
+class TestPromptRenderingIdentity:
+    def test_rendering_changes_identity_only_through_definition_reference(
+        self,
+    ) -> None:
+        role = ProviderCallRequest(
+            config=openai_chat_config(model="m"), transcript=TRANSCRIPT
+        )
+        flat = ProviderCallRequest(
+            config=openai_chat_config(
+                model="m", prompt_rendering=PromptRendering.FLAT_TEXT
+            ),
+            transcript=TRANSCRIPT,
+        )
+
+        assert (
+            role.config.definition.identity_hash
+            != flat.config.definition.identity_hash
+        )
+        assert _changed_payload_paths(
+            role.config.identity_payload(), flat.config.identity_payload()
+        ) == {"definition_hash"}
+        assert _changed_payload_paths(
+            role.identity_payload(), flat.identity_payload()
+        ) == {"config_hash"}
+        assert (
+            role.identity_payload()["transcript"]
+            == flat.identity_payload()["transcript"]
+        )
+        assert role.identity_hash != flat.identity_hash
+
+    def test_default_and_explicit_role_messages_have_same_identity(
+        self,
+    ) -> None:
+        default = openai_chat_config(model="m")
+        explicit = openai_chat_config(
+            model="m", prompt_rendering=PromptRendering.ROLE_MESSAGES
+        )
+
+        assert (
+            default.definition.identity_payload()["prompt_rendering"]
+            == "role_messages"
+        )
+        assert default.identity_hash == explicit.identity_hash
+
+    def test_flat_text_keeps_role_distinctions_in_transcript_identity(
+        self,
+    ) -> None:
+        config = openai_chat_config(
+            model="m", prompt_rendering=PromptRendering.FLAT_TEXT
+        )
+        user = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
+        assistant = ProviderCallRequest(
+            config=config,
+            transcript=Transcript(
+                messages=(
+                    PromptMessage(role=MessageRole.ASSISTANT, content="hi"),
+                )
+            ),
+        )
+        before = assistant.identity_payload()
+
+        assert build_payload(user) == build_payload(assistant)
+        assert assistant.identity_payload() == before
+        assert assistant.identity_payload()["transcript"] == [
+            {"role": "assistant", "content": "hi"}
+        ]
+        assert user.identity_hash != assistant.identity_hash
 
 
 if __name__ == "__main__":  # pragma: no cover -- golden-hash regeneration

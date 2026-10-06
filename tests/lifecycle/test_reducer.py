@@ -85,7 +85,7 @@ def _observation(
     }
     if outcome in response_outcomes:
         evidence = ProviderInvocationEvidence(
-            request_identity_hash=state.request_identity_hash,
+            request_hash=state.request_hash,
             policy_identity={
                 "provider_kind": "openai",
                 "transport_fixture": "v1",
@@ -141,7 +141,7 @@ def _observation(
         elif outcome is ProviderInvocationOutcome.PROVIDER_REJECTION:
             code = RESPONSE_REFUSAL_CODE
         evidence = ProviderInvocationEvidence(
-            request_identity_hash=state.request_identity_hash,
+            request_hash=state.request_hash,
             policy_identity={
                 "provider_kind": "openai",
                 "transport_fixture": "v1",
@@ -157,9 +157,9 @@ def _observation(
         )
     return CompletedProviderInvocationObservation(
         invocation_ordinal=state.next_invocation_ordinal,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         evidence=evidence,
-        evidence_identity_hash=evidence.identity_hash,
+        evidence_hash=evidence.identity_hash,
         outcome=outcome,
     )
 
@@ -174,8 +174,8 @@ def test_initial_state_carries_full_identity_components() -> None:
     assert state.request == _request()
     assert isinstance(state.retry_policy, StandardProviderCallRetryPolicy)
     assert state.classifier_identifier == CLASSIFIER_ID
-    assert state.request_identity_hash == state.request.identity_hash
-    assert state.retry_policy_identity_hash == state.retry_policy.identity_hash
+    assert state.request_hash == state.request.identity_hash
+    assert state.retry_policy_hash == state.retry_policy.identity_hash
     assert state.next_invocation_ordinal == 1
     assert _restored_state(state) == state
 
@@ -268,7 +268,7 @@ def test_transition_rejects_invalid_observation_sequence() -> None:
         transcript=state.request.transcript,
     )
     mismatched = CompletedProviderInvocationObservation.model_validate(
-        {**data, "request_identity_hash": other_request.identity_hash}
+        {**data, "request_hash": other_request.identity_hash}
     )
     with pytest.raises(ValueError, match="request"):
         transition_provider_call(state, mismatched)
@@ -286,7 +286,7 @@ def test_observation_rejects_bad_hash_and_decision_input() -> None:
 
     with pytest.raises(ValidationError, match="evidence identity hash"):
         CompletedProviderInvocationObservation.model_validate(
-            {**data, "evidence_identity_hash": "0" * 64}
+            {**data, "evidence_hash": "0" * 64}
         )
     with pytest.raises(ValidationError):
         CompletedProviderInvocationObservation.model_validate(
@@ -297,7 +297,7 @@ def test_observation_rejects_bad_hash_and_decision_input() -> None:
 def test_failure_outcome_is_recomputed_during_json_restore() -> None:
     state = _state()
     evidence = ProviderInvocationEvidence(
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         failure=ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,
             code="missing_api_key",
@@ -306,9 +306,9 @@ def test_failure_outcome_is_recomputed_during_json_restore() -> None:
     )
     observation = CompletedProviderInvocationObservation(
         invocation_ordinal=state.next_invocation_ordinal,
-        request_identity_hash=state.request_identity_hash,
+        request_hash=state.request_hash,
         evidence=evidence,
-        evidence_identity_hash=evidence.identity_hash,
+        evidence_hash=evidence.identity_hash,
         outcome=ProviderInvocationOutcome.MISSING_CREDENTIAL,
     )
     payload = json.loads(observation.model_dump_json())
@@ -533,11 +533,11 @@ def test_persisted_state_instruction_and_result_keys_are_pinned() -> None:
     assert set(json.loads(state.model_dump_json())) == {
         "schema_version",
         "request",
-        "request_identity_hash",
+        "request_hash",
         "retry_policy",
-        "retry_policy_identity_hash",
+        "retry_policy_hash",
         "classifier_identifier",
-        "call_identity_hash",
+        "call_hash",
         "completed_invocations",
         "completed_invocation_record_hashes",
         "next_invocation_ordinal",
@@ -552,11 +552,11 @@ def test_persisted_state_instruction_and_result_keys_are_pinned() -> None:
     assert set(json.loads(result.model_dump_json())) == {
         "schema_version",
         "request",
-        "request_identity_hash",
+        "request_hash",
         "retry_policy",
-        "retry_policy_identity_hash",
+        "retry_policy_hash",
         "classifier_identifier",
-        "call_identity_hash",
+        "call_hash",
         "completed_invocations",
         "completed_invocation_record_hashes",
         "outcome",

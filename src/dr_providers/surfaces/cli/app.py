@@ -16,6 +16,7 @@ from dr_providers.lifecycle import (
 )
 from dr_providers.modeling.controls import (
     GenerationControls,
+    PromptRendering,
     ReasoningEffort,
     Verbosity,
 )
@@ -71,6 +72,10 @@ TOKEN_LIMIT_OPTION = typer.Option(
 )
 SEED_OPTION = typer.Option("--seed", help="Sampling seed.")
 VERBOSITY_OPTION = typer.Option("--verbosity", help="Response verbosity.")
+PROMPT_RENDERING_OPTION = typer.Option(
+    "--prompt-rendering",
+    help="Transcript rendering: role messages or flat text.",
+)
 app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
 
 
@@ -86,12 +91,16 @@ def query(  # noqa: PLR0913
     token_limit: Annotated[int | None, TOKEN_LIMIT_OPTION] = None,
     seed: Annotated[int | None, SEED_OPTION] = None,
     verbosity: Annotated[Verbosity | None, VERBOSITY_OPTION] = None,
+    prompt_rendering: Annotated[PromptRendering, PROMPT_RENDERING_OPTION] = (
+        PromptRendering.ROLE_MESSAGES
+    ),
 ) -> None:
     """Run a single-shot provider query and print the response text."""
     factory = FACTORY_BY_KIND[_CHOICE_TO_FACTORY_KIND[provider]]
     try:
         config = factory(
             model=model,
+            prompt_rendering=prompt_rendering,
             controls=GenerationControls(
                 temperature=temperature,
                 top_p=top_p,

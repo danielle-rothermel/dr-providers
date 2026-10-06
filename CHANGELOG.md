@@ -4,6 +4,67 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - Unreleased
+
+### Added
+
+- Add identity-bearing `ProviderCallDefinition.prompt_rendering` and the
+  exported `PromptRendering` enum: `role_messages` (the default) preserves
+  existing protocol bodies; `flat_text` concatenates every transcript
+  message's content in order with no inserted separator and sends it as one
+  user message. Responses carries that message in `input` without
+  `instructions`; Anthropic Messages omits `system`. Controls, reasoning
+  mappings, and extensions are unchanged. Callers own all whitespace.
+- Add the `prompt_rendering` keyword to all five preset factories and the
+  `--prompt-rendering` CLI option, both defaulting to `role_messages`.
+  Transcript identity retains its original roles; rendering participates in
+  request identity through the definition and config hash references.
+
+### Changed
+
+- Rename identity-hash reference fields and payload keys as a persisted-format
+  hard cutover, including corresponding keyword parameters and exports:
+
+  | Old | New |
+  | --- | --- |
+  | `request_identity_hash` | `request_hash` |
+  | `retry_policy_identity_hash` | `retry_policy_hash` |
+  | `call_identity_hash` | `call_hash` |
+  | `evidence_identity_hash` | `evidence_hash` |
+  | `definition_identity_hash` (config identity payload) | `definition_hash` |
+  | `config_identity_hash` (request identity payload) | `config_hash` |
+  | `provider_call_identity_hash()` | `provider_call_hash()` |
+
+  Model `identity_hash` properties, `identity_payload()` and
+  `identity_document()` methods, `provider_call_identity_document()`, and
+  evidence `policy_identity` retain their names. No compatibility aliases
+  are provided; recorded payloads with the old format remain historical.
+- Advance the identity and persisted lifecycle schemas:
+
+  | Schema | Previous | Current |
+  | --- | --- | --- |
+  | Provider call definition | 3 | 4 |
+  | Provider call config | 1 | 2 |
+  | Provider call request | 1 | 2 |
+  | Provider invocation evidence | 8 | 9 |
+  | Provider call | 1 | 2 |
+  | Completed invocation observation | 1 | 2 |
+  | Decided invocation record | 1 | 2 |
+  | Provider call state | 1 | 2 |
+  | Provider retry instruction | 1 | 2 |
+  | Provider call result | 1 | 2 |
+
+  The definition schema advances for prompt rendering; the other schemas
+  advance for renamed reference keys or changed nested persisted shapes.
+  Retry policy schema remains at 1 and retry-policy hashes are unchanged.
+- Every definition, config, request, call, completed-observation,
+  decided-record, result, and evidence hash changes, including with the
+  default rendering. State records have a changed schema and embedded
+  hashes, with no separate state identity hash. Existing `role_messages`
+  wire bodies and the committed wire corpus are unchanged.
+- Bump the package version to 0.3.4 and refresh `uv.lock`. This version is
+  unreleased: no tag, GitHub release, or PyPI publication is created.
+
 ## [0.3.3] - 2026-10-06
 
 ### Added

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dr_providers import ProviderStopReason
+from dr_providers import PromptRendering, ProviderStopReason, build_payload
 from dr_providers.modeling.controls import ReasoningEffort, Verbosity
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.surfaces.cli import app as cli
@@ -157,6 +157,10 @@ def test_provider_flags_select_request_route(
 
     assert result.exit_code == 0
     request = scripted.requests[0]
+    assert (
+        request.config.definition.prompt_rendering
+        is PromptRendering.ROLE_MESSAGES
+    )
     assert request.config.route.provider is expected_provider
     assert request.config.route.protocol is expected_protocol
     assert request.config.controls.token_limit == expected_token_limit
@@ -349,3 +353,78 @@ def test_verbosity_on_responses_exits_nonzero(
     assert result.exit_code == 1
     assert "unsupported_control" in result.stderr
     assert "verbosity" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("rendering_arguments", "expected_rendering", "expected_body"),
+    [
+        (
+            [],
+            PromptRendering.ROLE_MESSAGES,
+            {
+                "model": "m",
+                "instructions": "System. ",
+                "input": [{"role": "user", "content": "User."}],
+            },
+        ),
+        (
+            ["--prompt-rendering", "flat_text"],
+            PromptRendering.FLAT_TEXT,
+            {
+                "model": "m",
+                "input": [{"role": "user", "content": "System. User."}],
+            },
+        ),
+    ],
+    ids=["default-role-messages", "flat-text"],
+)
+def test_prompt_rendering_option_reaches_request_body(
+    monkeypatch: pytest.MonkeyPatch,
+    rendering_arguments: list[str],
+    expected_rendering: PromptRendering,
+    expected_body: dict[str, object],
+) -> None:
+    scripted = patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "openai-responses",
+            "--model",
+            "m",
+            "--system",
+            "System. ",
+            "-m",
+            "User.",
+            *rendering_arguments,
+        ],
+    )
+
+    assert result.exit_code == 0
+    request = scripted.requests[0]
+    assert request.config.definition.prompt_rendering is expected_rendering
+    assert build_payload(request) == expected_body
+
+
+def test_prompt_rendering_option_rejects_unknown_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scripted = patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "openai-responses",
+            "--model",
+            "m",
+            "-m",
+            "hi",
+            "--prompt-rendering",
+            "other",
+        ],
+    )
+
+    assert result.exit_code == 2
+    assert scripted.requests == []
