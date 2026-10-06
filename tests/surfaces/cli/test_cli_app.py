@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from dr_providers import ProviderStopReason
-from dr_providers.modeling.controls import ReasoningEffort
+from dr_providers.modeling.controls import ReasoningEffort, Verbosity
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.surfaces.cli import app as cli
 from dr_providers.surfaces.testing.scripted import (
@@ -302,3 +302,50 @@ def test_anthropic_missing_token_limit_exits_nonzero(
     assert result.exit_code == 1
     assert "missing_required_control" in result.stderr
     assert "token_limit" in result.stderr
+
+
+def test_verbosity_flag_reaches_request_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scripted = patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "openai",
+            "--model",
+            "gpt-test",
+            "-m",
+            "hi",
+            "--verbosity",
+            "low",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert scripted.requests[0].config.controls.verbosity is Verbosity.LOW
+
+
+def test_verbosity_on_responses_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_http_provider(monkeypatch)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "--provider",
+            "openai-responses",
+            "--model",
+            "gpt-test",
+            "-m",
+            "hi",
+            "--verbosity",
+            "low",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "unsupported_control" in result.stderr
+    assert "verbosity" in result.stderr

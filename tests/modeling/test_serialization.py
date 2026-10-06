@@ -35,6 +35,7 @@ EXPECTED_JSON_DUMP = {
             "temperature",
             "token_limit",
             "top_p",
+            "verbosity",
         ],
         "token_limit_parameter": "max_completion_tokens",
         "reasoning_shape": "effort_field",

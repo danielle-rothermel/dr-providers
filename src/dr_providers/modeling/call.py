@@ -43,9 +43,22 @@ PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 3
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 1
 
-_SEEDLESS_PROTOCOLS = frozenset(
-    {Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}
-)
+# Controls whose single top-level wire key some protocols lack, mapped to
+# those protocols and the failure code a definition advertising them raises.
+# Responses nests verbosity under ``text``; this package maps only the
+# top-level ``verbosity`` key, so Responses does not carry it.
+_PROTOCOLS_WITHOUT_WIRE_KEY: dict[
+    RequestControl, tuple[frozenset[Protocol], str]
+] = {
+    RequestControl.SEED: (
+        frozenset({Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}),
+        "seed_protocol_unsupported",
+    ),
+    RequestControl.VERBOSITY: (
+        frozenset({Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}),
+        "verbosity_protocol_unsupported",
+    ),
+}
 
 _ANTHROPIC_REASONING_EFFORTS = frozenset(
     {
@@ -104,27 +117,29 @@ class ProviderCallDefinition(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _seed_requires_protocol_wire_key(self) -> ProviderCallDefinition:
-        if (
-            self.constraints.supports(RequestControl.SEED)
-            and self.route.protocol in _SEEDLESS_PROTOCOLS
-        ):
-            raise ControlValidationError(
-                failure_record(
-                    recoverability=RecoverabilityClass.PERMANENT,
-                    code="seed_protocol_unsupported",
-                    message=(
-                        f"definition {self.definition_id!r} advertises seed "
-                        f"but protocol {self.route.protocol.value!r} has no "
-                        "seed wire key"
-                    ),
-                    metadata={
-                        "protocol": self.route.protocol.value,
-                        "control": RequestControl.SEED.value,
-                        "definition_id": self.definition_id,
-                    },
+    def _advertised_controls_have_protocol_wire_key(
+        self,
+    ) -> ProviderCallDefinition:
+        protocol = self.route.protocol
+        for control, (protocols, code) in _PROTOCOLS_WITHOUT_WIRE_KEY.items():
+            if self.constraints.supports(control) and protocol in protocols:
+                raise ControlValidationError(
+                    failure_record(
+                        recoverability=RecoverabilityClass.PERMANENT,
+                        code=code,
+                        message=(
+                            f"definition {self.definition_id!r} advertises "
+                            f"{control.value} but protocol "
+                            f"{protocol.value!r} has no {control.value} "
+                            "wire key"
+                        ),
+                        metadata={
+                            "protocol": protocol.value,
+                            "control": control.value,
+                            "definition_id": self.definition_id,
+                        },
+                    )
                 )
-            )
         return self
 
     def identity_payload(self) -> dict[str, Any]:
@@ -256,6 +271,7 @@ class ProviderCallConfig(BaseModel):
             "reasoning_effort",
             "output_config",
             "seed",
+            "verbosity",
             constraints.token_limit_parameter.value,
         }
 

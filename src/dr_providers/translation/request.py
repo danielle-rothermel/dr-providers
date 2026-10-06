@@ -64,6 +64,8 @@ def _set_controls(payload: dict[str, Any], config: ProviderCallConfig) -> None:
         payload[constraints.token_limit_parameter.value] = controls.token_limit
     if controls.seed is not None:
         payload["seed"] = controls.seed
+    if controls.verbosity is not None:
+        payload["verbosity"] = controls.verbosity.value
     _set_reasoning(payload, config, controls)
     # Thaw for JSON encoding; Config validation prevents core-field overrides.
     payload.update(_thaw(config.extensions.extra_body))

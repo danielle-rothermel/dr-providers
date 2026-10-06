@@ -149,6 +149,7 @@ exported_symbols = [
   "PROVIDER_CALL_CONFIG_SCHEMA_VERSION",
   "GenerationControls",
   "ReasoningEffort",
+  "Verbosity",
   "ProviderBodyExtensions",
   "anthropic_messages_config",
   "gemini_chat_config",

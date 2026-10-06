@@ -67,6 +67,7 @@ from dr_providers.modeling.controls import (
     ReasoningRequestShape,
     RequestControl,
     TokenLimitParameter,
+    Verbosity,
 )
 from dr_providers.modeling.presets import (
     anthropic_messages_config,
@@ -232,6 +233,7 @@ __all__ = [
     "TokenUsage",
     "Transcript",
     "TransportTimeoutContainment",
+    "Verbosity",
     "WarningSeverity",
     "anthropic_messages_config",
     "build_payload",

@@ -68,6 +68,7 @@ from dr_providers.modeling.controls import (
     ReasoningRequestShape,
     RequestControl,
     TokenLimitParameter,
+    Verbosity,
 )
 from dr_providers.modeling.request import (
     PROVIDER_CALL_REQUEST_SCHEMA,
@@ -161,6 +162,7 @@ EXPECTED_REQUEST_CONTROL_LITERALS = [
     "token_limit",
     "reasoning",
     "seed",
+    "verbosity",
 ]
 EXPECTED_TOKEN_LIMIT_PARAMETER_LITERALS = [
     "max_tokens",
@@ -175,6 +177,7 @@ EXPECTED_REASONING_EFFORT_LITERALS = [
     "high",
     "xhigh",
 ]
+EXPECTED_VERBOSITY_LITERALS = ["low", "medium", "high"]
 EXPECTED_REASONING_SHAPE_LITERALS = [
     "none",
     "effort_field",
@@ -251,7 +254,7 @@ def test_control_literals_are_pinned() -> None:
     assert [member.value for member in RequestControl] == (
         EXPECTED_REQUEST_CONTROL_LITERALS
     )
-    assert len(RequestControl) == 5
+    assert len(RequestControl) == 6
     assert [member.value for member in TokenLimitParameter] == (
         EXPECTED_TOKEN_LIMIT_PARAMETER_LITERALS
     )
@@ -260,6 +263,10 @@ def test_control_literals_are_pinned() -> None:
         EXPECTED_REASONING_EFFORT_LITERALS
     )
     assert len(ReasoningEffort) == 6
+    assert [member.value for member in Verbosity] == (
+        EXPECTED_VERBOSITY_LITERALS
+    )
+    assert len(Verbosity) == 3
     assert [member.value for member in ReasoningRequestShape] == (
         EXPECTED_REASONING_SHAPE_LITERALS
     )
