@@ -14,7 +14,11 @@ from dr_providers.lifecycle import (
     StandardProviderCallRetryPolicy,
     run_local_provider_call,
 )
-from dr_providers.modeling.controls import GenerationControls, ReasoningEffort
+from dr_providers.modeling.controls import (
+    GenerationControls,
+    ReasoningEffort,
+    Verbosity,
+)
 from dr_providers.modeling.presets import FACTORY_BY_KIND, ProviderFactoryKind
 from dr_providers.modeling.request import ProviderCallRequest
 from dr_providers.modeling.transcript import (
@@ -66,6 +70,7 @@ TOKEN_LIMIT_OPTION = typer.Option(
     ),
 )
 SEED_OPTION = typer.Option("--seed", help="Sampling seed.")
+VERBOSITY_OPTION = typer.Option("--verbosity", help="Response verbosity.")
 app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
 
 
@@ -80,6 +85,7 @@ def query(  # noqa: PLR0913
     top_p: Annotated[float | None, TOP_P_OPTION] = None,
     token_limit: Annotated[int | None, TOKEN_LIMIT_OPTION] = None,
     seed: Annotated[int | None, SEED_OPTION] = None,
+    verbosity: Annotated[Verbosity | None, VERBOSITY_OPTION] = None,
 ) -> None:
     """Run a single-shot provider query and print the response text."""
     factory = FACTORY_BY_KIND[_CHOICE_TO_FACTORY_KIND[provider]]
@@ -92,6 +98,7 @@ def query(  # noqa: PLR0913
                 token_limit=token_limit,
                 reasoning=effort,
                 seed=seed,
+                verbosity=verbosity,
             ),
         )
     except ControlValidationError as exc:

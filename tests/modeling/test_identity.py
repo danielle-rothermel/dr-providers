@@ -25,6 +25,7 @@ from dr_providers import (
     RequestControl,
     TokenLimitParameter,
     Transcript,
+    Verbosity,
     openai_chat_config,
 )
 from dr_providers.modeling.call import (
@@ -232,13 +233,14 @@ class TestOutputAffectingControlsAreIdentity:
             GenerationControls(token_limit=32),
             GenerationControls(reasoning=ReasoningEffort.LOW),
             GenerationControls(seed=7),
+            GenerationControls(verbosity=Verbosity.LOW),
         ]
         hashes = {base.identity_hash}
         for controls in variants:
             hashes.add(
                 openai_chat_config(model="m", controls=controls).identity_hash
             )
-        assert len(hashes) == 6
+        assert len(hashes) == 7
 
     def test_body_extension_changes_config_identity(self) -> None:
         base = openai_chat_config(model="m")

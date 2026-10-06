@@ -18,6 +18,7 @@ from dr_providers import (
     ReasoningRequestShape,
     RequestControl,
     TokenLimitParameter,
+    Verbosity,
     anthropic_messages_config,
     gemini_chat_config,
     openai_chat_config,
@@ -63,6 +64,9 @@ class TestConfigPresets:
         param = config.definition.constraints.token_limit_parameter
         assert param is TokenLimitParameter.MAX_TOKENS
         assert not config.definition.constraints.supports(RequestControl.SEED)
+        assert not config.definition.constraints.supports(
+            RequestControl.VERBOSITY
+        )
 
     def test_openai_compat_presets_advertise_seed(self) -> None:
         presets = (
@@ -93,6 +97,51 @@ class TestConfigPresets:
             )
         assert exc_info.value.failure.code == "unsupported_control"
         assert exc_info.value.failure.metadata["control"] == "seed"
+
+    def test_openai_chat_presets_advertise_verbosity(self) -> None:
+        for config in (
+            openrouter_chat_config(model="m"),
+            openai_chat_config(model="m"),
+        ):
+            assert config.definition.constraints.supports(
+                RequestControl.VERBOSITY
+            )
+
+    def test_gemini_preset_rejects_verbosity(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            gemini_chat_config(
+                model="m",
+                controls=GenerationControls(verbosity=Verbosity.LOW),
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
+        assert exc_info.value.failure.metadata["control"] == "verbosity"
+
+    def test_openai_responses_preset_rejects_verbosity(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            openai_responses_config(
+                model="m",
+                controls=GenerationControls(verbosity=Verbosity.LOW),
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
+        assert exc_info.value.failure.metadata["control"] == "verbosity"
+        assert not openai_responses_config(
+            model="m"
+        ).definition.constraints.supports(RequestControl.VERBOSITY)
+
+    def test_anthropic_preset_rejects_verbosity(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            anthropic_messages_config(
+                model="claude",
+                controls=GenerationControls(
+                    token_limit=64, verbosity=Verbosity.LOW
+                ),
+            )
+        assert exc_info.value.failure.code == "unsupported_control"
+        assert exc_info.value.failure.metadata["control"] == "verbosity"
+
+    def test_verbosity_rejects_unknown_value(self) -> None:
+        with pytest.raises(ValidationError):
+            GenerationControls.model_validate({"verbosity": "max"})
 
     def test_anthropic_messages_requires_token_limit(self) -> None:
         with pytest.raises(ControlValidationError) as exc_info:
@@ -260,6 +309,58 @@ class TestDefinitionValidation:
         assert failure.metadata["control"] == "seed"
         assert failure.metadata["definition_id"] == "test.seedless"
 
+    @pytest.mark.parametrize(
+        ("provider", "protocol", "token_limit_parameter"),
+        [
+            (
+                ProviderKind.OPENAI,
+                Protocol.RESPONSES,
+                TokenLimitParameter.MAX_OUTPUT_TOKENS,
+            ),
+            (
+                ProviderKind.ANTHROPIC,
+                Protocol.ANTHROPIC_MESSAGES,
+                TokenLimitParameter.MAX_TOKENS,
+            ),
+        ],
+        ids=["responses", "anthropic-messages"],
+    )
+    def test_advertised_verbosity_refused_on_protocol_without_key(
+        self,
+        provider: ProviderKind,
+        protocol: Protocol,
+        token_limit_parameter: TokenLimitParameter,
+    ) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            ProviderCallDefinition(
+                definition_id="test.verbosityless",
+                route=ModelRoute(
+                    provider=provider,
+                    protocol=protocol,
+                    model="m",
+                ),
+                constraints=ControlConstraints(
+                    supported_controls=frozenset({RequestControl.VERBOSITY}),
+                    token_limit_parameter=token_limit_parameter,
+                ),
+            )
+        failure = exc_info.value.failure
+        assert failure.code == "verbosity_protocol_unsupported"
+        assert failure.metadata["protocol"] == protocol.value
+        assert failure.metadata["control"] == "verbosity"
+        assert failure.metadata["definition_id"] == "test.verbosityless"
+
+    def test_advertised_verbosity_constructs_on_chat_completions(
+        self,
+    ) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.VERBOSITY})
+        )
+        config = definition.materialize(
+            controls=GenerationControls(verbosity=Verbosity.HIGH)
+        )
+        assert config.controls.verbosity is Verbosity.HIGH
+
     def test_advertised_seed_constructs_on_chat_completions(self) -> None:
         definition = self._constrained_definition(
             frozenset({RequestControl.SEED})
@@ -322,6 +423,30 @@ class TestDefinitionValidation:
                 extension_keys=frozenset({"seed"}),
             )
         assert exc_info.value.failure.code == "reserved_extension_key"
+
+    def test_verbosity_extra_body_is_reserved(self) -> None:
+        with pytest.raises(ControlValidationError) as exc_info:
+            openai_chat_config(
+                model="m",
+                extensions=ProviderBodyExtensions(
+                    extra_body={"verbosity": "low"}
+                ),
+                extension_keys=frozenset({"verbosity"}),
+            )
+        assert exc_info.value.failure.code == "reserved_extension_key"
+        assert exc_info.value.failure.metadata["reserved_keys"] == [
+            "verbosity"
+        ]
+
+    def test_required_verbosity_must_be_assigned(self) -> None:
+        definition = self._constrained_definition(
+            frozenset({RequestControl.VERBOSITY}),
+            required=frozenset({RequestControl.VERBOSITY}),
+        )
+        with pytest.raises(ControlValidationError) as exc_info:
+            definition.materialize(controls=GenerationControls())
+        assert exc_info.value.failure.code == "missing_required_control"
+        assert exc_info.value.failure.metadata["control"] == "verbosity"
 
     def test_required_seed_must_be_assigned(self) -> None:
         definition = self._constrained_definition(

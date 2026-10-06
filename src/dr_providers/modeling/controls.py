@@ -34,6 +34,7 @@ class RequestControl(StrEnum):
     TOKEN_LIMIT = "token_limit"  # noqa: S105 -- knob name, not a secret
     REASONING = "reasoning"
     SEED = "seed"
+    VERBOSITY = "verbosity"
 
 
 CONTROL_ATTR: dict[RequestControl, str] = {
@@ -55,6 +56,12 @@ class ReasoningEffort(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
     XHIGH = "xhigh"
+
+
+class Verbosity(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class ReasoningRequestShape(StrEnum):
@@ -81,6 +88,7 @@ class GenerationControls(BaseModel):
     token_limit: StrictInt | None = None
     reasoning: ReasoningEffort | None = None
     seed: StrictInt | None = None
+    verbosity: Verbosity | None = None
 
     def identity_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {}
@@ -94,6 +102,8 @@ class GenerationControls(BaseModel):
             payload["reasoning"] = self.reasoning.value
         if self.seed is not None:
             payload["seed"] = self.seed
+        if self.verbosity is not None:
+            payload["verbosity"] = self.verbosity.value
         return payload
 
 

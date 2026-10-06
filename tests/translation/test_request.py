@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -20,6 +21,7 @@ from dr_providers import (
     RequestControl,
     TokenLimitParameter,
     Transcript,
+    Verbosity,
     anthropic_messages_config,
     build_payload,
     gemini_chat_config,
@@ -28,6 +30,11 @@ from dr_providers import (
     openrouter_chat_config,
     protocol_path,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from dr_providers import ProviderCallConfig
 
 MESSAGES = (
     PromptMessage(role=MessageRole.SYSTEM, content="be brief"),
@@ -176,6 +183,24 @@ class TestBuildPayload:
             )
         )
         assert build_payload(request)["seed"] == 7
+
+    @pytest.mark.parametrize(
+        "config_factory", [openai_chat_config, openrouter_chat_config]
+    )
+    def test_verbosity_transported(
+        self, config_factory: Callable[..., ProviderCallConfig]
+    ) -> None:
+        request = request_for(
+            config_factory(
+                model="m",
+                controls=GenerationControls(verbosity=Verbosity.LOW),
+            )
+        )
+        assert build_payload(request)["verbosity"] == "low"
+
+    def test_unset_verbosity_absent_from_payload(self) -> None:
+        request = request_for(openai_chat_config(model="m"))
+        assert "verbosity" not in build_payload(request)
 
     def test_extra_body_merged_into_payload(self) -> None:
         request = request_for(

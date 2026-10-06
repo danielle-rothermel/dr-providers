@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-_OPENAI_COMPAT_CONTROLS: frozenset[RequestControl] = frozenset(
+_GEMINI_COMPAT_CONTROLS: frozenset[RequestControl] = frozenset(
     {
         RequestControl.TEMPERATURE,
         RequestControl.TOP_P,
@@ -30,6 +30,11 @@ _OPENAI_COMPAT_CONTROLS: frozenset[RequestControl] = frozenset(
         RequestControl.SEED,
     }
 )
+# OpenAI Chat Completions and OpenRouter accept a top-level verbosity key;
+# Gemini's OpenAI-compatible endpoint does not document one.
+_OPENAI_CHAT_CONTROLS: frozenset[RequestControl] = _GEMINI_COMPAT_CONTROLS | {
+    RequestControl.VERBOSITY
+}
 _RESPONSES_CONTROLS: frozenset[RequestControl] = frozenset(
     {
         RequestControl.TEMPERATURE,
@@ -106,7 +111,7 @@ def openrouter_chat_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.REASONING_OBJECT,
-            supported_controls=_OPENAI_COMPAT_CONTROLS,
+            supported_controls=_OPENAI_CHAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
@@ -132,7 +137,7 @@ def openai_chat_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
-            supported_controls=_OPENAI_COMPAT_CONTROLS,
+            supported_controls=_OPENAI_CHAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
@@ -186,7 +191,7 @@ def gemini_chat_config(
         constraints=_chat_constraints(
             token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
             reasoning_shape=ReasoningRequestShape.EFFORT_FIELD,
-            supported_controls=_OPENAI_COMPAT_CONTROLS,
+            supported_controls=_GEMINI_COMPAT_CONTROLS,
         ),
         controls=controls,
         extensions=extensions,
