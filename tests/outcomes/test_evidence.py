@@ -11,17 +11,22 @@ from pydantic import ValidationError
 from dr_providers import (
     PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
     ApiKeyEnv,
+    ContinuationScore,
     GenerationControls,
     MessageRole,
     PromptMessage,
     ProviderBaseUrl,
     ProviderCallConfig,
-    ProviderCallRequest,
+    ProviderCallKind,
+    ProviderGenerateRequest,
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
     ProviderKind,
     ProviderRetryAfterHint,
+    ProviderScoreRequest,
+    ProviderScoreResponse,
     ProviderTransportFailure,
+    ProviderTransportOutcome,
     ProviderTransportPolicy,
     ProviderTransportResponse,
     RecoverabilityClass,
@@ -106,6 +111,7 @@ def evidence_for(
     failure: ProviderTransportFailure | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash="1" * 64,
         policy_identity={
             "provider_kind": "openai",
@@ -124,9 +130,10 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 9,
+        "schema_version": 10,
         "payload": {
             "request_hash": "1" * 64,
+            "kind": "generate",
             "policy_identity": {
                 "provider_kind": "openai",
                 "policy": "policy-1",
@@ -143,6 +150,7 @@ def expected_document(
             "response_bytes": None,
             "retry_after": None,
             "response": response,
+            "score_response": None,
             "failure": failure,
         },
     }
@@ -150,13 +158,13 @@ def expected_document(
 
 def request_for(
     config: ProviderCallConfig, messages=MESSAGES
-) -> ProviderCallRequest:
-    return ProviderCallRequest(
+) -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=config, transcript=Transcript(messages=messages)
     )
 
 
-def openai_request(**control_overrides: Any) -> ProviderCallRequest:
+def openai_request(**control_overrides: Any) -> ProviderGenerateRequest:
     controls = GenerationControls(**control_overrides)
     return request_for(openai_chat_config(model="m", controls=controls))
 
@@ -190,6 +198,7 @@ class TestInvocationEvidence:
             match="policy_identity requires a supported provider_kind",
         ):
             ProviderInvocationEvidence(
+                kind=ProviderCallKind.GENERATE,
                 request_hash="1" * 64,
                 policy_identity=policy_identity,
                 response=ProviderTransportResponse(text="ok"),
@@ -201,7 +210,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 9
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 10
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -429,6 +438,7 @@ def _failure_evidence(
     }
     failure_fields.update(failure_overrides)
     return ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash="1" * 64,
         failure=ProviderTransportFailure(**failure_fields),
     )
@@ -514,6 +524,7 @@ def test_deserialization_does_not_rescrub_a_traceback() -> None:
     restored = ProviderInvocationEvidence.model_validate(
         {
             "request_hash": "1" * 64,
+            "kind": "generate",
             "failure": {
                 "recoverability": "transient",
                 "code": "transport_error",
@@ -525,3 +536,238 @@ def test_deserialization_does_not_rescrub_a_traceback() -> None:
 
     assert restored.failure is not None
     assert restored.failure.traceback == third_party
+
+
+def _score_response() -> ProviderScoreResponse:
+    return ProviderScoreResponse(
+        scores=(
+            ContinuationScore(
+                log_likelihood=-2.0, token_count=1, char_count=6
+            ),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "slots",
+    [
+        (),
+        ("response", "failure"),
+        ("response", "score_response"),
+        ("score_response", "failure"),
+        ("response", "score_response", "failure"),
+    ],
+)
+def test_evidence_requires_exactly_one_of_three_slots(
+    slots: tuple[str, ...],
+) -> None:
+    values = {
+        "response": SUCCESS,
+        "score_response": _score_response(),
+        "failure": FAILURE,
+    }
+    with pytest.raises(ValidationError, match="exactly one"):
+        ProviderInvocationEvidence.model_validate(
+            {
+                "kind": "score",
+                "request_hash": "1" * 64,
+                **{slot: values[slot] for slot in slots},
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("kind", "slot", "outcome"),
+    [
+        ("generate", "score_response", _score_response()),
+        ("score", "response", SUCCESS),
+    ],
+)
+def test_evidence_rejects_kind_slot_mismatch(
+    kind: str,
+    slot: str,
+    outcome: ProviderTransportOutcome,
+) -> None:
+    with pytest.raises(ValidationError, match="slot must match"):
+        ProviderInvocationEvidence.model_validate(
+            {
+                "kind": kind,
+                "request_hash": "1" * 64,
+                slot: outcome,
+            }
+        )
+
+
+@pytest.mark.parametrize("outcome", [_score_response(), FAILURE])
+def test_build_records_score_kind(
+    score_request: ProviderScoreRequest,
+    outcome: ProviderTransportOutcome,
+) -> None:
+    evidence = ProviderInvocationEvidence.build(
+        request=score_request,
+        policy=None,
+        http_request=None,
+        outcome=outcome,
+    )
+    assert evidence.kind is ProviderCallKind.SCORE
+    assert evidence.outcome == outcome
+    assert (
+        ProviderInvocationEvidence.model_validate_json(
+            evidence.model_dump_json()
+        )
+        == evidence
+    )
+
+
+@pytest.mark.parametrize(
+    ("scores", "message"),
+    [
+        (
+            (
+                ContinuationScore(
+                    log_likelihood=-1.0, token_count=1, char_count=6
+                ),
+            )
+            * 2,
+            "score count",
+        ),
+        (
+            (
+                ContinuationScore(
+                    log_likelihood=-1.0, token_count=1, char_count=5
+                ),
+            ),
+            "char_count",
+        ),
+    ],
+)
+def test_build_rejects_score_correspondence_defects(
+    score_request: ProviderScoreRequest,
+    scores: tuple[ContinuationScore, ...],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ProviderInvocationEvidence.build(
+            request=score_request,
+            policy=None,
+            http_request=None,
+            outcome=ProviderScoreResponse(scores=scores),
+        )
+
+
+def test_build_requires_requested_detail_in_every_score(
+    score_request: ProviderScoreRequest,
+) -> None:
+    request = ProviderScoreRequest(
+        config=score_request.config,
+        context="",
+        continuations=("a", "b"),
+        token_logprobs=True,
+    )
+    detailed = ContinuationScore(
+        log_likelihood=-1.0,
+        token_count=1,
+        char_count=1,
+        token_logprobs=(-1.0,),
+    )
+    missing = ContinuationScore(
+        log_likelihood=-1.0, token_count=1, char_count=1
+    )
+    for scores in ((missing, detailed), (detailed, missing)):
+        with pytest.raises(ValueError, match="requested token_logprobs"):
+            ProviderInvocationEvidence.build(
+                request=request,
+                policy=None,
+                http_request=None,
+                outcome=ProviderScoreResponse(scores=scores),
+            )
+    outcome = ProviderScoreResponse(scores=(detailed, detailed))
+    assert (
+        ProviderInvocationEvidence.build(
+            request=request,
+            policy=None,
+            http_request=None,
+            outcome=outcome,
+        ).outcome
+        == outcome
+    )
+
+
+def test_build_rejects_score_response_for_generate_request() -> None:
+    with pytest.raises(ValueError, match="score request"):
+        ProviderInvocationEvidence.build(
+            request=openai_request(),
+            policy=None,
+            http_request=None,
+            outcome=_score_response(),
+        )
+
+
+def test_score_evidence_document_is_pinned() -> None:
+    evidence = ProviderInvocationEvidence(
+        request_hash="1" * 64,
+        kind=ProviderCallKind.SCORE,
+        score_response=_score_response(),
+    )
+    expected = {
+        "schema": "dr_providers.provider_invocation_evidence",
+        "schema_version": 10,
+        "payload": {
+            "request_hash": "1" * 64,
+            "kind": "score",
+            "policy_identity": None,
+            "max_request_bytes": None,
+            "max_response_bytes": None,
+            "http_request": None,
+            "response_bytes": None,
+            "retry_after": None,
+            "response": None,
+            "failure": None,
+            "score_response": {
+                "scores": [
+                    {
+                        "log_likelihood": -2.0,
+                        "token_count": 1,
+                        "char_count": 6,
+                        "token_logprobs": None,
+                    }
+                ],
+                "usage": None,
+                "cost": None,
+                "warnings": [],
+                "model": None,
+            },
+        },
+    }
+    assert evidence.identity_document().to_json_dict() == expected
+    # Without a request, trusted restoration keeps the score as supplied.
+    assert (
+        ProviderInvocationEvidence.model_validate(expected["payload"])
+        == evidence
+    )
+
+
+def test_score_char_count_uses_original_unicode_string_length(
+    score_request: ProviderScoreRequest,
+) -> None:
+    request = ProviderScoreRequest(
+        config=score_request.config, context="", continuations=("é🙂",)
+    )
+    outcome = ProviderScoreResponse(
+        scores=(
+            ContinuationScore(
+                log_likelihood=-1.0,
+                token_count=1,
+                char_count=2,
+            ),
+        )
+    )
+    assert (
+        ProviderInvocationEvidence.build(
+            request=request,
+            policy=None,
+            http_request=None,
+            outcome=outcome,
+        ).score_response
+        == outcome
+    )

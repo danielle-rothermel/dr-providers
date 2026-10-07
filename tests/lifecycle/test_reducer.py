@@ -9,7 +9,8 @@ from pydantic import ValidationError
 from dr_providers import (
     MessageRole,
     PromptMessage,
-    ProviderCallRequest,
+    ProviderCallKind,
+    ProviderGenerateRequest,
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
     ProviderTransportFailure,
@@ -47,8 +48,8 @@ HTTP_REQUEST = ProviderHttpRequestEvidence(
 )
 
 
-def _request() -> ProviderCallRequest:
-    return ProviderCallRequest(
+def _request() -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=openai_chat_config(model="m"),
         transcript=Transcript(
             messages=(PromptMessage(role=MessageRole.USER, content="hi"),)
@@ -85,6 +86,7 @@ def _observation(
     }
     if outcome in response_outcomes:
         evidence = ProviderInvocationEvidence(
+            kind=ProviderCallKind.GENERATE,
             request_hash=state.request_hash,
             policy_identity={
                 "provider_kind": "openai",
@@ -141,6 +143,7 @@ def _observation(
         elif outcome is ProviderInvocationOutcome.PROVIDER_REJECTION:
             code = RESPONSE_REFUSAL_CODE
         evidence = ProviderInvocationEvidence(
+            kind=ProviderCallKind.GENERATE,
             request_hash=state.request_hash,
             policy_identity={
                 "provider_kind": "openai",
@@ -263,7 +266,8 @@ def test_transition_rejects_invalid_observation_sequence() -> None:
     with pytest.raises(ValueError, match="ordinal"):
         transition_provider_call(state, skipped)
 
-    other_request = ProviderCallRequest(
+    assert isinstance(state.request, ProviderGenerateRequest)
+    other_request = ProviderGenerateRequest(
         config=openai_chat_config(model="other"),
         transcript=state.request.transcript,
     )
@@ -297,6 +301,7 @@ def test_observation_rejects_bad_hash_and_decision_input() -> None:
 def test_failure_outcome_is_recomputed_during_json_restore() -> None:
     state = _state()
     evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash=state.request_hash,
         failure=ProviderTransportFailure(
             recoverability=RecoverabilityClass.PERMANENT,

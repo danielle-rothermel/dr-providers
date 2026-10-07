@@ -2,6 +2,7 @@ import pytest
 
 from dr_providers import (
     GenerationControls,
+    ProviderCallKind,
     ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
@@ -55,6 +56,7 @@ def _classify(body: dict) -> ProviderInvocationOutcome:
     """Classify a wire body through the real parse and classify path."""
     outcome = parse_anthropic_messages_body(body, config=_config())
     evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash="a" * 64,
         response=outcome if is_response(outcome) else None,
         failure=outcome if is_failure(outcome) else None,

@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
+from dr_providers import (
+    CompletedProviderInvocationObservation,
+    ContinuationScore,
+    ProviderScoreRequest,
+    ProviderScoreResponse,
+)
 from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
@@ -10,6 +17,7 @@ from dr_providers.lifecycle import (
     SemanticResponseClassifierIdentifier,
     classify_provider_invocation,
 )
+from dr_providers.modeling.controls import ProviderCallKind
 from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
@@ -40,6 +48,7 @@ def _failure_evidence(
     containment: TransportTimeoutContainment | None = None,
 ) -> ProviderInvocationEvidence:
     return ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash=REQUEST_HASH,
         failure=ProviderTransportFailure(
             recoverability=recoverability,
@@ -162,6 +171,7 @@ def test_empty_generation_precedes_semantic_classifier() -> None:
             )
 
     evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash=REQUEST_HASH,
         response=ProviderTransportResponse(text="  "),
     )
@@ -177,3 +187,70 @@ def test_accept_all_classifier_has_stable_identifier() -> None:
     assert CLASSIFIER.identifier.root == (
         "dr_providers.accept_all_semantic_response.v1"
     )
+
+
+class _MustNotClassifyScores(AcceptAllSemanticResponseClassifier):
+    def classify(
+        self, response: ProviderTransportResponse
+    ) -> ProviderInvocationOutcome:
+        del response
+        raise AssertionError("semantic classifier must not receive scores")
+
+
+def test_score_response_bypasses_semantic_classifier(
+    score_request: ProviderScoreRequest,
+) -> None:
+    evidence = ProviderInvocationEvidence.build(
+        request=score_request,
+        policy=None,
+        http_request=None,
+        outcome=ProviderScoreResponse(
+            scores=(
+                ContinuationScore(
+                    log_likelihood=-1.0,
+                    token_count=1,
+                    char_count=6,
+                ),
+            )
+        ),
+    )
+    assert (
+        classify_provider_invocation(evidence, _MustNotClassifyScores())
+        is ProviderInvocationOutcome.SUCCESS
+    )
+
+
+@pytest.mark.parametrize("outcome", list(ProviderInvocationOutcome))
+def test_score_observation_requires_success(
+    outcome: ProviderInvocationOutcome,
+) -> None:
+    evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.SCORE,
+        request_hash=REQUEST_HASH,
+        score_response=ProviderScoreResponse(
+            scores=(
+                ContinuationScore(
+                    log_likelihood=-1.0,
+                    token_count=1,
+                    char_count=1,
+                ),
+            )
+        ),
+    )
+    values = {
+        "invocation_ordinal": 1,
+        "request_hash": REQUEST_HASH,
+        "evidence": evidence,
+        "evidence_hash": evidence.identity_hash,
+        "outcome": outcome,
+    }
+    if outcome is ProviderInvocationOutcome.SUCCESS:
+        assert (
+            CompletedProviderInvocationObservation.model_validate(
+                values
+            ).outcome
+            is outcome
+        )
+    else:
+        with pytest.raises(ValidationError, match="requires success"):
+            CompletedProviderInvocationObservation.model_validate(values)

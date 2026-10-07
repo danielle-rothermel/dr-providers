@@ -116,6 +116,8 @@ def classify_provider_invocation(
     classifier: SemanticResponseClassifier,
 ) -> ProviderInvocationOutcome:
     """Classify transport and protocol evidence before semantic response."""
+    if evidence.score_response is not None:
+        return ProviderInvocationOutcome.SUCCESS
     if evidence.response is not None:
         if not evidence.response.text.strip():
             return ProviderInvocationOutcome.EMPTY_GENERATION

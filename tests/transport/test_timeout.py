@@ -10,7 +10,7 @@ from dr_providers import (
     GenerationControls,
     MessageRole,
     PromptMessage,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     Transcript,
@@ -32,8 +32,8 @@ from dr_providers.transport.http import HttpProvider, _client_config
 MESSAGES = (PromptMessage(role=MessageRole.USER, content="hi"),)
 
 
-def _request() -> ProviderCallRequest:
-    return ProviderCallRequest(
+def _request() -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=openai_chat_config(model="m", controls=GenerationControls()),
         transcript=Transcript(messages=MESSAGES),
     )

@@ -14,7 +14,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallConfig,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ReasoningEffort,
     Transcript,
     anthropic_messages_config,
@@ -129,7 +129,7 @@ def test_live_matrix(
     config = _config_with_controls(
         config_factory, set_temperature=set_temperature
     )
-    request = ProviderCallRequest(
+    request = ProviderGenerateRequest(
         config=config,
         transcript=Transcript(
             messages=(PromptMessage(role=MessageRole.USER, content=PROMPT),)

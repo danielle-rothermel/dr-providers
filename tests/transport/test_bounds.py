@@ -15,7 +15,7 @@ from _policy import make_transport_policy
 from dr_providers import (
     MessageRole,
     PromptMessage,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -30,7 +30,7 @@ from dr_providers.transport.http import (
     HttpProvider,
 )
 
-REQUEST = ProviderCallRequest(
+REQUEST = ProviderGenerateRequest(
     config=openai_chat_config(model="m"),
     transcript=Transcript(
         messages=(PromptMessage(role=MessageRole.USER, content="write add"),)
@@ -344,6 +344,8 @@ def test_byte_accounting_and_hint_keys_are_pinned() -> None:
 
     assert set(payload) == {
         "request_hash",
+        "kind",
+        "score_response",
         "policy_identity",
         "max_request_bytes",
         "max_response_bytes",

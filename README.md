@@ -69,7 +69,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallOutcomeKind,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderCallState,
     ProviderKind,
     StandardProviderCallRetryPolicy,
@@ -83,7 +83,7 @@ config = openai_responses_config(
     model="gpt-5-mini",
     controls=GenerationControls(token_limit=256),
 )
-request = ProviderCallRequest(
+request = ProviderGenerateRequest(
     config=config,
     transcript=Transcript(
         messages=(
@@ -151,6 +151,33 @@ config = openai_responses_config(
 )
 ```
 
+## Score continuations
+
+`ProviderScoreRequest` carries one exact context string and a nonempty ordered
+sequence of nonempty continuations. Empty context and duplicate continuations
+are allowed. Definitions declare `supported_kinds`; all five HTTP presets
+support only `ProviderCallKind.GENERATE`. Hand-built score-capable definitions
+must have empty `required_controls`, and score requests reject assigned
+controls and nonempty body extensions.
+
+`ContinuationScore` reports total natural-log likelihood and token count for
+the continuation tokens, excluding context tokens, plus `char_count` equal to
+Python's `len()` of the original continuation string. Tokenization belongs to
+the backend. `token_logprobs=True` requires per-token values for every score.
+The evidence `build()` path checks score count, character counts, and required
+per-token detail; direct evidence construction and deserialization are trusted
+paths without request-dependent checks.
+
+`ScriptedProvider` supports scores for offline testing. No shipped production
+provider serves scores; `HttpProvider.invoke()` raises `ValueError` for them
+before admission or payload construction. Score responses classify as success
+without invoking the semantic classifier. The shared lifecycle still requires
+a classifier identifier and matching classifier object, although scoring does
+not call its `classify()` method.
+
+The request and response envelopes are intended to support a future local
+backend; backend fit will be validated when that backend is implemented.
+
 ## CLI
 
 Install and run the one-shot CLI:
@@ -185,7 +212,8 @@ identity; models expose their own identity through `identity_hash`.
 `HttpProvider.invoke()` makes at most one provider wire request and returns
 versioned serializable `ProviderInvocationEvidence`. The evidence binds the
 request identity hash and transport-policy identity to structured HTTP request
-metadata and exactly one response or expected failure. The HTTP request
+metadata, the request kind, and exactly one generate response, score response,
+or expected failure. The HTTP request
 evidence is the sole owner of the constructed request-body mapping.
 
 `run_local_provider_call()` classifies each invocation, applies the selected

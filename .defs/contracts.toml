@@ -2,9 +2,10 @@
 title = "Provider-call identity is layered by reference"
 statement = """
 Definition identity covers its identifier, route, prompt rendering, constraints, \
-required controls, and extension keys; config identity references the full \
+required controls, supported call kinds, and extension keys; config identity references the full \
 definition hash and adds assigned controls and extensions; request identity references \
-the full config hash and adds the ordered transcript. Transport policy is \
+the full config hash and adds the call kind and either the ordered transcript \
+or the exact context, ordered continuations, and per-token-detail flag. Transport policy is \
 absent from all three identities."""
 rationale = """
 Layered references keep each identity boundary explicit without duplicating \
@@ -23,13 +24,15 @@ mapping. Missing required controls, unmappable values for supported \
 controls, and unsupported controls always fail. A definition may not \
 advertise seed or verbosity on a protocol that has no matching top-level \
 wire key (Responses, Anthropic Messages). A constructable ProviderCallConfig transports every \
-control it carries; there is no drop mode."""
+control it carries; there is no drop mode. Requests refuse kinds absent from \
+the definition. Score requests refuse set controls and nonempty body extensions; \
+therefore scoring requires a definition with empty required controls."""
 rationale = """
 Identity and wire encoding must consume the same validated meaning. Allowing \
 coercion, mutable aliases, undeclared extensions, or core-field replacement \
 would let an apparently identical config produce a different request."""
 date = "2026-08-05"
-check = "uv run pytest -q tests/modeling/test_call.py tests/translation/test_request.py"
+check = "uv run pytest -q tests/modeling/test_call.py tests/modeling/test_score_request.py tests/translation/test_request.py"
 
 [[contracts]]
 title = "Quota identity is route-only"
@@ -64,7 +67,8 @@ title = "Provider invocation is the wire-request boundary"
 statement = """
 Each provider invocation makes at most one provider wire request and produces \
 one provider invocation evidence record containing exactly one provider \
-transport response or expected failure. Retries occur only as distinct visible \
+generate response, score response, or expected failure, tagged with the \
+request kind. Retries occur only as distinct visible \
 invocations. Invalid caller-supplied configuration and unexpected programming \
 or infrastructure errors may raise."""
 rationale = """
@@ -447,3 +451,18 @@ deliberate operation; the explicit restoration limit avoids presenting an \
 in-process best-effort rollback as crash-atomic publication."""
 date = "2026-08-05"
 check = "uv run pytest -q tests/transport/live/test_workflow.py"
+
+[[contracts]]
+title = "Score responses classify as success without the semantic classifier"
+statement = """
+A score response classifies as SUCCESS without invoking the semantic response \
+classifier; completed score-response observations require SUCCESS exactly. \
+The evidence build path requires one score per continuation, matching character \
+counts, and per-token log probabilities for every score when requested. Direct \
+construction and deserialization are trusted and do not re-check against a request."""
+rationale = """
+Scores have no generated text to accept semantically. Structural backend defects \
+raise at validation or evidence construction; expected failures retain the shared \
+failure classification and retry lifecycle."""
+date = "2026-10-06"
+check = "uv run pytest -q tests/lifecycle/test_classification.py"

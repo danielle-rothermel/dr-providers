@@ -29,6 +29,14 @@ from dr_providers.core.frozen import _deep_freeze, _FrozenMap, _thaw
 
 
 @verify(UNIQUE)
+class ProviderCallKind(StrEnum):
+    """Call kind declared by definitions and carried by requests."""
+
+    GENERATE = "generate"
+    SCORE = "score"
+
+
+@verify(UNIQUE)
 class PromptRendering(StrEnum):
     """Definition-owned rendering of transcript content into provider input."""
 

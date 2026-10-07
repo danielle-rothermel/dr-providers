@@ -12,6 +12,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderTransportFailure,
     RecoverabilityClass,
     ScriptedOutcome,
@@ -39,8 +40,8 @@ if TYPE_CHECKING:
 WATCHDOG_SECONDS = 5.0
 
 
-def _request() -> ProviderCallRequest:
-    return ProviderCallRequest(
+def _request() -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=openai_chat_config(model="m"),
         transcript=Transcript(
             messages=(PromptMessage(role=MessageRole.USER, content="hi"),)

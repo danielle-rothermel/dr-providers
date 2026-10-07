@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, TypeGuard
+from typing import Annotated, Any, TypeGuard
 
 from pydantic import (
     BaseModel,
@@ -140,6 +140,50 @@ class ProviderTransportResponse(BaseModel):
         )
 
 
+class ContinuationScore(BaseModel):
+    """Natural-log likelihood of continuation tokens, excluding context tokens.
+
+    Tokenization is backend-owned. All fields participate in evidence identity;
+    per-token values need not sum exactly to the total in floating point.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    log_likelihood: float = Field(strict=True, allow_inf_nan=False)
+    token_count: StrictInt = Field(ge=1)
+    char_count: StrictInt = Field(ge=1)
+    token_logprobs: (
+        tuple[Annotated[float, Field(strict=True, allow_inf_nan=False)], ...]
+        | None
+    ) = None
+
+    @model_validator(mode="after")
+    def _validate_token_logprobs(self) -> ContinuationScore:
+        if (
+            self.token_logprobs is not None
+            and len(self.token_logprobs) != self.token_count
+        ):
+            raise ValueError("token_logprobs length must equal token_count")
+        return self
+
+
+class ProviderScoreResponse(BaseModel):
+    """Ordered scores whose fields all bear invocation evidence identity.
+
+    ``ProviderInvocationEvidence.build`` checks correspondence to the request.
+    Direct evidence construction and deserialization are trusted paths and
+    cannot re-check correspondence without the request.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    scores: tuple[ContinuationScore, ...] = Field(min_length=1)
+    usage: TokenUsage | None = None
+    cost: CostInfo | None = None
+    warnings: tuple[ProviderTransportWarning, ...] = ()
+    model: StrictStr | None = None
+
+
 class ProviderTransportFailure(BaseModel):
     """Expected provider transport or protocol failure.
 
@@ -181,7 +225,11 @@ class ProviderTransportFailure(BaseModel):
         object.__setattr__(self, "metadata", _freeze_json(self.metadata))
 
 
-ProviderTransportOutcome = ProviderTransportResponse | ProviderTransportFailure
+ProviderTransportOutcome = (
+    ProviderTransportResponse
+    | ProviderScoreResponse
+    | ProviderTransportFailure
+)
 
 
 def is_response(
@@ -195,3 +243,9 @@ def is_failure(
     outcome: ProviderTransportOutcome,
 ) -> TypeGuard[ProviderTransportFailure]:
     return isinstance(outcome, ProviderTransportFailure)
+
+
+def is_score_response(
+    outcome: ProviderTransportOutcome,
+) -> TypeGuard[ProviderScoreResponse]:
+    return isinstance(outcome, ProviderScoreResponse)

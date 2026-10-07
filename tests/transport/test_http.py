@@ -13,8 +13,9 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallConfig,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderKind,
+    ProviderScoreRequest,
     ProviderTransportFailure,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -57,13 +58,13 @@ ANTHROPIC_POLICY = make_transport_policy(provider_kind=ProviderKind.ANTHROPIC)
 
 def request_for(
     config: ProviderCallConfig, messages=MESSAGES
-) -> ProviderCallRequest:
-    return ProviderCallRequest(
+) -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=config, transcript=Transcript(messages=messages)
     )
 
 
-def openai_request(**control_overrides: Any) -> ProviderCallRequest:
+def openai_request(**control_overrides: Any) -> ProviderGenerateRequest:
     controls = GenerationControls(**control_overrides)
     return request_for(openai_chat_config(model="m", controls=controls))
 
@@ -110,18 +111,18 @@ class TestHttpProvider:
     def test_route_policy_mismatch_precedes_request_and_credential_work(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        provider_request: ProviderCallRequest,
+        provider_request: ProviderGenerateRequest,
         policy_kind: ProviderKind,
         secret_env: str,
         endpoint: str,
     ) -> None:
-        payload_builds: list[ProviderCallRequest] = []
+        payload_builds: list[ProviderGenerateRequest] = []
         credential_resolutions: list[ProviderCallConfig] = []
         wire_requests: list[httpx.Request] = []
         monkeypatch.setenv(secret_env, f"secret-for-{secret_env}")
 
         def record_payload_build(
-            attempted_request: ProviderCallRequest,
+            attempted_request: ProviderGenerateRequest,
         ) -> dict[str, Any]:
             payload_builds.append(attempted_request)
             return {}
@@ -685,3 +686,40 @@ class TestHttpProviderLifecycle:
 
         with pytest.raises(RuntimeError, match="closing or closed"):
             provider.invoke(openai_request())
+
+
+def test_score_refusal_precedes_admission_payload_and_client_creation(
+    score_request: ProviderScoreRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempted: list[str] = []
+
+    def dispatch(_request: httpx.Request) -> httpx.Response:
+        attempted.append("dispatch")
+        raise AssertionError("dispatch must not run")
+
+    def client_factory(**_kwargs: Any) -> httpx.Client:
+        attempted.append("client factory")
+        return httpx.Client(transport=httpx.MockTransport(dispatch))
+
+    def admit() -> None:
+        attempted.append("admission")
+        raise AssertionError("admission must not run")
+
+    def payload(_request: ProviderGenerateRequest) -> dict[str, Any]:
+        attempted.append("payload")
+        raise AssertionError("payload construction must not run")
+
+    with HttpProvider(
+        policy=OPENAI_POLICY, _client_factory=client_factory
+    ) as provider:
+        # dr-wire creates its client eagerly; invocation must do no more work.
+        assert attempted == ["client factory"]
+        attempted.clear()
+        monkeypatch.setattr(provider._client, "admit", admit)
+        monkeypatch.setattr(transport_http, "build_payload", payload)
+        with pytest.raises(
+            ValueError, match="HTTP provider cannot serve score requests"
+        ):
+            provider.invoke(score_request)
+    assert attempted == []

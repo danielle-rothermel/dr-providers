@@ -43,13 +43,13 @@ PROVIDER_CALL_SCHEMA_VERSION = 2
 COMPLETED_INVOCATION_OBSERVATION_SCHEMA = (
     "dr_providers.completed_invocation_observation"
 )
-COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION = 2
+COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION = 3
 DECIDED_INVOCATION_RECORD_SCHEMA = "dr_providers.decided_invocation_record"
-DECIDED_INVOCATION_RECORD_SCHEMA_VERSION = 2
-PROVIDER_CALL_STATE_SCHEMA_VERSION = 2
-PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION = 2
+DECIDED_INVOCATION_RECORD_SCHEMA_VERSION = 3
+PROVIDER_CALL_STATE_SCHEMA_VERSION = 3
+PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION = 3
 PROVIDER_CALL_RESULT_SCHEMA = "dr_providers.provider_call_result"
-PROVIDER_CALL_RESULT_SCHEMA_VERSION = 2
+PROVIDER_CALL_RESULT_SCHEMA_VERSION = 3
 
 ContentIdentityHash = Annotated[
     StrictStr,
@@ -108,7 +108,7 @@ class CompletedProviderInvocationObservation(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[2] = (
+    schema_version: Literal[3] = (
         COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION
     )
     invocation_ordinal: StrictInt = Field(gt=0)
@@ -137,6 +137,11 @@ class CompletedProviderInvocationObservation(BaseModel):
             ) is not is_blank:
                 msg = "empty generation outcome must match response text"
                 raise ValueError(msg)
+        elif self.evidence.score_response is not None:
+            if self.outcome is not ProviderInvocationOutcome.SUCCESS:
+                raise ValueError(
+                    "score response evidence requires success outcome"
+                )
         else:
             assert self.evidence.failure is not None
             expected_outcome = classify_provider_failure(self.evidence.failure)
@@ -173,7 +178,7 @@ class DecidedProviderInvocationRecord(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[2] = DECIDED_INVOCATION_RECORD_SCHEMA_VERSION
+    schema_version: Literal[3] = DECIDED_INVOCATION_RECORD_SCHEMA_VERSION
     observation: CompletedProviderInvocationObservation
     retry_decision: ProviderRetryDecision | None = None
 
@@ -285,7 +290,7 @@ class ProviderCallState(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[2] = PROVIDER_CALL_STATE_SCHEMA_VERSION
+    schema_version: Literal[3] = PROVIDER_CALL_STATE_SCHEMA_VERSION
     request: ProviderCallRequest
     request_hash: ContentIdentityHash
     retry_policy: ProviderCallRetryPolicy
@@ -359,7 +364,7 @@ class ProviderRetryInstruction(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[2] = PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION
+    schema_version: Literal[3] = PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION
     source: Literal[ProviderRetryDelaySource.PROVIDER_CALL_RETRY_POLICY] = (
         ProviderRetryDelaySource.PROVIDER_CALL_RETRY_POLICY
     )
@@ -396,7 +401,7 @@ class ProviderCallResult(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    schema_version: Literal[2] = PROVIDER_CALL_RESULT_SCHEMA_VERSION
+    schema_version: Literal[3] = PROVIDER_CALL_RESULT_SCHEMA_VERSION
     request: ProviderCallRequest
     request_hash: ContentIdentityHash
     retry_policy: ProviderCallRetryPolicy

@@ -11,7 +11,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     Provider,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderKind,
     ProviderTransportFailure,
     ProviderTransportPolicy,
@@ -26,7 +26,7 @@ from dr_providers import (
 OutcomeKind = Literal["success", "failure"]
 ProviderFactory = Callable[[OutcomeKind], Provider]
 
-REQUEST = ProviderCallRequest(
+REQUEST = ProviderGenerateRequest(
     config=openai_chat_config(model="m"),
     transcript=Transcript(
         messages=(PromptMessage(role=MessageRole.USER, content="say hello"),)

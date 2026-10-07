@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING
 import pytest
 from typer.testing import CliRunner
 
-from dr_providers import PromptRendering, ProviderStopReason, build_payload
+from dr_providers import (
+    PromptRendering,
+    ProviderGenerateRequest,
+    ProviderStopReason,
+    build_payload,
+)
 from dr_providers.modeling.controls import ReasoningEffort, Verbosity
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.surfaces.cli import app as cli
@@ -157,6 +162,7 @@ def test_provider_flags_select_request_route(
 
     assert result.exit_code == 0
     request = scripted.requests[0]
+    assert isinstance(request, ProviderGenerateRequest)
     assert (
         request.config.definition.prompt_rendering
         is PromptRendering.ROLE_MESSAGES
@@ -200,6 +206,7 @@ def test_query_flags_build_full_request(
 
     assert result.exit_code == 0
     request = scripted.requests[0]
+    assert isinstance(request, ProviderGenerateRequest)
     assert request.config.route.provider is ProviderKind.OPENAI
     assert request.config.route.protocol is Protocol.RESPONSES
     assert request.config.route.model == "gpt-test"
@@ -403,6 +410,7 @@ def test_prompt_rendering_option_reaches_request_body(
 
     assert result.exit_code == 0
     request = scripted.requests[0]
+    assert isinstance(request, ProviderGenerateRequest)
     assert request.config.definition.prompt_rendering is expected_rendering
     assert build_payload(request) == expected_body
 

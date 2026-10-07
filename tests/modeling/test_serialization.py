@@ -11,6 +11,7 @@ from dr_providers import (
     ModelRoute,
     Protocol,
     ProviderCallDefinition,
+    ProviderCallKind,
     ProviderKind,
     ReasoningRequestShape,
     RequestControl,
@@ -23,6 +24,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 EXPECTED_JSON_DUMP = {
     "definition_id": "test.chat",
+    "supported_kinds": ["generate"],
     "route": {
         "provider": "openai",
         "protocol": "chat_completions",
@@ -49,6 +51,7 @@ MODEL_DUMP_JSON_SCRIPT = """
 import sys
 
 from dr_providers import (
+    ProviderCallKind,
     ControlConstraints,
     ModelRoute,
     Protocol,
@@ -60,6 +63,7 @@ from dr_providers import (
 )
 
 definition = ProviderCallDefinition(
+    supported_kinds=frozenset({ProviderCallKind.GENERATE}),
     definition_id="test.chat",
     route=ModelRoute(
         provider=ProviderKind.OPENAI,
@@ -82,6 +86,7 @@ sys.stdout.buffer.write(definition.model_dump_json().encode("utf-8"))
 
 def _definition() -> ProviderCallDefinition:
     return ProviderCallDefinition(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="test.chat",
         route=ModelRoute(
             provider=ProviderKind.OPENAI,

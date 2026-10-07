@@ -16,7 +16,8 @@ from dr_providers import (
     Protocol,
     ProviderBodyExtensions,
     ProviderCallDefinition,
-    ProviderCallRequest,
+    ProviderCallKind,
+    ProviderGenerateRequest,
     ProviderKind,
     ReasoningEffort,
     RequestControl,
@@ -43,8 +44,8 @@ MESSAGES = (
 )
 
 
-def request_for(config, messages=MESSAGES) -> ProviderCallRequest:
-    return ProviderCallRequest(
+def request_for(config, messages=MESSAGES) -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=config, transcript=Transcript(messages=messages)
     )
 
@@ -157,6 +158,7 @@ class TestBuildPayload:
 
     def test_unsupported_control_refuses_construction(self) -> None:
         definition = ProviderCallDefinition(
+            supported_kinds=frozenset({ProviderCallKind.GENERATE}),
             definition_id="test.chat",
             route=ModelRoute(
                 provider=ProviderKind.OPENAI,

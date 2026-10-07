@@ -11,7 +11,8 @@ from pydantic import ValidationError
 from dr_providers import (
     MessageRole,
     PromptMessage,
-    ProviderCallRequest,
+    ProviderCallKind,
+    ProviderGenerateRequest,
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
     ProviderTransportFailure,
@@ -41,34 +42,34 @@ from dr_providers.lifecycle import (
 )
 
 REQUEST_HASH = (
-    "e32c651b313d287aff067c16ba0eabe80406532cfe603da7443a4a463336f467"
+    "9632eb598dd9f55aff338f51ecfb8793b15d43ac58263c1e53148652f56695fa"
 )
 RETRY_POLICY_HASH = (
     "a465bcf528ec87cfacd1fe842849ee13880bc236f3693268caf6555aeba7c4cc"
 )
-CALL_HASH = "53ab9f755f70102c90edd69ed0a5cfe75826c4a9cf9c58976bfab4c9d0c33549"
+CALL_HASH = "64b91c55bf59813087ad626de28e4976c938d97aef87c362aa829381a5fadf51"
 FIRST_EVIDENCE_HASH = (
-    "4e201d827a9686cb219f1226c40a559d92d3482d3bd33888c9ac750aed367010"
+    "4f1abf090574e0d468f9112d16688a982c9463c02a8b1e8d25783375d2d02700"
 )
 FIRST_OBSERVATION_IDENTITY_HASH = (
-    "e8efcf91417da7733f0309afbcc16a2432f8fdf9e3c065a1f17090f46830a998"
+    "d6dd44c2de9130781960f01aa62ab664944760dd4f4f6304d2977f23ee975e8e"
 )
 FIRST_RECORD_IDENTITY_HASH = (
-    "275fa3f3f767cae677f14a3c591d6204f8cfb722d812ecd5314e7511e6536879"
+    "1109796cf3483814949f6d033e393aa49236aa016a45d47c0bc2442e068b17af"
 )
 SECOND_RECORD_IDENTITY_HASH = (
-    "1a2b4b9f464d220bf576772ebd3e104e5c40426af444b4cf5d9635e6244e8c8d"
+    "35b3d3619555b3da2f608c5040de0e452e5779e4f4f4d8fb7d247ec648b3e70d"
 )
 RESULT_IDENTITY_HASH = (
-    "0efe29d9cfe5f79339b2051e4b41cb8edafa0a35e9e93e6125ac3402bd954ccf"
+    "540c27b92b41ffa78598099007988f8e86d93202bff181613209fdb0d1b3c664"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "500bf76f6e0cd8b9991e2f41e349fca7681285e7a6be0a73a67ccab279f5ea1d"
+    "d87b0575d7d4d59b64537c8cda4924efa7b9850dddcce853def32e34d8c35827"
 )
 
 
-def _request() -> ProviderCallRequest:
-    return ProviderCallRequest(
+def _request() -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=openai_chat_config(model="m"),
         transcript=Transcript(
             messages=(PromptMessage(role=MessageRole.USER, content="hi"),)
@@ -201,6 +202,7 @@ def _golden_trace() -> tuple[
         body_bytes=57,
     )
     first_evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash=state.request_hash,
         policy_identity={
             "provider_kind": "openai",
@@ -230,6 +232,7 @@ def _golden_trace() -> tuple[
     assert isinstance(instruction, ProviderRetryInstruction)
 
     second_evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash=state.request_hash,
         policy_identity={
             "provider_kind": "openai",
@@ -268,7 +271,7 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
     policy_payload = state.retry_policy.model_dump(mode="json")
     evidence_payload = first_observation.evidence.model_dump(mode="json")
     observation_payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "invocation_ordinal": 1,
         "request_hash": REQUEST_HASH,
         "evidence": evidence_payload,
@@ -276,7 +279,7 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
         "outcome": "transient_provider_or_network_failure",
     }
     first_record_payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "observation": observation_payload,
         "retry_decision": {
             "source": "provider_call_retry_policy",
@@ -284,7 +287,7 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
         },
     }
     initial_state_payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "request": request_payload,
         "request_hash": REQUEST_HASH,
         "retry_policy": policy_payload,
@@ -306,14 +309,14 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
     assert first_observation.model_dump(mode="json") == observation_payload
     assert first_record.model_dump(mode="json") == first_record_payload
     assert instruction.model_dump(mode="json") == {
-        "schema_version": 2,
+        "schema_version": 3,
         "source": "provider_call_retry_policy",
         "delay_seconds": 1.0,
         "next_invocation_ordinal": 2,
         "next_state": next_state_payload,
     }
     assert result.model_dump(mode="json") == {
-        "schema_version": 2,
+        "schema_version": 3,
         "request": request_payload,
         "request_hash": REQUEST_HASH,
         "retry_policy": policy_payload,
@@ -331,7 +334,7 @@ def test_lifecycle_wire_dictionaries_and_identities_are_pinned() -> None:
         "outcome": {"kind": "accepted", "invocation_outcome": "success"},
     }
     assert cancellation.model_dump(mode="json") == {
-        "schema_version": 2,
+        "schema_version": 3,
         "request": request_payload,
         "request_hash": REQUEST_HASH,
         "retry_policy": policy_payload,
@@ -423,11 +426,13 @@ def test_terminal_history_cannot_be_restored_as_continuable_state(
     state = _state()
     if outcome is ProviderInvocationOutcome.SUCCESS:
         evidence = ProviderInvocationEvidence(
+            kind=ProviderCallKind.GENERATE,
             request_hash=state.request_hash,
             response=ProviderTransportResponse(text="accepted"),
         )
     else:
         evidence = ProviderInvocationEvidence(
+            kind=ProviderCallKind.GENERATE,
             request_hash=state.request_hash,
             failure=ProviderTransportFailure(
                 recoverability=RecoverabilityClass.TRANSIENT,

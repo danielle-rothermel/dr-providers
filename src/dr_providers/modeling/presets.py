@@ -12,6 +12,7 @@ from dr_providers.modeling.controls import (
     GenerationControls,
     PromptRendering,
     ProviderBodyExtensions,
+    ProviderCallKind,
     ReasoningRequestShape,
     RequestControl,
     TokenLimitParameter,
@@ -72,6 +73,7 @@ def _config_from_route(  # noqa: PLR0913 -- explicit keyword-only builder
     definition_id: str,
     route: ModelRoute,
     constraints: ControlConstraints,
+    supported_kinds: frozenset[ProviderCallKind],
     controls: GenerationControls | None,
     extensions: ProviderBodyExtensions | None,
     required_controls: frozenset[RequestControl] = frozenset(),
@@ -89,6 +91,7 @@ def _config_from_route(  # noqa: PLR0913 -- explicit keyword-only builder
         definition_id=definition_id,
         route=route,
         constraints=constraints,
+        supported_kinds=supported_kinds,
         prompt_rendering=prompt_rendering,
         required_controls=required_controls,
         extension_keys=declared_keys,
@@ -110,6 +113,7 @@ def openrouter_chat_config(
         model=model,
     )
     return _config_from_route(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="openrouter.chat_completions",
         route=route,
         constraints=_chat_constraints(
@@ -138,6 +142,7 @@ def openai_chat_config(
         model=model,
     )
     return _config_from_route(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="openai.chat_completions",
         route=route,
         constraints=_chat_constraints(
@@ -166,6 +171,7 @@ def openai_responses_config(
         model=model,
     )
     return _config_from_route(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="openai.responses",
         route=route,
         constraints=_chat_constraints(
@@ -195,6 +201,7 @@ def gemini_chat_config(
         model=model,
     )
     return _config_from_route(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="gemini.openai_compat",
         route=route,
         # The compatibility endpoint uses a flat reasoning_effort field.
@@ -225,6 +232,7 @@ def anthropic_messages_config(
         model=model,
     )
     return _config_from_route(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="anthropic.messages",
         route=route,
         # Anthropic uses max_tokens and a native reasoning effort object.
