@@ -11,7 +11,7 @@ from dr_providers import (
     PromptMessage,
     ProviderBaseUrl,
     ProviderCallConfig,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderKind,
     ProviderTransportPolicy,
     ProviderTransportResponse,
@@ -53,13 +53,13 @@ OPENAI_POLICY = ProviderTransportPolicy(
 
 def request_for(
     config: ProviderCallConfig, messages=MESSAGES
-) -> ProviderCallRequest:
-    return ProviderCallRequest(
+) -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=config, transcript=Transcript(messages=messages)
     )
 
 
-def openai_request(**control_overrides: Any) -> ProviderCallRequest:
+def openai_request(**control_overrides: Any) -> ProviderGenerateRequest:
     controls = GenerationControls(**control_overrides)
     return request_for(openai_chat_config(model="m", controls=controls))
 

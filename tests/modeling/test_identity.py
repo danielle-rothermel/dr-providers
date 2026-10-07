@@ -18,8 +18,10 @@ from dr_providers import (
     ProviderBodyExtensions,
     ProviderCallConfig,
     ProviderCallDefinition,
-    ProviderCallRequest,
+    ProviderCallKind,
+    ProviderGenerateRequest,
     ProviderKind,
+    ProviderScoreRequest,
     ProviderTransportPolicy,
     ReasoningEffort,
     ReasoningRequestShape,
@@ -41,6 +43,7 @@ TRANSCRIPT = Transcript(
 
 def _fixed_definition() -> ProviderCallDefinition:
     return ProviderCallDefinition(
+        supported_kinds=frozenset({ProviderCallKind.GENERATE}),
         definition_id="openai.chat_completions",
         route=ModelRoute(
             provider=ProviderKind.OPENAI,
@@ -60,19 +63,21 @@ def _fixed_config() -> ProviderCallConfig:
     )
 
 
-def _fixed_request() -> ProviderCallRequest:
-    return ProviderCallRequest(config=_fixed_config(), transcript=TRANSCRIPT)
+def _fixed_request() -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
+        config=_fixed_config(), transcript=TRANSCRIPT
+    )
 
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "4acb3899f212a6babb98854c6c5c3c98935ba99ffc4119bbd6ed09d6e6c3885c"
+    "41f14f577a2c36db23777a12f5ee936cba2588f0f697f85fa6eeb5c508ffff27"
 )
 GOLDEN_CONFIG_HASH = (
-    "8d7bc15a327d0cee2470d1cfc185d1de3253d673da7d239052a82852a22b0488"
+    "c9dd4c376d72980dc42e24925672602dc8da9a35bece4fcee08320527f1c02ed"
 )
 GOLDEN_REQUEST_HASH = (
-    "9690da69ff909abc9339f45b929f9c0cbfae5b7c952ed1e7b706b212760ac6f8"
+    "f3fe0677a98004ec18fee3bed7d91df702b820f8382cea3ec16196329fef62d0"
 )
 
 
@@ -91,7 +96,7 @@ class TestDefinitionSchemaVersionOwnership:
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         definition = _fixed_definition()
 
-        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 4
+        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 5
         assert "schema_version" not in ProviderCallDefinition.model_fields
         properties = ProviderCallDefinition.model_json_schema()["properties"]
         assert "schema_version" not in properties
@@ -176,6 +181,7 @@ def _changed_payload_paths(
         ),
         (("extension_keys",), frozenset({"user"})),
         (("prompt_rendering",), PromptRendering.FLAT_TEXT),
+        (("supported_kinds",), frozenset({"generate", "score"})),
     ],
     ids=(
         "definition-id",
@@ -188,6 +194,7 @@ def _changed_payload_paths(
         "required-controls",
         "extension-keys",
         "prompt-rendering",
+        "supported-kinds",
     ),
 )
 def test_every_definition_dimension_changes_identity(
@@ -265,7 +272,7 @@ class TestPolicyExclusion:
         config = openai_chat_config(
             model="m", controls=GenerationControls(token_limit=64)
         )
-        request = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
+        request = ProviderGenerateRequest(config=config, transcript=TRANSCRIPT)
         policy = ProviderTransportPolicy(
             provider_kind=ProviderKind.OPENAI,
             api_key_env=str(ApiKeyEnv.OPENAI),
@@ -287,7 +294,8 @@ class TestPolicyExclusion:
         assert policy.identity_payload()
 
     def test_request_fields_are_exactly_identity_bearing(self) -> None:
-        assert set(ProviderCallRequest.model_fields) == {
+        assert set(ProviderGenerateRequest.model_fields) == {
+            "kind",
             "config",
             "transcript",
         }
@@ -298,16 +306,20 @@ class TestRequestIdentity:
         config = openai_chat_config(
             model="m", controls=GenerationControls(token_limit=64)
         )
-        request = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
+        request = ProviderGenerateRequest(config=config, transcript=TRANSCRIPT)
         payload = request.identity_payload()
-        assert set(payload) == {"config_hash", "transcript"}
+        assert payload == {
+            "kind": "generate",
+            "config_hash": config.identity_hash,
+            "transcript": [{"role": "user", "content": "hi"}],
+        }
         assert payload["config_hash"] == config.identity_hash
         assert payload["transcript"] == [{"role": "user", "content": "hi"}]
 
     def test_request_hash_changes_with_transcript(self) -> None:
         config = openai_chat_config(model="m")
-        a = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
-        b = ProviderCallRequest(
+        a = ProviderGenerateRequest(config=config, transcript=TRANSCRIPT)
+        b = ProviderGenerateRequest(
             config=config,
             transcript=Transcript(
                 messages=(
@@ -323,11 +335,11 @@ class TestRequestIdentity:
             PromptMessage(role=MessageRole.USER, content="first"),
             PromptMessage(role=MessageRole.ASSISTANT, content="second"),
         )
-        forward = ProviderCallRequest(
+        forward = ProviderGenerateRequest(
             config=config,
             transcript=Transcript(messages=messages),
         )
-        reversed_order = ProviderCallRequest(
+        reversed_order = ProviderGenerateRequest(
             config=config,
             transcript=Transcript(messages=tuple(reversed(messages))),
         )
@@ -336,10 +348,10 @@ class TestRequestIdentity:
 
     def test_request_hash_changes_with_config(self) -> None:
         transcript = TRANSCRIPT
-        a = ProviderCallRequest(
+        a = ProviderGenerateRequest(
             config=openai_chat_config(model="m"), transcript=transcript
         )
-        b = ProviderCallRequest(
+        b = ProviderGenerateRequest(
             config=openai_chat_config(model="other"), transcript=transcript
         )
         assert a.identity_hash != b.identity_hash
@@ -349,10 +361,10 @@ class TestPromptRenderingIdentity:
     def test_rendering_changes_identity_only_through_definition_reference(
         self,
     ) -> None:
-        role = ProviderCallRequest(
+        role = ProviderGenerateRequest(
             config=openai_chat_config(model="m"), transcript=TRANSCRIPT
         )
-        flat = ProviderCallRequest(
+        flat = ProviderGenerateRequest(
             config=openai_chat_config(
                 model="m", prompt_rendering=PromptRendering.FLAT_TEXT
             ),
@@ -395,8 +407,8 @@ class TestPromptRenderingIdentity:
         config = openai_chat_config(
             model="m", prompt_rendering=PromptRendering.FLAT_TEXT
         )
-        user = ProviderCallRequest(config=config, transcript=TRANSCRIPT)
-        assistant = ProviderCallRequest(
+        user = ProviderGenerateRequest(config=config, transcript=TRANSCRIPT)
+        assistant = ProviderGenerateRequest(
             config=config,
             transcript=Transcript(
                 messages=(
@@ -418,3 +430,56 @@ if __name__ == "__main__":  # pragma: no cover -- golden-hash regeneration
     print("GOLDEN_DEFINITION_HASH =", _fixed_definition().identity_hash)
     print("GOLDEN_CONFIG_HASH =", _fixed_config().identity_hash)
     print("GOLDEN_REQUEST_HASH =", _fixed_request().identity_hash)
+
+
+def test_score_request_identity_payload_and_hash_are_pinned(
+    score_request: ProviderScoreRequest,
+) -> None:
+    assert score_request.identity_payload() == {
+        "kind": "score",
+        "config_hash": (
+            "96094a19a792d17add4051bc45e575fd025e4e4c4036d9be22aaa9f736c603ad"
+        ),
+        "context": "context",
+        "continuations": ["answer"],
+        "token_logprobs": False,
+    }
+    assert score_request.identity_hash == (
+        "6c7a5f6d7f9e89c6b1fce6ed42afc5b7e7985be84db6eecc1f375ef2cd5dc571"
+    )
+    assert set(ProviderScoreRequest.model_fields) == {
+        "kind",
+        "config",
+        "context",
+        "continuations",
+        "token_logprobs",
+    }
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"context": "other context"},
+        {"continuations": ("other answer",)},
+        {"token_logprobs": True},
+    ],
+)
+def test_each_score_request_input_changes_identity(
+    score_request: ProviderScoreRequest, override: dict[str, Any]
+) -> None:
+    variant = ProviderScoreRequest.model_validate(
+        {**score_request.model_dump(mode="python"), **override}
+    )
+    assert variant.identity_hash != score_request.identity_hash
+
+
+def test_score_continuation_order_is_identity_bearing(
+    score_request: ProviderScoreRequest,
+) -> None:
+    forward = ProviderScoreRequest(
+        config=score_request.config, context="", continuations=("a", "b")
+    )
+    reverse = ProviderScoreRequest(
+        config=score_request.config, context="", continuations=("b", "a")
+    )
+    assert forward.identity_hash != reverse.identity_hash

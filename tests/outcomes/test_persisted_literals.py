@@ -20,6 +20,17 @@ producing copy fails here even when the consuming copy still agrees.
 
 from __future__ import annotations
 
+import pytest
+
+from dr_providers import (
+    ControlValidationError,
+    GenerationControls,
+    ProviderBodyExtensions,
+    ProviderCallConfig,
+    ProviderCallDefinition,
+    ProviderScoreRequest,
+    openai_chat_config,
+)
 from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle.classifier import (
     ACCEPT_ALL_SEMANTIC_CLASSIFIER_IDENTIFIER,
@@ -65,6 +76,7 @@ from dr_providers.modeling.call import (
 )
 from dr_providers.modeling.controls import (
     PromptRendering,
+    ProviderCallKind,
     ReasoningEffort,
     ReasoningRequestShape,
     RequestControl,
@@ -72,8 +84,10 @@ from dr_providers.modeling.controls import (
     Verbosity,
 )
 from dr_providers.modeling.request import (
-    PROVIDER_CALL_REQUEST_SCHEMA,
-    PROVIDER_CALL_REQUEST_SCHEMA_VERSION,
+    PROVIDER_GENERATE_REQUEST_SCHEMA,
+    PROVIDER_GENERATE_REQUEST_SCHEMA_VERSION,
+    PROVIDER_SCORE_REQUEST_SCHEMA,
+    PROVIDER_SCORE_REQUEST_SCHEMA_VERSION,
 )
 from dr_providers.modeling.route import Protocol, ProviderKind
 from dr_providers.modeling.transcript import MessageRole
@@ -411,7 +425,10 @@ def test_identity_schema_names_are_pinned() -> None:
         "dr_providers.provider_call_definition"
     )
     assert PROVIDER_CALL_CONFIG_SCHEMA == "dr_providers.provider_call_config"
-    assert PROVIDER_CALL_REQUEST_SCHEMA == "dr_providers.provider_call_request"
+    assert (
+        PROVIDER_GENERATE_REQUEST_SCHEMA
+        == "dr_providers.provider_generate_request"
+    )
     assert PROVIDER_CALL_RETRY_POLICY_SCHEMA == (
         "dr_providers.provider_call_retry_policy"
     )
@@ -429,20 +446,83 @@ def test_identity_schema_names_are_pinned() -> None:
 
 
 def test_persisted_schema_versions_are_pinned() -> None:
-    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 9
-    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 4
+    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 10
+    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 5
     assert PROVIDER_CALL_CONFIG_SCHEMA_VERSION == 2
-    assert PROVIDER_CALL_REQUEST_SCHEMA_VERSION == 2
+    assert PROVIDER_GENERATE_REQUEST_SCHEMA_VERSION == 1
+    assert PROVIDER_SCORE_REQUEST_SCHEMA_VERSION == 1
     assert PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION == 1
-    assert COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION == 2
-    assert DECIDED_INVOCATION_RECORD_SCHEMA_VERSION == 2
+    assert COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION == 3
+    assert DECIDED_INVOCATION_RECORD_SCHEMA_VERSION == 3
     assert PROVIDER_CALL_SCHEMA_VERSION == 2
-    assert PROVIDER_CALL_STATE_SCHEMA_VERSION == 2
-    assert PROVIDER_CALL_RESULT_SCHEMA_VERSION == 2
-    assert PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION == 2
+    assert PROVIDER_CALL_STATE_SCHEMA_VERSION == 3
+    assert PROVIDER_CALL_RESULT_SCHEMA_VERSION == 3
+    assert PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION == 3
 
 
 def test_prompt_rendering_values_are_pinned() -> None:
     assert PromptRendering.ROLE_MESSAGES.value == "role_messages"
     assert PromptRendering.FLAT_TEXT.value == "flat_text"
     assert len(PromptRendering) == 2
+
+
+def test_call_kind_and_score_schema_literals_are_pinned() -> None:
+    assert [kind.value for kind in ProviderCallKind] == ["generate", "score"]
+    assert len(ProviderCallKind) == 2
+    assert (
+        PROVIDER_SCORE_REQUEST_SCHEMA == "dr_providers.provider_score_request"
+    )
+
+
+@pytest.mark.parametrize(
+    ("scenario", "code"),
+    [
+        ("empty kinds", "no_supported_kinds"),
+        ("unsupported kind", "unsupported_call_kind"),
+        ("set control", "score_request_rejects_controls"),
+        ("set extension", "score_request_rejects_extensions"),
+    ],
+)
+def test_score_validation_failure_codes_are_pinned(
+    scenario: str,
+    code: str,
+    score_config: ProviderCallConfig,
+) -> None:
+    with pytest.raises(ControlValidationError) as exc:
+        _construct_invalid_score(scenario, score_config)
+    assert exc.value.failure.code == code
+    assert exc.value.failure.recoverability is RecoverabilityClass.PERMANENT
+
+
+def _construct_invalid_score(
+    scenario: str,
+    score_config: ProviderCallConfig,
+) -> None:
+    data = score_config.definition.model_dump(mode="python")
+    if scenario == "empty kinds":
+        ProviderCallDefinition.model_validate({**data, "supported_kinds": []})
+    elif scenario == "unsupported kind":
+        ProviderScoreRequest(
+            config=openai_chat_config(model="m"),
+            context="",
+            continuations=("a",),
+        )
+    elif scenario == "set control":
+        ProviderScoreRequest(
+            config=score_config.definition.materialize(
+                controls=GenerationControls(temperature=0.5)
+            ),
+            context="",
+            continuations=("a",),
+        )
+    else:
+        definition = ProviderCallDefinition.model_validate(
+            {**data, "extension_keys": ["user"]}
+        )
+        ProviderScoreRequest(
+            config=definition.materialize(
+                extensions=ProviderBodyExtensions(extra_body={"user": "test"})
+            ),
+            context="",
+            continuations=("a",),
+        )

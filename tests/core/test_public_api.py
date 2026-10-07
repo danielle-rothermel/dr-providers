@@ -55,3 +55,26 @@ def test_import_pure_modules_does_not_load_httpx() -> None:
     subprocess.run(  # noqa: S603
         [sys.executable, "-c", code], check=True
     )
+
+
+def test_score_api_exports_and_removed_request_constants() -> None:
+    expected = {
+        "ProviderCallKind",
+        "ProviderGenerateRequest",
+        "ProviderScoreRequest",
+        "ProviderCallRequest",
+        "ContinuationScore",
+        "ProviderScoreResponse",
+        "is_score_response",
+        "PROVIDER_GENERATE_REQUEST_SCHEMA",
+        "PROVIDER_GENERATE_REQUEST_SCHEMA_VERSION",
+        "PROVIDER_SCORE_REQUEST_SCHEMA",
+        "PROVIDER_SCORE_REQUEST_SCHEMA_VERSION",
+    }
+    assert expected <= set(dr_providers.__all__)
+    for name in (
+        "PROVIDER_CALL_REQUEST_SCHEMA",
+        "PROVIDER_CALL_REQUEST_SCHEMA_VERSION",
+    ):
+        assert name not in dr_providers.__all__
+        assert not hasattr(dr_providers, name)

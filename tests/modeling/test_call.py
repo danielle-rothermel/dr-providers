@@ -14,6 +14,7 @@ from dr_providers import (
     ProviderBodyExtensions,
     ProviderCallConfig,
     ProviderCallDefinition,
+    ProviderCallKind,
     ProviderKind,
     ReasoningEffort,
     ReasoningRequestShape,
@@ -198,6 +199,7 @@ class TestDefinitionValidation:
         required: frozenset[RequestControl] = frozenset(),
     ) -> ProviderCallDefinition:
         return ProviderCallDefinition(
+            supported_kinds=frozenset({ProviderCallKind.GENERATE}),
             definition_id="test.chat",
             route=ModelRoute(
                 provider=ProviderKind.OPENAI,
@@ -237,6 +239,7 @@ class TestDefinitionValidation:
         self,
     ) -> None:
         definition = ProviderCallDefinition(
+            supported_kinds=frozenset({ProviderCallKind.GENERATE}),
             definition_id="test.anthropic",
             route=ModelRoute(
                 provider=ProviderKind.ANTHROPIC,
@@ -296,6 +299,7 @@ class TestDefinitionValidation:
     ) -> None:
         with pytest.raises(ControlValidationError) as exc_info:
             ProviderCallDefinition(
+                supported_kinds=frozenset({ProviderCallKind.GENERATE}),
                 definition_id="test.seedless",
                 route=ModelRoute(
                     provider=provider,
@@ -337,6 +341,7 @@ class TestDefinitionValidation:
     ) -> None:
         with pytest.raises(ControlValidationError) as exc_info:
             ProviderCallDefinition(
+                supported_kinds=frozenset({ProviderCallKind.GENERATE}),
                 definition_id="test.verbosityless",
                 route=ModelRoute(
                     provider=provider,
@@ -394,6 +399,7 @@ class TestDefinitionValidation:
     def test_required_control_not_supported_rejected(self) -> None:
         with pytest.raises(ControlValidationError) as exc_info:
             ProviderCallDefinition(
+                supported_kinds=frozenset({ProviderCallKind.GENERATE}),
                 definition_id="bad",
                 route=ModelRoute(
                     provider=ProviderKind.OPENAI,
@@ -518,6 +524,7 @@ class TestDefinitionValidation:
     def test_extra_body_is_isolated_from_source_aliases(self) -> None:
         source: dict[str, Any] = {"nested": {"k": [1, 2]}}
         definition = ProviderCallDefinition(
+            supported_kinds=frozenset({ProviderCallKind.GENERATE}),
             definition_id="test.extensions",
             route=ModelRoute(
                 provider=ProviderKind.OPENAI,

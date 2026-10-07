@@ -9,6 +9,20 @@ rediscovering them.
 The package's frozen surface is deliberately small. A future need may add any
 of the following; until one does, the absence is a decision, not an oversight.
 
+## HTTP continuation scoring
+
+An HTTP provider exposing prompt log-probabilities could support the score call
+kind through an explicit scoring adapter and a definition declaring
+`ProviderCallKind.SCORE`. This capability is not built: the shipped HTTP
+presets declare generation only, and `HttpProvider.invoke()` raises on scores
+before invocation admission or payload construction.
+
+The score request and response envelopes, request-kind-tagged evidence, and
+shared retry lifecycle exist for scripted testing. A future implementation
+must validate backend fit, tokenization behavior, and response correspondence;
+the envelopes are intended for reuse without claiming that a backend has
+already proven them sufficient. No local backend is shipped today.
+
 ## Native async transport
 
 A future need may add a native asynchronous transport built on

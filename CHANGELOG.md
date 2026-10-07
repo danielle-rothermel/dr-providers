@@ -8,6 +8,22 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add `ProviderCallKind` (`generate`, `score`), `ProviderGenerateRequest`,
+  and `ProviderScoreRequest`. Score requests carry exact context, ordered
+  continuations, and an identity-bearing flag requiring per-token values.
+- Add `ContinuationScore`, `ProviderScoreResponse`, `is_score_response`, and
+  the kind-specific request schema names and version constants. Total and
+  per-token log probabilities must be finite and at most zero.
+- Invocation evidence carries required `kind` and optional `score_response`;
+  exactly one generate response, score response, or failure is retained.
+  Score responses classify as success without semantic classification.
+- `ScriptedOutcome.scores` and `ScriptedProvider` support scoring, including
+  expected failures and the shared retry lifecycle. HTTP scoring raises before
+  admission; the CLI remains generate-only. No production scoring backend,
+  torch, transformers, or new runtime dependency is added.
+- Add permanent validation failure codes `no_supported_kinds`,
+  `unsupported_call_kind`, `score_request_rejects_controls`, and
+  `score_request_rejects_extensions`.
 - Add identity-bearing `ProviderCallDefinition.prompt_rendering` and the
   exported `PromptRendering` enum: `role_messages` (the default) preserves
   existing protocol bodies; `flat_text` concatenates every transcript
@@ -22,6 +38,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Replace the concrete `ProviderCallRequest` with a discriminated union of
+  `ProviderGenerateRequest` and `ProviderScoreRequest`. Generation callers
+  construct `ProviderGenerateRequest`. Remove `PROVIDER_CALL_REQUEST_SCHEMA`
+  and `PROVIDER_CALL_REQUEST_SCHEMA_VERSION`; the two request kinds each own
+  a named version-1 identity schema. No aliases or compatibility shims remain.
+- Require nonempty `ProviderCallDefinition.supported_kinds`, sorted in JSON
+  and identity. HTTP presets declare generate only. Requests refuse undeclared
+  kinds; scoring also refuses assigned controls and nonempty extensions.
+  Definitions used for scoring therefore need empty `required_controls`.
+- Generate request identity includes `kind`; score identity includes kind,
+  config hash, exact context, ordered continuations, and `token_logprobs`.
+  Definition, config, request, call, evidence, observation, record, and result
+  hashes change. Config schema stays at 2, provider call at 2, and retry policy
+  at 1 because those identity payload shapes are unchanged.
 - Rename identity-hash reference fields and payload keys as a persisted-format
   hard cutover, including corresponding keyword parameters and exports:
 
@@ -41,21 +71,26 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are provided; recorded payloads with the old format remain historical.
 - Advance the identity and persisted lifecycle schemas:
 
-  | Schema | Previous | Current |
+  | Schema | Previous released | Current |
   | --- | --- | --- |
-  | Provider call definition | 3 | 4 |
+  | Provider call definition | 3 | 5 |
   | Provider call config | 1 | 2 |
-  | Provider call request | 1 | 2 |
-  | Provider invocation evidence | 8 | 9 |
+  | Provider call request | 1 | Removed; replaced by kind-specific schemas |
+  | Provider generate request | — | 1 |
+  | Provider score request | — | 1 |
+  | Provider invocation evidence | 8 | 10 |
   | Provider call | 1 | 2 |
-  | Completed invocation observation | 1 | 2 |
-  | Decided invocation record | 1 | 2 |
-  | Provider call state | 1 | 2 |
-  | Provider retry instruction | 1 | 2 |
-  | Provider call result | 1 | 2 |
+  | Completed invocation observation | 1 | 3 |
+  | Decided invocation record | 1 | 3 |
+  | Provider call state | 1 | 3 |
+  | Provider retry instruction | 1 | 3 |
+  | Provider call result | 1 | 3 |
+  | Provider call retry policy | 1 | 1 |
 
-  The definition schema advances for prompt rendering; the other schemas
-  advance for renamed reference keys or changed nested persisted shapes.
+  Definition identity includes prompt rendering and supported call kinds;
+  evidence records the request kind and an exclusive generate response, score
+  response, or failure. Lifecycle schemas advance for renamed reference keys
+  and changed nested persisted shapes.
   Retry policy schema remains at 1 and retry-policy hashes are unchanged.
 - Every definition, config, request, call, completed-observation,
   decided-record, result, and evidence hash changes, including with the

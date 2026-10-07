@@ -6,10 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
+from dr_providers.modeling.controls import ProviderCallKind
 from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 from dr_providers.outcomes.models import (
+    ContinuationScore,
     CostInfo,
+    ProviderScoreResponse,
     ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
@@ -36,6 +39,7 @@ SCRIPTED_RESPONSE_ID_PREFIX = "scripted-response"
 class ScriptedOutcome(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    scores: tuple[ContinuationScore, ...] | None = None
     text: StrictStr = ""
     usage: TokenUsage | None = None
     cost: CostInfo | None = None
@@ -106,9 +110,14 @@ class ScriptedProvider:
     def invoke(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
-        payload = build_payload(request)
+        payload = (
+            build_payload(request)
+            if request.kind == ProviderCallKind.GENERATE
+            else None
+        )
         self.requests.append(request)
-        self.payloads.append(payload)
+        if payload is not None:
+            self.payloads.append(payload)
         index = min(len(self.requests) - 1, len(self._outcomes) - 1)
         outcome = self._outcomes[index]
         if outcome.failure is not None:
@@ -117,6 +126,23 @@ class ScriptedProvider:
                 policy=None,
                 http_request=None,
                 outcome=outcome.failure,
+            )
+        if request.kind == ProviderCallKind.SCORE:
+            if outcome.scores is None:
+                raise ValueError(
+                    "scripted score request requires scores or failure"
+                )
+            return ProviderInvocationEvidence.build(
+                request=request,
+                policy=None,
+                http_request=None,
+                outcome=ProviderScoreResponse(
+                    scores=outcome.scores,
+                    usage=outcome.usage,
+                    cost=outcome.cost,
+                    warnings=outcome.warnings,
+                    model=request.config.route.model,
+                ),
             )
         response_id = f"{SCRIPTED_RESPONSE_ID_PREFIX}-{len(self.requests)}"
         response = ProviderTransportResponse(

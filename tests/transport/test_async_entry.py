@@ -15,7 +15,7 @@ from dr_providers import (
     GenerationControls,
     MessageRole,
     PromptMessage,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderTransportPolicy,
     Transcript,
     openai_chat_config,
@@ -42,8 +42,8 @@ CHAT_BODY_OK: dict[str, Any] = {
 }
 
 
-def _request() -> ProviderCallRequest:
-    return ProviderCallRequest(
+def _request() -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=openai_chat_config(model="m", controls=GenerationControls()),
         transcript=Transcript(
             messages=(PromptMessage(role=MessageRole.USER, content="hi"),)

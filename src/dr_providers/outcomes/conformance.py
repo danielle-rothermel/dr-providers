@@ -9,14 +9,14 @@ from dr_providers.outcomes.models import (
 )
 
 if TYPE_CHECKING:
-    from dr_providers.modeling.request import ProviderCallRequest
+    from dr_providers.modeling.request import ProviderGenerateRequest
 
 REASONING_NOT_OBSERVED_CODE = "reasoning_not_observed"
 MODEL_SUBSTITUTION_CODE = "model_substitution"
 
 
 def conformance_warnings(
-    request: ProviderCallRequest,
+    request: ProviderGenerateRequest,
     response: ProviderTransportResponse,
 ) -> tuple[ProviderTransportWarning, ...]:
     warnings: list[ProviderTransportWarning] = []
@@ -60,7 +60,7 @@ def conformance_warnings(
 
 
 def with_conformance_warnings(
-    request: ProviderCallRequest,
+    request: ProviderGenerateRequest,
     response: ProviderTransportResponse,
 ) -> ProviderTransportResponse:
     warnings = conformance_warnings(request, response)

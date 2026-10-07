@@ -1,6 +1,7 @@
 import pytest
 
 from dr_providers import (
+    ProviderCallKind,
     ProviderStopReason,
     ProviderTransportFailure,
     ProviderTransportResponse,
@@ -124,6 +125,7 @@ def _classify(body: dict) -> ProviderInvocationOutcome:
         body, config=openai_chat_config(model="m")
     )
     evidence = ProviderInvocationEvidence(
+        kind=ProviderCallKind.GENERATE,
         request_hash="c" * 64,
         response=outcome if is_response(outcome) else None,
         failure=outcome if is_failure(outcome) else None,

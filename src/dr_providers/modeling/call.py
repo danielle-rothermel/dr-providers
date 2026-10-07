@@ -29,6 +29,7 @@ from dr_providers.modeling.controls import (
     GenerationControls,
     PromptRendering,
     ProviderBodyExtensions,
+    ProviderCallKind,
     ReasoningEffort,
     RequestControl,
 )
@@ -39,7 +40,7 @@ from dr_providers.modeling.route import (
 )
 
 PROVIDER_CALL_DEFINITION_SCHEMA = "dr_providers.provider_call_definition"
-PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 4
+PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 5
 
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 2
@@ -71,16 +72,39 @@ _ANTHROPIC_REASONING_EFFORTS = frozenset(
 
 
 class ProviderCallDefinition(BaseModel):
-    """Identity includes all fixed fields and declared control variables."""
+    """Identity includes fixed fields, supported kinds, and control variables.
+
+    Score requests require empty ``required_controls``: config assignments
+    must satisfy required controls, while scoring forbids set controls.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     definition_id: StrictStr
     route: ModelRoute
+    supported_kinds: frozenset[ProviderCallKind]
     constraints: ControlConstraints
     prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES
     required_controls: frozenset[RequestControl] = frozenset()
     extension_keys: frozenset[StrictStr] = frozenset()
+
+    @field_serializer("supported_kinds", when_used="json")
+    def _serialize_supported_kinds(
+        self, value: frozenset[ProviderCallKind]
+    ) -> list[Jsonable]:
+        return canonical_sorted_values(kind.value for kind in value)
+
+    @model_validator(mode="after")
+    def _require_supported_kind(self) -> ProviderCallDefinition:
+        if not self.supported_kinds:
+            raise ControlValidationError(
+                failure_record(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code="no_supported_kinds",
+                    message="a definition must support at least one call kind",
+                )
+            )
+        return self
 
     @field_serializer("required_controls", when_used="json")
     def _serialize_required_controls(
@@ -148,6 +172,9 @@ class ProviderCallDefinition(BaseModel):
         return {
             "definition_id": self.definition_id,
             "route": self.route.identity_payload(),
+            "supported_kinds": sorted(
+                kind.value for kind in self.supported_kinds
+            ),
             "prompt_rendering": self.prompt_rendering.value,
             "constraints": self.constraints.identity_payload(),
             "required_controls": sorted(

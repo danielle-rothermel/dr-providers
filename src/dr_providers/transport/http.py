@@ -17,6 +17,7 @@ from dr_wire import (
 )
 
 from dr_providers.core.failures import RecoverabilityClass
+from dr_providers.modeling.controls import ProviderCallKind
 from dr_providers.modeling.route import Protocol
 from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import (
@@ -55,7 +56,10 @@ if TYPE_CHECKING:
     from dr_wire import ParsedRetryAfter
 
     from dr_providers.modeling.call import ProviderCallConfig
-    from dr_providers.modeling.request import ProviderCallRequest
+    from dr_providers.modeling.request import (
+        ProviderCallRequest,
+        ProviderGenerateRequest,
+    )
     from dr_providers.transport.policy import ProviderTransportPolicy
 
 ANTHROPIC_VERSION = "2023-06-01"
@@ -188,6 +192,8 @@ class HttpProvider:
     def invoke(
         self, request: ProviderCallRequest
     ) -> ProviderInvocationEvidence:
+        if request.kind == ProviderCallKind.SCORE:
+            raise ValueError("HTTP provider cannot serve score requests")
         with self._client.admit():
             return self._invoke_admitted(request)
 
@@ -206,7 +212,7 @@ class HttpProvider:
         return self._client.offload(fn)
 
     def _invoke_admitted(
-        self, request: ProviderCallRequest
+        self, request: ProviderGenerateRequest
     ) -> ProviderInvocationEvidence:
         if request.config.route.provider is not self._policy.provider_kind:
             msg = (
@@ -280,7 +286,7 @@ class HttpProvider:
 
     def _wire_call(
         self,
-        request: ProviderCallRequest,
+        request: ProviderGenerateRequest,
         url: str,
         headers: dict[str, str],
         encoded_payload: bytes,
@@ -301,7 +307,7 @@ class HttpProvider:
     def _outcome_from_wire_response(
         self,
         response: WireResponse,
-        request: ProviderCallRequest,
+        request: ProviderGenerateRequest,
         url: str,
     ) -> _WireCallResult:
         return _WireCallResult(
@@ -455,7 +461,7 @@ class HttpProvider:
 
     def _outcome_from_response(
         self,
-        request: ProviderCallRequest,
+        request: ProviderGenerateRequest,
         status_code: int,
         response_bytes: bytes,
         url: str,

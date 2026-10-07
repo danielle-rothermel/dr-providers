@@ -66,7 +66,7 @@ part_of = ["model route"]
 [[terms]]
 name = "provider transcript"
 definition = """
-An ordered sequence of role-and-content messages supplied as provider-call \
+An ordered sequence of role-and-content messages supplied as generation \
 input."""
 exported_symbols = ["Transcript", "PromptMessage", "MessageRole"]
 part_of = ["provider call request"]
@@ -123,10 +123,11 @@ exported_symbols = ["ProviderQuotaIdentity"]
 [[terms]]
 name = "provider call definition"
 definition = """
-A variable-bearing definition declaring a model route, supported and \
-required controls, usable wire mappings for advertised controls, extension \
+A variable-bearing definition declaring a model route, supported call kinds, \
+supported and required controls, usable wire mappings for advertised controls, extension \
 keys, and identity effects. PromptRendering selects role-preserving messages \
-or separator-free flat text sent as one user message."""
+or separator-free flat text sent as one user message. Scoring requires empty \
+required controls; capability declarations do not guarantee executor support."""
 exported_symbols = [
   "ProviderCallDefinition",
   "PromptRendering",
@@ -165,14 +166,10 @@ part_of = ["provider call request"]
 [[terms]]
 name = "provider call request"
 definition = """
-An identity-bearing transport request containing one provider call config \
-and one ordered provider transcript."""
+The discriminated union of provider generate and provider score requests, \
+each carrying a call kind and one provider call config."""
 exported_symbols = [
   "ProviderCallRequest",
-  "PROVIDER_CALL_REQUEST_SCHEMA",
-  "PROVIDER_CALL_REQUEST_SCHEMA_VERSION",
-  "build_payload",
-  "protocol_path",
 ]
 
 [[terms]]
@@ -245,9 +242,9 @@ part_of = ["provider transport failure", "provider failure record"]
 [[terms]]
 name = "provider transport outcome"
 definition = """
-The closed response-or-failure observation retained by one provider \
-invocation, before invocation and call classification."""
-exported_symbols = ["ProviderTransportOutcome", "is_response", "is_failure"]
+The closed generate-response, score-response, or failure observation retained \
+by one provider invocation, before invocation and call classification."""
+exported_symbols = ["ProviderTransportOutcome", "is_response", "is_score_response", "is_failure"]
 
 [[terms]]
 name = "provider failure record"
@@ -294,7 +291,7 @@ name = "provider invocation evidence"
 definition = """
 A versioned serializable record binding request identity, optional transport-\
 policy identity and provider HTTP request evidence, optional byte accounting \
-and normalized rate-limit hint, and exactly one provider transport response or \
+and normalized rate-limit hint, the request kind, and exactly one generate response, score response, or \
 failure. HTTP evidence is bounded by its declared transport policy."""
 exported_symbols = [
   "ProviderInvocationEvidence",
@@ -509,3 +506,61 @@ definition = """
 An awaitable entry point that runs one local provider call driver on an \
 offloading provider's executor and awaits its result."""
 exported_symbols = ["run_local_provider_call_async"]
+
+[[terms]]
+name = "provider call kind"
+definition = """
+The closed generate-or-score classification that a definition declares and a \
+request carries."""
+exported_symbols = ["ProviderCallKind"]
+part_of = ["provider call definition", "provider call request"]
+
+[[terms]]
+name = "provider generate request"
+definition = """
+An identity-bearing generate request containing a config and ordered transcript; \
+its identity covers the generate kind, config hash, and transcript."""
+exported_symbols = [
+  "ProviderGenerateRequest",
+  "PROVIDER_GENERATE_REQUEST_SCHEMA",
+  "PROVIDER_GENERATE_REQUEST_SCHEMA_VERSION",
+  "build_payload",
+  "protocol_path",
+]
+is_a = ["provider call request"]
+
+[[terms]]
+name = "provider score request"
+definition = """
+An identity-bearing score request containing a config, exact context string, \
+nonempty ordered continuation strings, and a flag requiring per-token log \
+probabilities. Empty context and duplicate continuations are allowed; controls \
+and body extensions must be unset. Every input field bears identity."""
+exported_symbols = [
+  "ProviderScoreRequest",
+  "PROVIDER_SCORE_REQUEST_SCHEMA",
+  "PROVIDER_SCORE_REQUEST_SCHEMA_VERSION",
+]
+is_a = ["provider call request"]
+
+[[terms]]
+name = "provider score response"
+definition = """
+An ordered nonempty sequence of continuation scores with optional usage, cost, \
+warnings, and model. It classifies as success without semantic classification. \
+The evidence build path checks score count, character counts, and required \
+per-token detail against the request; restoration is trusted."""
+exported_symbols = ["ProviderScoreResponse"]
+is_a = ["provider transport outcome"]
+part_of = ["provider invocation evidence"]
+
+[[terms]]
+name = "continuation score"
+definition = """
+The finite nonpositive total natural-log likelihood of continuation tokens \
+conditioned on context, their positive token count, the original continuation \
+character count, and optional finite nonpositive per-token log probabilities \
+in token order. Context tokens are excluded; tokenization is backend-owned. \
+Every field bears evidence identity."""
+exported_symbols = ["ContinuationScore"]
+part_of = ["provider score response"]

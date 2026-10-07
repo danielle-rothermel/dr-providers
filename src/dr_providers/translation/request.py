@@ -13,7 +13,7 @@ from dr_providers.modeling.transcript import MessageRole, PromptMessage
 
 if TYPE_CHECKING:
     from dr_providers.modeling.call import ProviderCallConfig
-    from dr_providers.modeling.request import ProviderCallRequest
+    from dr_providers.modeling.request import ProviderGenerateRequest
 
 CHAT_COMPLETIONS_PATH = "/chat/completions"
 RESPONSES_PATH = "/responses"
@@ -30,7 +30,7 @@ def protocol_path(config: ProviderCallConfig) -> str:
     return PROTOCOL_PATHS[config.route.protocol]
 
 
-def build_payload(request: ProviderCallRequest) -> dict[str, Any]:
+def build_payload(request: ProviderGenerateRequest) -> dict[str, Any]:
     """Render the transcript and construct a protocol-specific wire body.
 
     A transcript ending in an assistant message preserves its prefill under

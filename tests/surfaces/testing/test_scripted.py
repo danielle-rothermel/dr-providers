@@ -3,15 +3,22 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
+import pytest
+
 from dr_providers import (
+    ContinuationScore,
     CostInfo,
     GenerationControls,
     MessageRole,
     PromptMessage,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
+    ProviderScoreRequest,
+    ProviderScoreResponse,
     ProviderStopReason,
+    ProviderTransportFailure,
     ProviderTransportResponse,
     ProviderTransportWarning,
+    RecoverabilityClass,
     ScriptedOutcome,
     ScriptedProvider,
     TokenUsage,
@@ -30,8 +37,8 @@ MESSAGES = (
 )
 
 
-def request_for(config, messages=MESSAGES) -> ProviderCallRequest:
-    return ProviderCallRequest(
+def request_for(config, messages=MESSAGES) -> ProviderGenerateRequest:
+    return ProviderGenerateRequest(
         config=config, transcript=Transcript(messages=messages)
     )
 
@@ -230,3 +237,60 @@ class TestScriptedProvider:
         assert len(live_workers) == 1
         provider.close()
         assert provider._executor is None
+
+
+def test_scripted_score_preserves_fields_and_records_only_generate_payloads(
+    score_request: ProviderScoreRequest,
+) -> None:
+    score = ContinuationScore(log_likelihood=-2.0, token_count=1, char_count=6)
+    usage = TokenUsage(prompt_tokens=2, completion_tokens=1, total_tokens=3)
+    cost = CostInfo(total_cost=0.01)
+    warnings = (
+        ProviderTransportWarning(code="test", message="scripted score"),
+    )
+    with ScriptedProvider(
+        [
+            ScriptedOutcome(text="generated"),
+            ScriptedOutcome(
+                scores=(score,), usage=usage, cost=cost, warnings=warnings
+            ),
+        ]
+    ) as provider:
+        generate = request_for(openai_chat_config(model="m"))
+        provider.invoke(generate)
+        evidence = provider.invoke(score_request)
+        assert evidence.outcome == ProviderScoreResponse(
+            scores=(score,),
+            usage=usage,
+            cost=cost,
+            warnings=warnings,
+            model="m",
+        )
+        assert provider.requests == [generate, score_request]
+        assert len(provider.payloads) == 1
+        assert provider.payloads[0]["messages"][0]["role"] == "system"
+        assert provider.invoke(score_request).outcome == evidence.outcome
+
+
+def test_scripted_score_failure(score_request: ProviderScoreRequest) -> None:
+    failure = ProviderTransportFailure(
+        recoverability=RecoverabilityClass.TRANSIENT,
+        code="test",
+        message="retry",
+    )
+    with ScriptedProvider([ScriptedOutcome(failure=failure)]) as provider:
+        evidence = provider.invoke(score_request)
+        assert evidence.failure == failure
+        assert evidence.kind is score_request.kind
+        assert provider.requests == [score_request]
+        assert provider.payloads == []
+
+
+def test_scripted_score_without_scores_or_failure_raises(
+    score_request: ProviderScoreRequest,
+) -> None:
+    with ScriptedProvider() as provider:
+        with pytest.raises(ValueError, match="requires scores or failure"):
+            provider.invoke(score_request)
+        assert provider.requests == [score_request]
+        assert provider.payloads == []

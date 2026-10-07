@@ -21,7 +21,7 @@ from dr_providers.modeling.controls import (
     Verbosity,
 )
 from dr_providers.modeling.presets import FACTORY_BY_KIND, ProviderFactoryKind
-from dr_providers.modeling.request import ProviderCallRequest
+from dr_providers.modeling.request import ProviderGenerateRequest
 from dr_providers.modeling.transcript import (
     MessageRole,
     PromptMessage,
@@ -118,7 +118,7 @@ def query(  # noqa: PLR0913
     if system is not None:
         messages.append(PromptMessage(role=MessageRole.SYSTEM, content=system))
     messages.append(PromptMessage(role=MessageRole.USER, content=message))
-    request = ProviderCallRequest(
+    request = ProviderGenerateRequest(
         config=config,
         transcript=Transcript(messages=tuple(messages)),
     )

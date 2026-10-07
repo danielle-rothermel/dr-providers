@@ -69,7 +69,7 @@ from dr_providers import (
     MessageRole,
     PromptMessage,
     ProviderCallOutcomeKind,
-    ProviderCallRequest,
+    ProviderGenerateRequest,
     ProviderCallState,
     ProviderKind,
     StandardProviderCallRetryPolicy,
@@ -83,7 +83,7 @@ config = openai_responses_config(
     model="gpt-5-mini",
     controls=GenerationControls(token_limit=256),
 )
-request = ProviderCallRequest(
+request = ProviderGenerateRequest(
     config=config,
     transcript=Transcript(
         messages=(
@@ -151,6 +151,110 @@ config = openai_responses_config(
 )
 ```
 
+## Score continuations
+
+`ProviderScoreRequest` carries one exact context string and a nonempty ordered
+sequence of nonempty continuations. Empty context and duplicate continuations
+are allowed. Definitions declare `supported_kinds`; all five HTTP presets
+support only `ProviderCallKind.GENERATE`. Definitions used for scoring must
+have empty `required_controls`: configurations enforce required controls, and
+score requests reject assigned controls and nonempty body extensions.
+Definition construction allows SCORE declarations with required controls, but
+those definitions cannot produce a valid score request.
+
+`ContinuationScore` reports total natural-log likelihood and token count for
+the continuation tokens, excluding context tokens, plus `char_count` equal to
+Python's `len()` of the original continuation string. Total and per-token log
+probabilities must be finite and at most zero. Tokenization belongs to the
+backend. `token_logprobs=True` requires per-token values for every score.
+The evidence `build()` path checks score count, character counts, and required
+per-token detail; direct evidence construction and deserialization are trusted
+paths without request-dependent checks.
+
+`ScriptedProvider` supports scores for offline testing. No shipped production
+provider serves scores; `HttpProvider.invoke()` raises `ValueError` for them
+before admission or payload construction. Score responses classify as success
+without invoking the semantic classifier. The shared lifecycle still requires
+a classifier identifier and matching classifier object, although scoring does
+not call its `classify()` method.
+
+The request and response envelopes are intended to support a future local
+backend; backend fit will be validated when that backend is implemented.
+
+```python
+from threading import Event
+
+from dr_providers import (
+    AcceptAllSemanticResponseClassifier,
+    ContinuationScore,
+    ControlConstraints,
+    ModelRoute,
+    Protocol,
+    ProviderCallDefinition,
+    ProviderCallKind,
+    ProviderCallState,
+    ProviderKind,
+    ProviderScoreRequest,
+    ScriptedOutcome,
+    ScriptedProvider,
+    StandardProviderCallRetryPolicy,
+    TokenLimitParameter,
+    run_local_provider_call,
+)
+
+definition = ProviderCallDefinition(
+    definition_id="example.score",
+    route=ModelRoute(
+        provider=ProviderKind.OPENAI,
+        protocol=Protocol.CHAT_COMPLETIONS,
+        model="scripted-model",
+    ),
+    supported_kinds=frozenset({ProviderCallKind.SCORE}),
+    constraints=ControlConstraints(
+        supported_controls=frozenset(),
+        token_limit_parameter=TokenLimitParameter.MAX_COMPLETION_TOKENS,
+    ),
+)
+request = ProviderScoreRequest(
+    config=definition.materialize(),
+    context="The capital of France is",
+    continuations=(" Paris", " Lyon"),
+    token_logprobs=True,
+)
+classifier = AcceptAllSemanticResponseClassifier()
+state = ProviderCallState.initial(
+    request=request,
+    retry_policy=StandardProviderCallRetryPolicy(),
+    classifier_identifier=classifier.identifier,
+)
+with ScriptedProvider([
+    ScriptedOutcome(scores=(
+        ContinuationScore(
+            log_likelihood=-0.1, token_count=1, char_count=6,
+            token_logprobs=(-0.1,),
+        ),
+        ContinuationScore(
+            log_likelihood=-3.0, token_count=1, char_count=5,
+            token_logprobs=(-3.0,),
+        ),
+    )),
+]) as provider:
+    result = run_local_provider_call(
+        provider=provider, state=state, classifier=classifier,
+        cancellation=Event(),
+    )
+
+response = result.completed_invocations[-1].observation.evidence.score_response
+assert response is not None
+print([score.log_likelihood for score in response.scores])  # [-0.1, -3.0]
+```
+
+The example uses an HTTP-shaped route as declaration data for the scripted
+provider. That declaration does not make `HttpProvider` able to execute it.
+`ProviderCallRequest` is a type alias; parse standalone serialized requests
+with `TypeAdapter(ProviderCallRequest)` from Pydantic. Lifecycle models parse
+the discriminated request automatically when restoring state or results.
+
 ## CLI
 
 Install and run the one-shot CLI:
@@ -185,7 +289,8 @@ identity; models expose their own identity through `identity_hash`.
 `HttpProvider.invoke()` makes at most one provider wire request and returns
 versioned serializable `ProviderInvocationEvidence`. The evidence binds the
 request identity hash and transport-policy identity to structured HTTP request
-metadata and exactly one response or expected failure. The HTTP request
+metadata, the request kind, and exactly one generate response, score response,
+or expected failure. The HTTP request
 evidence is the sole owner of the constructed request-body mapping.
 
 `run_local_provider_call()` classifies each invocation, applies the selected

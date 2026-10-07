@@ -21,8 +21,11 @@ from pydantic import (
 )
 
 from dr_providers.core.frozen import _deep_freeze, _thaw
+from dr_providers.modeling.controls import ProviderCallKind
+from dr_providers.modeling.request import ProviderScoreRequest
 from dr_providers.modeling.route import ProviderKind
 from dr_providers.outcomes.models import (
+    ProviderScoreResponse,
     ProviderTransportFailure,
     ProviderTransportOutcome,
     ProviderTransportResponse,
@@ -90,7 +93,7 @@ def scrub_traceback(traceback: str | None) -> str | None:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 9
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 10
 ContentIdentityHash = Annotated[
     StrictStr,
     Field(pattern=r"^[0-9a-f]{64}$"),
@@ -186,12 +189,16 @@ class ProviderRetryAfterHint(BaseModel):
 class ProviderInvocationEvidence(BaseModel):
     """Freeze nested identity-bearing JSON and identity components.
 
-    Schema metadata belongs to ``identity_document()``.
+    Schema metadata belongs to ``identity_document()``. All persisted fields
+    bear identity except failure message and traceback. ``build()`` checks
+    score correspondence to the request; direct construction and restoration
+    are trusted paths and do not repeat those request-dependent checks.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     request_hash: ContentIdentityHash
+    kind: ProviderCallKind
     policy_identity: Mapping[str, Any] | None = None
     max_request_bytes: StrictInt | None = Field(default=None, gt=0)
     max_response_bytes: StrictInt | None = Field(default=None, gt=0)
@@ -199,16 +206,30 @@ class ProviderInvocationEvidence(BaseModel):
     response_bytes: StrictInt | None = Field(default=None, ge=0)
     retry_after: ProviderRetryAfterHint | None = None
     response: ProviderTransportResponse | None = None
+    score_response: ProviderScoreResponse | None = None
     failure: ProviderTransportFailure | None = None
 
     @model_validator(mode="after")
     def _exactly_one_outcome(self) -> ProviderInvocationEvidence:
-        if (self.response is None) == (self.failure is None):
+        if (
+            sum(
+                value is not None
+                for value in (self.response, self.score_response, self.failure)
+            )
+            != 1
+        ):
             msg = (
                 "ProviderInvocationEvidence requires exactly one of "
-                "response/failure to be set"
+                "response/score_response/failure to be set"
             )
             raise ValueError(msg)
+        if (
+            self.kind is ProviderCallKind.GENERATE
+            and self.score_response is not None
+        ) or (
+            self.kind is ProviderCallKind.SCORE and self.response is not None
+        ):
+            raise ValueError("response slot must match invocation kind")
         if self.policy_identity is not None:
             object.__setattr__(
                 self,
@@ -234,6 +255,14 @@ class ProviderInvocationEvidence(BaseModel):
                     self.response.model_dump(mode="python")
                 ),
             )
+        if self.score_response is not None:
+            object.__setattr__(
+                self,
+                "score_response",
+                ProviderScoreResponse.model_validate(
+                    self.score_response.model_dump(mode="python")
+                ),
+            )
         if self.failure is not None:
             object.__setattr__(
                 self,
@@ -254,6 +283,8 @@ class ProviderInvocationEvidence(BaseModel):
     def outcome(self) -> ProviderTransportOutcome:
         if self.response is not None:
             return self.response
+        if self.score_response is not None:
+            return self.score_response
         assert self.failure is not None
         return self.failure
 
@@ -271,6 +302,25 @@ class ProviderInvocationEvidence(BaseModel):
         response = (
             outcome if isinstance(outcome, ProviderTransportResponse) else None
         )
+        score_response = (
+            outcome if isinstance(outcome, ProviderScoreResponse) else None
+        )
+        if score_response is not None:
+            if not isinstance(request, ProviderScoreRequest):
+                raise ValueError("score response requires a score request")
+            if len(score_response.scores) != len(request.continuations):
+                raise ValueError("score count must equal continuation count")
+            for score, continuation in zip(
+                score_response.scores, request.continuations, strict=True
+            ):
+                if score.char_count != len(continuation):
+                    raise ValueError(
+                        "score char_count must equal continuation length"
+                    )
+                if request.token_logprobs and score.token_logprobs is None:
+                    raise ValueError(
+                        "requested token_logprobs missing from a score"
+                    )
         failure = (
             outcome if isinstance(outcome, ProviderTransportFailure) else None
         )
@@ -280,6 +330,7 @@ class ProviderInvocationEvidence(BaseModel):
             )
         return cls(
             request_hash=request.identity_hash,
+            kind=request.kind,
             policy_identity=(
                 None if policy is None else policy.identity_payload()
             ),
@@ -293,6 +344,7 @@ class ProviderInvocationEvidence(BaseModel):
             response_bytes=response_bytes,
             retry_after=retry_after,
             response=response,
+            score_response=score_response,
             failure=failure,
         )
 
