@@ -143,17 +143,21 @@ class ProviderTransportResponse(BaseModel):
 class ContinuationScore(BaseModel):
     """Natural-log likelihood of continuation tokens, excluding context tokens.
 
+    Total and per-token log probabilities are finite and nonpositive.
     Tokenization is backend-owned. All fields participate in evidence identity;
     per-token values need not sum exactly to the total in floating point.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    log_likelihood: float = Field(strict=True, allow_inf_nan=False)
+    log_likelihood: float = Field(strict=True, allow_inf_nan=False, le=0)
     token_count: StrictInt = Field(ge=1)
     char_count: StrictInt = Field(ge=1)
     token_logprobs: (
-        tuple[Annotated[float, Field(strict=True, allow_inf_nan=False)], ...]
+        tuple[
+            Annotated[float, Field(strict=True, allow_inf_nan=False, le=0)],
+            ...,
+        ]
         | None
     ) = None
 

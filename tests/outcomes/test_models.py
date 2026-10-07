@@ -20,6 +20,8 @@ from dr_providers import (
 @pytest.mark.parametrize(
     "override",
     [
+        {"log_likelihood": 1.0},
+        {"log_likelihood": 5e-324},
         {"log_likelihood": float("nan")},
         {"log_likelihood": float("inf")},
         {"log_likelihood": float("-inf")},
@@ -29,6 +31,8 @@ from dr_providers import (
         {"token_count": True},
         {"char_count": 0},
         {"char_count": "1"},
+        {"token_logprobs": (1.0,)},
+        {"token_logprobs": (5e-324,)},
         {"token_logprobs": (float("nan"),)},
         {"token_logprobs": (float("inf"),)},
         {"token_logprobs": (float("-inf"),)},
@@ -50,6 +54,20 @@ def test_continuation_score_rejects_invalid_values(
                 **override,
             }
         )
+
+
+def test_score_accepts_zero_log_probabilities() -> None:
+    score = ContinuationScore(
+        log_likelihood=0.0,
+        token_count=1,
+        char_count=1,
+        token_logprobs=(0.0,),
+    )
+    assert score.log_likelihood == 0.0
+    assert score.token_logprobs == (0.0,)
+    assert (
+        ContinuationScore.model_validate_json(score.model_dump_json()) == score
+    )
 
 
 def test_score_does_not_require_exact_floating_point_sum() -> None:

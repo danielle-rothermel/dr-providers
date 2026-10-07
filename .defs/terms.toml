@@ -557,9 +557,10 @@ part_of = ["provider invocation evidence"]
 [[terms]]
 name = "continuation score"
 definition = """
-The finite total natural-log likelihood of continuation tokens conditioned on \
-context, their positive token count, the original continuation character count, \
-and optional finite per-token log probabilities in token order. Context tokens \
-are excluded; tokenization is backend-owned. Every field bears evidence identity."""
+The finite nonpositive total natural-log likelihood of continuation tokens \
+conditioned on context, their positive token count, the original continuation \
+character count, and optional finite nonpositive per-token log probabilities \
+in token order. Context tokens are excluded; tokenization is backend-owned. \
+Every field bears evidence identity."""
 exported_symbols = ["ContinuationScore"]
 part_of = ["provider score response"]

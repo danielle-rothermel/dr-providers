@@ -12,7 +12,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `ProviderScoreRequest`. Score requests carry exact context, ordered
   continuations, and an identity-bearing flag requiring per-token values.
 - Add `ContinuationScore`, `ProviderScoreResponse`, `is_score_response`, and
-  the kind-specific request schema names and version constants.
+  the kind-specific request schema names and version constants. Total and
+  per-token log probabilities must be finite and at most zero.
 - Invocation evidence carries required `kind` and optional `score_response`;
   exactly one generate response, score response, or failure is retained.
   Score responses classify as success without semantic classification.
@@ -23,7 +24,6 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add permanent validation failure codes `no_supported_kinds`,
   `unsupported_call_kind`, `score_request_rejects_controls`, and
   `score_request_rejects_extensions`.
-
 - Add identity-bearing `ProviderCallDefinition.prompt_rendering` and the
   exported `PromptRendering` enum: `role_messages` (the default) preserves
   existing protocol bodies; `flat_text` concatenates every transcript
@@ -52,7 +52,6 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Definition, config, request, call, evidence, observation, record, and result
   hashes change. Config schema stays at 2, provider call at 2, and retry policy
   at 1 because those identity payload shapes are unchanged.
-
 - Rename identity-hash reference fields and payload keys as a persisted-format
   hard cutover, including corresponding keyword parameters and exports:
 

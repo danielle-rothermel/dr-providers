@@ -9,12 +9,14 @@ from _retry_fixtures import two_invocation_transient_retry_policy
 from pydantic import ValidationError
 
 from dr_providers import (
+    ContinuationScore,
     MessageRole,
     PromptMessage,
     ProviderCallKind,
     ProviderGenerateRequest,
     ProviderHttpRequestEvidence,
     ProviderInvocationEvidence,
+    ProviderScoreRequest,
     ProviderTransportFailure,
     ProviderTransportResponse,
     RecoverabilityClass,
@@ -491,3 +493,258 @@ def test_two_invocation_result_does_not_amplify_large_evidence() -> None:
     ]
     assert "http_request" not in first_evidence["failure"]
     assert "request_body" not in first_evidence["failure"]
+
+
+class _NoScoreSemanticClassification(AcceptAllSemanticResponseClassifier):
+    def classify(
+        self, response: ProviderTransportResponse
+    ) -> ProviderInvocationOutcome:
+        del response
+        raise AssertionError(
+            "score handoff must not invoke semantic classification"
+        )
+
+
+def test_score_handoff_wire_dictionaries_match_local_driver(
+    score_request: ProviderScoreRequest,
+) -> None:
+    request = ProviderScoreRequest(
+        config=score_request.config,
+        context="context",
+        continuations=("answer",),
+        token_logprobs=True,
+    )
+    classifier = _NoScoreSemanticClassification()
+    state = ProviderCallState.initial(
+        request=request,
+        retry_policy=two_invocation_transient_retry_policy(),
+        classifier_identifier=classifier.identifier,
+    )
+    scripted = [
+        ScriptedOutcome(
+            failure=ProviderTransportFailure(
+                recoverability=RecoverabilityClass.TRANSIENT,
+                code="connection_reset",
+                message="retryable failure",
+            )
+        ),
+        ScriptedOutcome(
+            scores=(
+                ContinuationScore(
+                    log_likelihood=-2.0,
+                    token_count=1,
+                    char_count=6,
+                    token_logprobs=(-2.0,),
+                ),
+            )
+        ),
+    ]
+    with ScriptedProvider(scripted) as durable_provider:
+        first = durable_provider.invoke(state.request)
+        instruction = transition_provider_call(
+            state, _observation(state, first)
+        )
+        assert isinstance(instruction, ProviderRetryInstruction)
+        restored = ProviderRetryInstruction.model_validate_json(
+            instruction.model_dump_json()
+        )
+        second = durable_provider.invoke(restored.next_state.request)
+        result = transition_provider_call(
+            restored.next_state,
+            _observation(restored.next_state, second),
+        )
+        assert isinstance(result, ProviderCallResult)
+        restored_result = ProviderCallResult.model_validate_json(
+            result.model_dump_json()
+        )
+        assert durable_provider.requests == [request, request]
+        assert durable_provider.payloads == []
+    wait = _NoWait()
+    with ScriptedProvider(scripted) as local_provider:
+        local_result = run_local_provider_call(
+            provider=local_provider,
+            state=state,
+            classifier=classifier,
+            cancellation=Event(),
+            retry_wait=wait,
+        )
+    assert restored_result == local_result
+    assert wait.delays == [1.0]
+
+    # Handwritten payloads and independent hashes pin the wire shape.
+    request_hash = (
+        "46743d9ac2bea3785b92ffbeb2620f5e55922327542d76a182a70753bc36d357"
+    )
+    call_hash = (
+        "a555a467408526fc5da4c7e6cbcece59c24cb93165a5f164a8672d02e1c145c0"
+    )
+    first_evidence_hash = (
+        "251a5507f356612eaf2ae5e1f157005fb06a47db18938e3d762a2d291876ab95"
+    )
+    first_record_hash = (
+        "79714d10281d7a649dc609f260c506fa75416f12343b113dcad2707b5a7912b7"
+    )
+    second_evidence_hash = (
+        "d9b0d2756ac80f435cc7615e116e2b508cec582fd39e196e0a4a47a29da0ee99"
+    )
+    second_record_hash = (
+        "6bd80104a65e1a30330155527a73f8009757f381d858f7d5576f4661feee118e"
+    )
+    request_payload = {
+        "kind": "score",
+        "config": {
+            "definition": {
+                "definition_id": "test.score",
+                "route": {
+                    "provider": "openai",
+                    "protocol": "chat_completions",
+                    "model": "m",
+                },
+                "supported_kinds": ["score"],
+                "constraints": {
+                    "supported_controls": [
+                        "temperature",
+                        "token_limit",
+                        "top_p",
+                    ],
+                    "token_limit_parameter": "max_completion_tokens",
+                    "reasoning_shape": "none",
+                },
+                "prompt_rendering": "role_messages",
+                "required_controls": [],
+                "extension_keys": [],
+            },
+            "controls": {
+                "temperature": None,
+                "top_p": None,
+                "token_limit": None,
+                "reasoning": None,
+                "seed": None,
+                "verbosity": None,
+            },
+            "extensions": {"extra_body": {}},
+        },
+        "context": "context",
+        "continuations": ["answer"],
+        "token_logprobs": True,
+    }
+    retry_payload = {
+        "policy_type": "custom",
+        "maximum_invocations": 2,
+        "eligible_outcomes": [
+            "contained_transport_timeout",
+            "transient_provider_or_network_failure",
+        ],
+        "declared_delays_seconds": [1.0],
+    }
+    initial_payload = {
+        "schema_version": 3,
+        "request": request_payload,
+        "request_hash": request_hash,
+        "retry_policy": retry_payload,
+        "retry_policy_hash": RETRY_POLICY_HASH,
+        "classifier_identifier": (
+            "dr_providers.accept_all_semantic_response.v1"
+        ),
+        "call_hash": call_hash,
+        "completed_invocations": [],
+        "completed_invocation_record_hashes": [],
+        "next_invocation_ordinal": 1,
+    }
+    first_evidence_payload = {
+        "request_hash": request_hash,
+        "kind": "score",
+        "policy_identity": None,
+        "max_request_bytes": None,
+        "max_response_bytes": None,
+        "http_request": None,
+        "response_bytes": None,
+        "retry_after": None,
+        "response": None,
+        "score_response": None,
+        "failure": {
+            "recoverability": "transient",
+            "code": "connection_reset",
+            "message": "retryable failure",
+            "traceback": None,
+            "response_body": None,
+            "status_code": None,
+            "containment": None,
+            "metadata": {},
+        },
+    }
+    first_record_payload = {
+        "schema_version": 3,
+        "observation": {
+            "schema_version": 3,
+            "invocation_ordinal": 1,
+            "request_hash": request_hash,
+            "evidence": first_evidence_payload,
+            "evidence_hash": first_evidence_hash,
+            "outcome": "transient_provider_or_network_failure",
+        },
+        "retry_decision": {
+            "source": "provider_call_retry_policy",
+            "delay_seconds": 1.0,
+        },
+    }
+    second_evidence_payload = {
+        **first_evidence_payload,
+        "failure": None,
+        "score_response": {
+            "scores": [
+                {
+                    "log_likelihood": -2.0,
+                    "token_count": 1,
+                    "char_count": 6,
+                    "token_logprobs": [-2.0],
+                }
+            ],
+            "usage": None,
+            "cost": None,
+            "warnings": [],
+            "model": "m",
+        },
+    }
+    second_record_payload = {
+        "schema_version": 3,
+        "observation": {
+            "schema_version": 3,
+            "invocation_ordinal": 2,
+            "request_hash": request_hash,
+            "evidence": second_evidence_payload,
+            "evidence_hash": second_evidence_hash,
+            "outcome": "success",
+        },
+        "retry_decision": None,
+    }
+    assert state.model_dump(mode="json") == initial_payload
+    assert instruction.model_dump(mode="json") == {
+        "schema_version": 3,
+        "source": "provider_call_retry_policy",
+        "delay_seconds": 1.0,
+        "next_invocation_ordinal": 2,
+        "next_state": {
+            **initial_payload,
+            "completed_invocations": [first_record_payload],
+            "completed_invocation_record_hashes": [first_record_hash],
+            "next_invocation_ordinal": 2,
+        },
+    }
+    result_payload = {
+        key: value
+        for key, value in initial_payload.items()
+        if key != "next_invocation_ordinal"
+    }
+    assert restored_result.model_dump(mode="json") == {
+        **result_payload,
+        "completed_invocations": [first_record_payload, second_record_payload],
+        "completed_invocation_record_hashes": [
+            first_record_hash,
+            second_record_hash,
+        ],
+        "outcome": {"kind": "accepted", "invocation_outcome": "success"},
+    }
+    assert restored_result.identity_hash == (
+        "2f3925c90969fcbbcd4e5f71768ad49d7d4124404b1d7bfaecd6de7d9abe207b"
+    )

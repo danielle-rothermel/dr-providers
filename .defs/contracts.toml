@@ -457,6 +457,7 @@ title = "Score responses classify as success without the semantic classifier"
 statement = """
 A score response classifies as SUCCESS without invoking the semantic response \
 classifier; completed score-response observations require SUCCESS exactly. \
+Total and per-token log probabilities must be finite and nonpositive. \
 The evidence build path requires one score per continuation, matching character \
 counts, and per-token log probabilities for every score when requested. Direct \
 construction and deserialization are trusted and do not re-check against a request."""
@@ -465,4 +466,4 @@ Scores have no generated text to accept semantically. Structural backend defects
 raise at validation or evidence construction; expected failures retain the shared \
 failure classification and retry lifecycle."""
 date = "2026-10-06"
-check = "uv run pytest -q tests/lifecycle/test_classification.py"
+check = "uv run pytest -q tests/outcomes/test_models.py tests/lifecycle/test_classification.py"
