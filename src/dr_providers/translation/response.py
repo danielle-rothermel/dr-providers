@@ -25,4 +25,6 @@ def parse_response(
         return parse_anthropic_messages_body(body, config=config)
     if protocol is Protocol.RESPONSES:
         return parse_responses_body(body, config=config)
+    if protocol is Protocol.TRANSFORMERS:
+        raise ValueError("protocol has no HTTP wire response")
     assert_never(protocol)

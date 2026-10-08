@@ -12,7 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from dr_providers.core.failures import (  # noqa: TC001 -- pydantic field
+from dr_providers.core.failures import (
     RecoverabilityClass,
 )
 from dr_providers.core.frozen import _freeze_json
@@ -21,6 +21,18 @@ INVALID_JSON_CODE = "invalid_response_json"
 TIMEOUT_CODE = "timeout"
 STALLED_RESPONSE_CODE = "stalled_response"
 POOL_TIMEOUT_CODE = "pool_timeout"
+
+LOCAL_OUT_OF_MEMORY_CODE = "local_out_of_memory"
+LOCAL_DEVICE_UNAVAILABLE_CODE = "local_device_unavailable"
+LOCAL_MODEL_NOT_FOUND_CODE = "local_model_not_found"
+LOCAL_SEQUENCE_TOO_LONG_CODE = "local_sequence_too_long"
+
+LOCAL_FAILURE_RECOVERABILITY: dict[str, RecoverabilityClass] = {
+    LOCAL_OUT_OF_MEMORY_CODE: RecoverabilityClass.RESOURCE_EXHAUSTION,
+    LOCAL_DEVICE_UNAVAILABLE_CODE: RecoverabilityClass.PERMANENT,
+    LOCAL_MODEL_NOT_FOUND_CODE: RecoverabilityClass.PERMANENT,
+    LOCAL_SEQUENCE_TOO_LONG_CODE: RecoverabilityClass.PERMANENT,
+}
 
 TIMEOUT_CODES = frozenset(
     {TIMEOUT_CODE, STALLED_RESPONSE_CODE, POOL_TIMEOUT_CODE}
@@ -209,6 +221,20 @@ class ProviderTransportFailure(BaseModel):
     status_code: StrictInt | None = None
     containment: TransportTimeoutContainment | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_local_recoverability(self) -> ProviderTransportFailure:
+        expected = (
+            LOCAL_FAILURE_RECOVERABILITY.get(self.code)
+            if self.code is not None
+            else None
+        )
+        if expected is not None and self.recoverability is not expected:
+            raise ValueError(
+                f"local failure code {self.code!r} requires "
+                f"{expected.value!r} recoverability"
+            )
+        return self
 
     @model_validator(mode="after")
     def _validate_timeout_containment(self) -> ProviderTransportFailure:

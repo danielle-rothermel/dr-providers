@@ -12,7 +12,9 @@ from dr_providers import (
     PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION,
     ApiKeyEnv,
     ContinuationScore,
+    CostInfo,
     GenerationControls,
+    LocalExecutionEvidence,
     MessageRole,
     PromptMessage,
     ProviderBaseUrl,
@@ -130,7 +132,7 @@ def expected_document(
 ) -> dict[str, Any]:
     return {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 10,
+        "schema_version": 11,
         "payload": {
             "request_hash": "1" * 64,
             "kind": "generate",
@@ -149,6 +151,7 @@ def expected_document(
             },
             "response_bytes": None,
             "retry_after": None,
+            "local_execution": None,
             "response": response,
             "score_response": None,
             "failure": failure,
@@ -210,7 +213,7 @@ class TestInvocationEvidence:
         )
         evidence = provider.invoke(openai_request())
 
-        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 10
+        assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 11
         assert "schema_version" not in ProviderInvocationEvidence.model_fields
         properties = ProviderInvocationEvidence.model_json_schema()[
             "properties"
@@ -711,7 +714,7 @@ def test_score_evidence_document_is_pinned() -> None:
     )
     expected = {
         "schema": "dr_providers.provider_invocation_evidence",
-        "schema_version": 10,
+        "schema_version": 11,
         "payload": {
             "request_hash": "1" * 64,
             "kind": "score",
@@ -721,6 +724,7 @@ def test_score_evidence_document_is_pinned() -> None:
             "http_request": None,
             "response_bytes": None,
             "retry_after": None,
+            "local_execution": None,
             "response": None,
             "failure": None,
             "score_response": {
@@ -771,3 +775,213 @@ def test_score_char_count_uses_original_unicode_string_length(
         ).score_response
         == outcome
     )
+
+
+def test_local_execution_round_trip_and_identity_document(
+    local_execution: LocalExecutionEvidence,
+) -> None:
+    evidence = ProviderInvocationEvidence(
+        request_hash="1" * 64,
+        kind=ProviderCallKind.GENERATE,
+        local_execution=local_execution,
+        wall_time_seconds=1.25,
+        response=ProviderTransportResponse(
+            text="answer", cost=CostInfo(total_cost=0.0)
+        ),
+    )
+    assert (
+        ProviderInvocationEvidence.model_validate_json(
+            evidence.model_dump_json()
+        )
+        == evidence
+    )
+    assert evidence.identity_document().to_json_dict() == {
+        "schema": "dr_providers.provider_invocation_evidence",
+        "schema_version": 11,
+        "payload": {
+            "request_hash": "1" * 64,
+            "kind": "generate",
+            "policy_identity": None,
+            "max_request_bytes": None,
+            "max_response_bytes": None,
+            "http_request": None,
+            "response_bytes": None,
+            "retry_after": None,
+            "local_execution": {
+                "device": "cuda",
+                "device_name": "NVIDIA A100",
+                "dtype": "float32",
+                "float32_matmul_precision": "highest",
+                "quantization": "none",
+                "revision_commit": "0123456789abcdef0123456789abcdef01234567",
+                "torch_version": "2.8.0",
+                "transformers_version": "4.55.0",
+                "chat_template_applied": False,
+                "add_bos_token": True,
+            },
+            "response": {
+                "text": "answer",
+                "response_body": {},
+                "usage": None,
+                "cost": {"total_cost": 0.0, "currency": "USD"},
+                "warnings": [],
+                "stop_reason": None,
+                "response_id": None,
+                "model": None,
+                "system_fingerprint": None,
+                "diagnostics": None,
+            },
+            "score_response": None,
+            "failure": None,
+        },
+    }
+
+
+@pytest.mark.parametrize("http_field", ["policy_identity", "http_request"])
+def test_local_and_http_execution_records_are_mutually_exclusive(
+    local_execution: LocalExecutionEvidence, http_field: str
+) -> None:
+    data: dict[str, Any] = {
+        "request_hash": "1" * 64,
+        "kind": "generate",
+        "local_execution": local_execution,
+        "response": ProviderTransportResponse(text="answer"),
+    }
+    data[http_field] = (
+        {"provider_kind": "openai"}
+        if http_field == "policy_identity"
+        else ProviderHttpRequestEvidence(
+            url="https://example.com", body_bytes=2
+        )
+    )
+    with pytest.raises(
+        ValueError, match="evidence carries at most one execution record kind"
+    ):
+        ProviderInvocationEvidence.model_validate(data)
+
+
+def test_policy_evidence_refuses_local_provider_kind() -> None:
+    with pytest.raises(ValueError, match="supported HTTP provider_kind"):
+        ProviderInvocationEvidence(
+            request_hash="1" * 64,
+            kind=ProviderCallKind.GENERATE,
+            policy_identity={"provider_kind": "huggingface"},
+            response=ProviderTransportResponse(text="answer"),
+        )
+
+
+@pytest.mark.parametrize("wall_time", [None, 0.0, 1.5, 30.0])
+def test_wall_time_is_persisted_but_never_identity(
+    local_config: ProviderCallConfig,
+    local_execution: LocalExecutionEvidence,
+    wall_time: float | None,
+) -> None:
+    request = ProviderGenerateRequest(
+        config=local_config, transcript=Transcript(messages=())
+    )
+    evidence = ProviderInvocationEvidence.build(
+        request=request,
+        policy=None,
+        http_request=None,
+        outcome=ProviderTransportResponse(text="answer"),
+        local_execution=local_execution,
+        wall_time_seconds=wall_time,
+    )
+    restored = ProviderInvocationEvidence.model_validate_json(
+        evidence.model_dump_json()
+    )
+    assert restored.wall_time_seconds == wall_time
+    assert evidence.model_dump(mode="json")["wall_time_seconds"] == wall_time
+    assert "wall_time_seconds" not in evidence.identity_payload()
+    document_payload = evidence.identity_document().to_json_dict()["payload"]
+    assert isinstance(document_payload, dict)
+    assert "wall_time_seconds" not in document_payload
+    variant = ProviderInvocationEvidence.model_validate(
+        {**evidence.model_dump(mode="python"), "wall_time_seconds": 99.0}
+    )
+    assert (
+        variant.identity_hash
+        == evidence.identity_hash
+        == restored.identity_hash
+    )
+
+
+@pytest.mark.parametrize(
+    "value", [-1.0, float("inf"), float("-inf"), float("nan"), "1.0", True]
+)
+def test_wall_time_is_strict_finite_and_nonnegative(value: Any) -> None:
+    with pytest.raises(ValidationError):
+        ProviderInvocationEvidence(
+            request_hash="1" * 64,
+            kind=ProviderCallKind.GENERATE,
+            response=ProviderTransportResponse(text="answer"),
+            wall_time_seconds=value,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("device", "cpu"),
+        ("device_name", "NVIDIA H100"),
+        ("device_name", None),
+        ("dtype", "bfloat16"),
+        ("float32_matmul_precision", "high"),
+        ("quantization", "bitsandbytes_nf4"),
+        ("revision_commit", "other"),
+        ("revision_commit", None),
+        ("torch_version", "2.9.0"),
+        ("transformers_version", "4.56.0"),
+        ("chat_template_applied", True),
+        ("chat_template_applied", None),
+        ("add_bos_token", False),
+        ("add_bos_token", None),
+    ],
+)
+def test_each_local_execution_field_bears_identity(
+    local_execution: LocalExecutionEvidence, field: str, value: Any
+) -> None:
+    base = ProviderInvocationEvidence(
+        request_hash="1" * 64,
+        kind=ProviderCallKind.GENERATE,
+        local_execution=local_execution,
+        response=ProviderTransportResponse(text="answer"),
+    )
+    data = base.model_dump(mode="python")
+    data["local_execution"][field] = value
+    variant = ProviderInvocationEvidence.model_validate(data)
+    assert base.identity_hash != variant.identity_hash
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("device_name", 3),
+        ("torch_version", 2.8),
+        ("transformers_version", 4),
+        ("revision_commit", 123),
+        ("chat_template_applied", 1),
+        ("add_bos_token", "true"),
+        ("unexpected", True),
+    ],
+)
+def test_local_execution_strictness(
+    local_execution: LocalExecutionEvidence, field: str, value: Any
+) -> None:
+    with pytest.raises(ValidationError):
+        LocalExecutionEvidence.model_validate(
+            {**local_execution.model_dump(), field: value}
+        )
+
+
+def test_local_execution_fields_are_required_and_frozen(
+    local_execution: LocalExecutionEvidence,
+) -> None:
+    data = local_execution.model_dump()
+    for field in data:
+        with pytest.raises(ValidationError):
+            LocalExecutionEvidence.model_validate(
+                {key: value for key, value in data.items() if key != field}
+            )
+    with pytest.raises(ValidationError):
+        local_execution.torch_version = "other"

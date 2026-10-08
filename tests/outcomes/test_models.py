@@ -113,3 +113,39 @@ def test_transport_outcome_guards_distinguish_all_three_variants() -> None:
         is_score_response(failure),
         is_failure(failure),
     ) == (False, False, True)
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [
+        ("local_out_of_memory", RecoverabilityClass.RESOURCE_EXHAUSTION),
+        ("local_device_unavailable", RecoverabilityClass.PERMANENT),
+        ("local_model_not_found", RecoverabilityClass.PERMANENT),
+        ("local_sequence_too_long", RecoverabilityClass.PERMANENT),
+    ],
+)
+def test_local_failure_codes_require_fixed_recoverability(
+    code: str, expected: RecoverabilityClass
+) -> None:
+    for recoverability in RecoverabilityClass:
+        if recoverability is expected:
+            failure = ProviderTransportFailure(
+                code=code,
+                recoverability=recoverability,
+                message="local failure",
+            )
+            assert (
+                ProviderTransportFailure.model_validate_json(
+                    failure.model_dump_json()
+                )
+                == failure
+            )
+        else:
+            with pytest.raises(
+                ValueError, match=r"requires .* recoverability"
+            ):
+                ProviderTransportFailure(
+                    code=code,
+                    recoverability=recoverability,
+                    message="local failure",
+                )

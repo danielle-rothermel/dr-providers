@@ -16,6 +16,7 @@ PURE_MODULES = (
     "dr_providers.lifecycle.reducer",
     "dr_providers.modeling.call",
     "dr_providers.modeling.controls",
+    "dr_providers.modeling.local",
     "dr_providers.modeling.presets",
     "dr_providers.modeling.request",
     "dr_providers.modeling.route",
@@ -78,3 +79,34 @@ def test_score_api_exports_and_removed_request_constants() -> None:
     ):
         assert name not in dr_providers.__all__
         assert not hasattr(dr_providers, name)
+
+
+def test_local_public_surface_is_torch_free() -> None:
+    expected = {
+        "LocalModelSpec",
+        "LocalDevice",
+        "LocalDtype",
+        "Float32MatmulPrecision",
+        "Quantization",
+        "ContinuationTokenization",
+        "huggingface_config",
+        "LocalExecutionEvidence",
+    }
+    assert expected <= set(dr_providers.__all__)
+    assert {
+        "HTTP_PROVIDER_KINDS",
+        "WIRE_PROTOCOLS",
+        "LOCAL_OUT_OF_MEMORY_CODE",
+    }.isdisjoint(dr_providers.__all__)
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys, dr_providers; "
+                "assert {'torch', 'transformers', 'bitsandbytes'}"
+                ".isdisjoint(sys.modules)"
+            ),
+        ],
+        check=True,
+    )

@@ -17,6 +17,14 @@ from dr_providers.modeling.controls import (
     RequestControl,
     TokenLimitParameter,
 )
+from dr_providers.modeling.local import (
+    ContinuationTokenization,
+    Float32MatmulPrecision,
+    LocalDevice,
+    LocalDtype,
+    LocalModelSpec,
+    Quantization,
+)
 from dr_providers.modeling.route import ModelRoute, Protocol, ProviderKind
 
 if TYPE_CHECKING:
@@ -247,6 +255,69 @@ def anthropic_messages_config(
         prompt_rendering=prompt_rendering,
         extension_keys=extension_keys,
     )
+
+
+def huggingface_config(  # noqa: PLR0913 -- explicit local model declaration
+    *,
+    model: str,
+    revision: str,
+    device: LocalDevice,
+    dtype: LocalDtype,
+    batch_size: int,
+    max_sequence_length: int,
+    float32_matmul_precision: Float32MatmulPrecision = (
+        Float32MatmulPrecision.HIGHEST
+    ),
+    quantization: Quantization = Quantization.NONE,
+    continuation_tokenization: ContinuationTokenization = (
+        ContinuationTokenization.SEPARATE_ENCODE
+    ),
+    controls: GenerationControls | None = None,
+    prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
+) -> ProviderCallConfig:
+    """Declare a local route; no shipped provider runs a local model yet.
+
+    A future backend applies the tokenizer's chat template for ROLE_MESSAGES
+    and fails at load if it is absent. FLAT_TEXT directly tokenizes the
+    separator-free concatenation. Score requests ignore rendering because
+    they carry exact context and continuations rather than a transcript.
+    Backend fit and detailed tokenization rules remain to be validated.
+    """
+    definition = ProviderCallDefinition(
+        definition_id="huggingface.transformers",
+        route=ModelRoute(
+            provider=ProviderKind.HUGGINGFACE,
+            protocol=Protocol.TRANSFORMERS,
+            model=model,
+        ),
+        local=LocalModelSpec(
+            revision=revision,
+            device=device,
+            dtype=dtype,
+            float32_matmul_precision=float32_matmul_precision,
+            quantization=quantization,
+            batch_size=batch_size,
+            max_sequence_length=max_sequence_length,
+            continuation_tokenization=continuation_tokenization,
+        ),
+        supported_kinds=frozenset(
+            {ProviderCallKind.GENERATE, ProviderCallKind.SCORE}
+        ),
+        constraints=ControlConstraints(
+            supported_controls=frozenset(
+                {
+                    RequestControl.TEMPERATURE,
+                    RequestControl.TOP_P,
+                    RequestControl.TOKEN_LIMIT,
+                    RequestControl.SEED,
+                }
+            ),
+            token_limit_parameter=TokenLimitParameter.MAX_NEW_TOKENS,
+            reasoning_shape=ReasoningRequestShape.NONE,
+        ),
+        prompt_rendering=prompt_rendering,
+    )
+    return definition.materialize(controls=controls)
 
 
 class ProviderFactoryKind(StrEnum):

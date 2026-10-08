@@ -7,8 +7,8 @@
 | --- | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**
-It supports OpenRouter, OpenAI, Gemini, and Anthropic while keeping call
-identity, provider translation, transport policy, and outcomes separate.
+It executes HTTP calls for OpenRouter, OpenAI, Gemini, and Anthropic and models
+local HuggingFace routes while keeping call identity, provider translation, transport policy, and outcomes separate.
 
 ## Package map
 
@@ -255,6 +255,96 @@ provider. That declaration does not make `HttpProvider` able to execute it.
 with `TypeAdapter(ProviderCallRequest)` from Pydantic. Lifecycle models parse
 the discriminated request automatically when restoring state or results.
 
+## Local HuggingFace routes
+
+`huggingface_config` declares a HuggingFace/Transformers route for generation
+and continuation scoring. No shipped provider loads or runs a local model yet.
+`ScriptedProvider` can exercise both kinds without constructing an HTTP body.
+The CLI remains HTTP generation only.
+
+```python
+from dr_providers import LocalDevice, LocalDtype, huggingface_config
+
+config = huggingface_config(
+    model="example/model",  # Hub repo ID or local path, retained verbatim
+    revision="0123456789abcdef0123456789abcdef01234567",
+    device=LocalDevice.CUDA,
+    dtype=LocalDtype.BFLOAT16,
+    batch_size=1,
+    max_sequence_length=2048,
+)
+```
+
+The definition's `local` spec is required for HuggingFace and forbidden for
+HTTP services. Every spec field participates in definition identity and,
+through references, config and request identity:
+
+| Field | Declared meaning |
+| --- | --- |
+| `revision` | Nonempty revision selector; use a Hub commit ID to pin a snapshot |
+| `device` | `cuda`, `mps`, or `cpu`; hardware availability is checked by the backend |
+| `dtype` | `float32` or `bfloat16`; exact quantized compute rules need backend validation |
+| `float32_matmul_precision` | `highest` (default) or `high`; `high` requires CUDA and permits reduced internal precision |
+| `quantization` | `none` (default), `bitsandbytes_int8`, or `bitsandbytes_nf4`; quantization currently requires CUDA |
+| `batch_size` | Positive declared batch size |
+| `max_sequence_length` | Positive declared sequence cap; backend validates token accounting and model capacity |
+| `continuation_tokenization` | `separate_encode`: encode context and continuation separately, then concatenate |
+
+Identity covers declarations, not immutable file contents. A branch or tag can
+resolve differently later, and a local directory can change under the same
+path. Resolved Hub commits belong in execution evidence when available; local
+paths with no resolved commit do not establish artifact identity. Neither
+request identity nor this evidence record promises reproducible execution.
+The backend must validate the fit of these declarations; this modeling surface
+does not promise that implementation will require no further schema changes.
+
+The preset supports temperature, top-p, token limit (`max_new_tokens`), and
+seed. It has no required controls; reasoning, verbosity, and HTTP body
+extensions are refused. Score requests require all controls to be unset.
+For a local backend, `ROLE_MESSAGES` applies the tokenizer's chat template;
+a tokenizer without one fails at load. `FLAT_TEXT` directly tokenizes the
+separator-free concatenation of transcript contents. Scores ignore rendering
+because they carry exact context and continuations rather than a transcript.
+The first backend should implement fixed rules for assistant prefills,
+special tokens (including empty-context scoring), sampling defaults, sequence
+limits, and quantization details, adding configuration only for concrete
+needs. Those rules and backend support remain to be validated there.
+
+`LocalExecutionEvidence` records selected realized conditions: device and GPU
+name, dtype, float32 matmul precision, quantization, resolved Hub commit when
+available, torch and transformers versions, and whether a chat template and
+BOS token were applied. Every field bears evidence identity, so a changed GPU
+model or recorded library version changes that identity. This is a selected
+conditions record, not an exhaustive environment fingerprint. It is mutually
+exclusive with transport-policy identity or HTTP request evidence; neither
+record kind is required for scripted invocations.
+
+`wall_time_seconds` is an optional strict, finite, nonnegative duration.
+It is persisted and restored but excluded from evidence identity; changing
+only wall time also preserves the enclosing lifecycle result identity.
+
+The following codes are module-level constants in `dr_providers.outcomes.models`:
+
+| Failure code | Required recoverability | Invocation classification |
+| --- | --- | --- |
+| `local_out_of_memory` | `resource_exhaustion` | `resource_exhaustion` |
+| `local_device_unavailable` | `permanent` | `permanent_provider_or_transport_failure` |
+| `local_model_not_found` | `permanent` | `permanent_provider_or_transport_failure` |
+| `local_sequence_too_long` | `permanent` | `permanent_provider_or_transport_failure` |
+
+Contradictory recoverability is refused. Out-of-memory is terminal under the
+standard policy, which never retries any invocation. This does not assert that
+a later identical invocation cannot succeed after memory pressure changes;
+custom retry behavior is unchanged.
+
+Local generation reports input tokens as `prompt_tokens`, generated tokens as
+`completion_tokens`, and their sum as `total_tokens`. Local scoring reports all
+tokens processed across context and continuations as `prompt_tokens` and
+`total_tokens`, leaving `completion_tokens` unset. Local responses declare
+`CostInfo(total_cost=0.0)`, meaning zero provider charge, rather than `None`;
+this does not estimate hardware or electricity costs. Route-only quota identity
+remains available but carries no quota meaning for local routes.
+
 ## CLI
 
 Install and run the one-shot CLI:
@@ -287,11 +377,12 @@ evidence records that carry them. `provider_call_hash()` computes call
 identity; models expose their own identity through `identity_hash`.
 
 `HttpProvider.invoke()` makes at most one provider wire request and returns
-versioned serializable `ProviderInvocationEvidence`. The evidence binds the
-request identity hash and transport-policy identity to structured HTTP request
-metadata, the request kind, and exactly one generate response, score response,
-or expected failure. The HTTP request
-evidence is the sole owner of the constructed request-body mapping.
+versioned serializable `ProviderInvocationEvidence`. The evidence binds
+request identity to the request kind and exactly one generate response, score
+response, or expected failure. HTTP invocations record transport-policy
+identity and structured HTTP request metadata; local execution evidence is an
+alternative record kind. HTTP request evidence is the sole owner of the
+constructed request-body mapping.
 
 `run_local_provider_call()` classifies each invocation, applies the selected
 serializable retry policy through the deterministic lifecycle transition, and
@@ -311,6 +402,10 @@ phase timeouts and the
 response-read idle timeout are each declared explicitly on transport policy and
 do not bound the total wall-clock duration of a slow response that keeps
 producing bytes.
+
+`ProviderTransportPolicy` and `policy_for()` bind only HTTP provider services
+and refuse HuggingFace. HTTP body/path construction and response translation
+refuse the transformers protocol.
 
 Every `ProviderTransportPolicy` and `policy_for()` call must declare native
 connect, write/pool, and response-read idle timeouts, connection-pool limits,

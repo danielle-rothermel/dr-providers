@@ -23,6 +23,7 @@ HASH_SEEDS = ("0", "1", "4", "4242")
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "src"
 
 EXPECTED_JSON_DUMP = {
+    "local": None,
     "definition_id": "test.chat",
     "supported_kinds": ["generate"],
     "route": {

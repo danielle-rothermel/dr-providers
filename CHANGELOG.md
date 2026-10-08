@@ -8,6 +8,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add HuggingFace/Transformers local routes, `LocalModelSpec`, `LocalDevice`,
+  `LocalDtype`, `Float32MatmulPrecision`, `Quantization`,
+  `ContinuationTokenization`, `TokenLimitParameter.MAX_NEW_TOKENS`, and the
+  generate/score `huggingface_config` preset. No local backend or new runtime
+  dependency is shipped.
+- Add four module-level local failure codes with fixed recoverability and
+  explicit invocation classification: `local_out_of_memory`,
+  `local_device_unavailable`, `local_model_not_found`, and
+  `local_sequence_too_long`. Retry behavior is unchanged.
+- Add identity-bearing `LocalExecutionEvidence` and optional persisted
+  `wall_time_seconds`, excluded from evidence and enclosing result identity.
+- Add permanent validation codes `matmul_precision_requires_cuda`,
+  `quantization_requires_cuda`, `local_spec_required`, `local_spec_forbidden`,
+  `local_extensions_forbidden`, and `reasoning_protocol_unsupported`.
 - Add `ProviderCallKind` (`generate`, `score`), `ProviderGenerateRequest`,
   and `ProviderScoreRequest`. Score requests carry exact context, ordered
   continuations, and an identity-bearing flag requiring per-token values.
@@ -31,13 +45,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   user message. Responses carries that message in `input` without
   `instructions`; Anthropic Messages omits `system`. Controls, reasoning
   mappings, and extensions are unchanged. Callers own all whitespace.
-- Add the `prompt_rendering` keyword to all five preset factories and the
+- Add the `prompt_rendering` keyword to all five HTTP preset factories and the
   `--prompt-rendering` CLI option, both defaulting to `role_messages`.
   Transcript identity retains its original roles; rendering participates in
   request identity through the definition and config hash references.
 
 ### Changed
 
+- Add unconditional definition identity key `local`: required on HuggingFace
+  definitions and `None` on HTTP definitions. All definition and downstream
+  config, request, call, evidence, observation, record, and result hashes change.
+- Transport policies and restored policy evidence admit only HTTP services;
+  HTTP body/path construction and response translation refuse transformers.
+  Local definitions refuse HTTP body extensions, reasoning, and verbosity.
+  Scripted local requests are recorded without HTTP payloads.
+- Evidence carries an optional local execution record, mutually exclusive
+  with policy identity or HTTP request evidence. Recorded conditions are
+  selected facts, not a complete environment or artifact fingerprint.
 - Replace the concrete `ProviderCallRequest` with a discriminated union of
   `ProviderGenerateRequest` and `ProviderScoreRequest`. Generation callers
   construct `ProviderGenerateRequest`. Remove `PROVIDER_CALL_REQUEST_SCHEMA`
@@ -73,24 +97,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   | Schema | Previous released | Current |
   | --- | --- | --- |
-  | Provider call definition | 3 | 5 |
+  | Provider call definition | 3 | 6 |
   | Provider call config | 1 | 2 |
   | Provider call request | 1 | Removed; replaced by kind-specific schemas |
   | Provider generate request | — | 1 |
   | Provider score request | — | 1 |
-  | Provider invocation evidence | 8 | 10 |
+  | Provider invocation evidence | 8 | 11 |
   | Provider call | 1 | 2 |
-  | Completed invocation observation | 1 | 3 |
-  | Decided invocation record | 1 | 3 |
-  | Provider call state | 1 | 3 |
-  | Provider retry instruction | 1 | 3 |
-  | Provider call result | 1 | 3 |
+  | Completed invocation observation | 1 | 4 |
+  | Decided invocation record | 1 | 4 |
+  | Provider call state | 1 | 4 |
+  | Provider retry instruction | 1 | 4 |
+  | Provider call result | 1 | 4 |
   | Provider call retry policy | 1 | 1 |
 
-  Definition identity includes prompt rendering and supported call kinds;
-  evidence records the request kind and an exclusive generate response, score
-  response, or failure. Lifecycle schemas advance for renamed reference keys
-  and changed nested persisted shapes.
+  Definition identity includes prompt rendering, supported call kinds, and
+  the optional local model spec; evidence records the request kind and an exclusive generate response, score
+  response, or failure plus optional local execution evidence. Wall time is
+  persisted outside identity. Lifecycle schemas advance for renamed reference
+  keys and changed nested persisted shapes.
   Retry policy schema remains at 1 and retry-policy hashes are unchanged.
 - Every definition, config, request, call, completed-observation,
   decided-record, result, and evidence hash changes, including with the

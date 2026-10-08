@@ -164,11 +164,13 @@ EXPECTED_PROVIDER_KIND_LITERALS = [
     "openai",
     "gemini",
     "anthropic",
+    "huggingface",
 ]
 EXPECTED_PROTOCOL_LITERALS = [
     "chat_completions",
     "responses",
     "anthropic_messages",
+    "transformers",
 ]
 EXPECTED_MESSAGE_ROLE_LITERALS = ["system", "user", "assistant", "tool"]
 EXPECTED_REQUEST_CONTROL_LITERALS = [
@@ -183,6 +185,7 @@ EXPECTED_TOKEN_LIMIT_PARAMETER_LITERALS = [
     "max_tokens",
     "max_completion_tokens",
     "max_output_tokens",
+    "max_new_tokens",
 ]
 EXPECTED_REASONING_EFFORT_LITERALS = [
     "none",
@@ -253,9 +256,9 @@ def test_route_literals_are_pinned() -> None:
     assert [member.value for member in ProviderKind] == (
         EXPECTED_PROVIDER_KIND_LITERALS
     )
-    assert len(ProviderKind) == 4
+    assert len(ProviderKind) == 5
     assert [member.value for member in Protocol] == EXPECTED_PROTOCOL_LITERALS
-    assert len(Protocol) == 3
+    assert len(Protocol) == 4
 
 
 def test_transcript_literals_are_pinned() -> None:
@@ -273,7 +276,7 @@ def test_control_literals_are_pinned() -> None:
     assert [member.value for member in TokenLimitParameter] == (
         EXPECTED_TOKEN_LIMIT_PARAMETER_LITERALS
     )
-    assert len(TokenLimitParameter) == 3
+    assert len(TokenLimitParameter) == 4
     assert [member.value for member in ReasoningEffort] == (
         EXPECTED_REASONING_EFFORT_LITERALS
     )
@@ -446,18 +449,18 @@ def test_identity_schema_names_are_pinned() -> None:
 
 
 def test_persisted_schema_versions_are_pinned() -> None:
-    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 10
-    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 5
+    assert PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION == 11
+    assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 6
     assert PROVIDER_CALL_CONFIG_SCHEMA_VERSION == 2
     assert PROVIDER_GENERATE_REQUEST_SCHEMA_VERSION == 1
     assert PROVIDER_SCORE_REQUEST_SCHEMA_VERSION == 1
     assert PROVIDER_CALL_RETRY_POLICY_SCHEMA_VERSION == 1
-    assert COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION == 3
-    assert DECIDED_INVOCATION_RECORD_SCHEMA_VERSION == 3
+    assert COMPLETED_INVOCATION_OBSERVATION_SCHEMA_VERSION == 4
+    assert DECIDED_INVOCATION_RECORD_SCHEMA_VERSION == 4
     assert PROVIDER_CALL_SCHEMA_VERSION == 2
-    assert PROVIDER_CALL_STATE_SCHEMA_VERSION == 3
-    assert PROVIDER_CALL_RESULT_SCHEMA_VERSION == 3
-    assert PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION == 3
+    assert PROVIDER_CALL_STATE_SCHEMA_VERSION == 4
+    assert PROVIDER_CALL_RESULT_SCHEMA_VERSION == 4
+    assert PROVIDER_RETRY_INSTRUCTION_SCHEMA_VERSION == 4
 
 
 def test_prompt_rendering_values_are_pinned() -> None:
@@ -526,3 +529,105 @@ def _construct_invalid_score(
             context="",
             continuations=("a",),
         )
+
+
+def test_local_enum_and_failure_literals_are_pinned() -> None:
+    from dr_providers import (
+        ContinuationTokenization,
+        Float32MatmulPrecision,
+        LocalDevice,
+        LocalDtype,
+        Quantization,
+    )
+    from dr_providers.outcomes.models import (
+        LOCAL_DEVICE_UNAVAILABLE_CODE,
+        LOCAL_FAILURE_RECOVERABILITY,
+        LOCAL_MODEL_NOT_FOUND_CODE,
+        LOCAL_OUT_OF_MEMORY_CODE,
+        LOCAL_SEQUENCE_TOO_LONG_CODE,
+    )
+
+    assert [item.value for item in LocalDevice] == ["cuda", "mps", "cpu"]
+    assert len(LocalDevice) == 3
+    assert [item.value for item in LocalDtype] == ["float32", "bfloat16"]
+    assert len(LocalDtype) == 2
+    assert [item.value for item in Float32MatmulPrecision] == [
+        "highest",
+        "high",
+    ]
+    assert len(Float32MatmulPrecision) == 2
+    assert [item.value for item in Quantization] == [
+        "none",
+        "bitsandbytes_int8",
+        "bitsandbytes_nf4",
+    ]
+    assert len(Quantization) == 3
+    assert [item.value for item in ContinuationTokenization] == [
+        "separate_encode"
+    ]
+    assert len(ContinuationTokenization) == 1
+    assert LOCAL_OUT_OF_MEMORY_CODE == "local_out_of_memory"
+    assert LOCAL_DEVICE_UNAVAILABLE_CODE == "local_device_unavailable"
+    assert LOCAL_MODEL_NOT_FOUND_CODE == "local_model_not_found"
+    assert LOCAL_SEQUENCE_TOO_LONG_CODE == "local_sequence_too_long"
+    assert LOCAL_FAILURE_RECOVERABILITY == {
+        "local_out_of_memory": "resource_exhaustion",
+        "local_device_unavailable": "permanent",
+        "local_model_not_found": "permanent",
+        "local_sequence_too_long": "permanent",
+    }
+
+
+@pytest.mark.parametrize(
+    ("scenario", "code"),
+    [
+        ("precision", "matmul_precision_requires_cuda"),
+        ("quantization", "quantization_requires_cuda"),
+        ("missing", "local_spec_required"),
+        ("http", "local_spec_forbidden"),
+        ("extensions", "local_extensions_forbidden"),
+        ("reasoning", "reasoning_protocol_unsupported"),
+        ("verbosity", "verbosity_protocol_unsupported"),
+    ],
+)
+def test_local_validation_code_literals_are_pinned(
+    local_config: ProviderCallConfig, scenario: str, code: str
+) -> None:
+    from dr_providers import LocalModelSpec
+
+    data = local_config.definition.model_dump(mode="python")
+    model_class = ProviderCallDefinition
+    if scenario in {"precision", "quantization"}:
+        model_class = LocalModelSpec
+        data = data["local"]
+        data["device"] = "cpu"
+        if scenario == "precision":
+            data["float32_matmul_precision"] = "high"
+        else:
+            data["quantization"] = "bitsandbytes_nf4"
+    elif scenario == "missing":
+        data["local"] = None
+    elif scenario == "http":
+        data["route"] = openai_chat_config(model="m").route
+    elif scenario == "extensions":
+        data["extension_keys"] = {"custom"}
+    else:
+        data["constraints"]["supported_controls"] = {scenario}
+        data["constraints"]["reasoning_shape"] = "effort_field"
+    with pytest.raises(ControlValidationError) as caught:
+        model_class.model_validate(data)
+    assert caught.value.failure.code == code
+    assert caught.value.failure.recoverability is RecoverabilityClass.PERMANENT
+
+
+def test_evidence_identity_exclusion_literals_are_pinned() -> None:
+    from dr_providers.outcomes.evidence import (
+        EVIDENCE_IDENTITY_EXCLUDED_FAILURE_FIELDS,
+        EVIDENCE_IDENTITY_EXCLUDED_FIELDS,
+    )
+
+    assert sorted(EVIDENCE_IDENTITY_EXCLUDED_FIELDS) == ["wall_time_seconds"]
+    assert sorted(EVIDENCE_IDENTITY_EXCLUDED_FAILURE_FIELDS) == [
+        "message",
+        "traceback",
+    ]

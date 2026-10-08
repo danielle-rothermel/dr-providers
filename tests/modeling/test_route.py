@@ -50,3 +50,44 @@ def test_unsupported_provider_protocol_pairs_are_rejected(
         ),
     ):
         ModelRoute(provider=provider, protocol=protocol, model="m")
+
+
+def test_local_route_and_http_boundary_sets() -> None:
+    from dr_providers.modeling.route import HTTP_PROVIDER_KINDS, WIRE_PROTOCOLS
+
+    assert {
+        "openrouter",
+        "openai",
+        "gemini",
+        "anthropic",
+    } == HTTP_PROVIDER_KINDS
+    assert {
+        "chat_completions",
+        "responses",
+        "anthropic_messages",
+    } == WIRE_PROTOCOLS
+    assert len(ProviderKind) == 5
+    assert len(Protocol) == 4
+    for provider in ProviderKind:
+        for protocol in Protocol:
+            if (
+                provider is ProviderKind.HUGGINGFACE
+                or protocol is Protocol.TRANSFORMERS
+            ):
+                if (
+                    provider is ProviderKind.HUGGINGFACE
+                    and protocol is Protocol.TRANSFORMERS
+                ):
+                    assert (
+                        ModelRoute(
+                            provider=provider, protocol=protocol, model="m"
+                        ).model
+                        == "m"
+                    )
+                else:
+                    with pytest.raises(
+                        ValueError, match="unsupported provider/protocol"
+                    ):
+                        ModelRoute(
+                            provider=provider, protocol=protocol, model="m"
+                        )

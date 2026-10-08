@@ -9,6 +9,10 @@ from dr_providers.core.failures import RecoverabilityClass
 from dr_providers.lifecycle.outcomes import ProviderInvocationOutcome
 from dr_providers.outcomes.models import (
     INVALID_JSON_CODE,
+    LOCAL_DEVICE_UNAVAILABLE_CODE,
+    LOCAL_MODEL_NOT_FOUND_CODE,
+    LOCAL_OUT_OF_MEMORY_CODE,
+    LOCAL_SEQUENCE_TOO_LONG_CODE,
     TIMEOUT_CODES,
     ProviderTransportFailure,
     ProviderTransportResponse,
@@ -34,6 +38,16 @@ INVALID_BASE_URL_CODE = "invalid_base_url"
 HTTP_STATUS_402_CODE = "http_status_402"
 
 CODE_TO_OUTCOME = {
+    LOCAL_OUT_OF_MEMORY_CODE: ProviderInvocationOutcome.RESOURCE_EXHAUSTION,
+    LOCAL_DEVICE_UNAVAILABLE_CODE: (
+        ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+    ),
+    LOCAL_MODEL_NOT_FOUND_CODE: (
+        ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+    ),
+    LOCAL_SEQUENCE_TOO_LONG_CODE: (
+        ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+    ),
     RESPONSE_INCOMPLETE_NO_TEXT_CODE: (
         ProviderInvocationOutcome.TRUNCATED_NO_TEXT
     ),

@@ -14,6 +14,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StrictStr,
     field_serializer,
@@ -22,8 +23,14 @@ from pydantic import (
 
 from dr_providers.core.frozen import _deep_freeze, _thaw
 from dr_providers.modeling.controls import ProviderCallKind
+from dr_providers.modeling.local import (  # noqa: TC001 -- pydantic fields
+    Float32MatmulPrecision,
+    LocalDevice,
+    LocalDtype,
+    Quantization,
+)
 from dr_providers.modeling.request import ProviderScoreRequest
-from dr_providers.modeling.route import ProviderKind
+from dr_providers.modeling.route import HTTP_PROVIDER_KINDS, ProviderKind
 from dr_providers.outcomes.models import (
     ProviderScoreResponse,
     ProviderTransportFailure,
@@ -93,7 +100,7 @@ def scrub_traceback(traceback: str | None) -> str | None:
 PROVIDER_INVOCATION_EVIDENCE_SCHEMA = (
     "dr_providers.provider_invocation_evidence"
 )
-PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 10
+PROVIDER_INVOCATION_EVIDENCE_SCHEMA_VERSION = 11
 ContentIdentityHash = Annotated[
     StrictStr,
     Field(pattern=r"^[0-9a-f]{64}$"),
@@ -108,6 +115,36 @@ These names are a hash-preimage format, not merely field names: changing
 the set changes every evidence identity hash and therefore requires a
 schema-version bump.
 """
+
+
+EVIDENCE_IDENTITY_EXCLUDED_FIELDS = frozenset({"wall_time_seconds"})
+"""Persisted evidence fields kept out of the identity preimage.
+
+These names are a hash-preimage format, not merely field names: changing
+this set changes evidence identity and requires a schema-version bump.
+"""
+
+
+class LocalExecutionEvidence(BaseModel):
+    """Selected realized local execution conditions, all identity-bearing.
+
+    A different GPU model or torch version is a different measurement
+    condition and forks evidence identity. This record is not a complete
+    execution-environment fingerprint or a reproducibility guarantee.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    device: LocalDevice
+    device_name: StrictStr | None
+    dtype: LocalDtype
+    float32_matmul_precision: Float32MatmulPrecision
+    quantization: Quantization
+    revision_commit: StrictStr | None
+    torch_version: StrictStr
+    transformers_version: StrictStr
+    chat_template_applied: StrictBool | None
+    add_bos_token: StrictBool | None
 
 
 class ProviderHttpRequestEvidence(BaseModel):
@@ -190,8 +227,8 @@ class ProviderInvocationEvidence(BaseModel):
     """Freeze nested identity-bearing JSON and identity components.
 
     Schema metadata belongs to ``identity_document()``. All persisted fields
-    bear identity except failure message and traceback. ``build()`` checks
-    score correspondence to the request; direct construction and restoration
+    bear identity except wall time, failure message, and traceback. ``build()``
+    checks score correspondence; direct construction and restoration
     are trusted paths and do not repeat those request-dependent checks.
     """
 
@@ -205,12 +242,25 @@ class ProviderInvocationEvidence(BaseModel):
     http_request: ProviderHttpRequestEvidence | None = None
     response_bytes: StrictInt | None = Field(default=None, ge=0)
     retry_after: ProviderRetryAfterHint | None = None
+    local_execution: LocalExecutionEvidence | None = None
     response: ProviderTransportResponse | None = None
     score_response: ProviderScoreResponse | None = None
     failure: ProviderTransportFailure | None = None
+    wall_time_seconds: float | None = Field(
+        default=None,
+        strict=True,
+        allow_inf_nan=False,
+        ge=0,
+    )
 
     @model_validator(mode="after")
     def _exactly_one_outcome(self) -> ProviderInvocationEvidence:
+        if self.local_execution is not None and (
+            self.policy_identity is not None or self.http_request is not None
+        ):
+            raise ValueError(
+                "evidence carries at most one execution record kind"
+            )
         if (
             sum(
                 value is not None
@@ -237,10 +287,16 @@ class ProviderInvocationEvidence(BaseModel):
                 _deep_freeze(dict(self.policy_identity)),
             )
             try:
-                ProviderKind(self.policy_identity["provider_kind"])
+                provider_kind = ProviderKind(
+                    self.policy_identity["provider_kind"]
+                )
             except (KeyError, TypeError, ValueError):
                 msg = "policy_identity requires a supported provider_kind"
                 raise ValueError(msg) from None
+            if provider_kind not in HTTP_PROVIDER_KINDS:
+                raise ValueError(
+                    "policy_identity requires a supported HTTP provider_kind"
+                )
             for field_name in ("max_request_bytes", "max_response_bytes"):
                 if field_name in self.policy_identity and self.policy_identity[
                     field_name
@@ -298,6 +354,8 @@ class ProviderInvocationEvidence(BaseModel):
         outcome: ProviderTransportOutcome,
         response_bytes: int | None = None,
         retry_after: ProviderRetryAfterHint | None = None,
+        local_execution: LocalExecutionEvidence | None = None,
+        wall_time_seconds: float | None = None,
     ) -> ProviderInvocationEvidence:
         response = (
             outcome if isinstance(outcome, ProviderTransportResponse) else None
@@ -343,6 +401,8 @@ class ProviderInvocationEvidence(BaseModel):
             http_request=http_request,
             response_bytes=response_bytes,
             retry_after=retry_after,
+            local_execution=local_execution,
+            wall_time_seconds=wall_time_seconds,
             response=response,
             score_response=score_response,
             failure=failure,
@@ -351,7 +411,7 @@ class ProviderInvocationEvidence(BaseModel):
     def identity_payload(self) -> dict[str, Any]:
         """Project the persisted record onto its identity-bearing fields.
 
-        Two fields stay fully persisted on the model but are excluded
+        Wall time and two failure fields stay persisted but are excluded
         from the hash preimage:
 
         ``failure.traceback`` names absolute source paths of the machine
@@ -367,12 +427,17 @@ class ProviderInvocationEvidence(BaseModel):
         constructed failure that relies on ``message`` alone to
         distinguish itself from another shares that other's identity.
 
-        The projection is scoped to ``failure``: every other persisted
-        field is identity-bearing, including ``response.warnings[]``
-        messages, which this package generates deterministically and
-        which therefore discriminate rather than fork identity.
+        ``wall_time_seconds`` measures duration, not invocation meaning.
+
+        Every other persisted field is identity-bearing, including
+        ``response.warnings[]`` messages, which this package generates
+        deterministically and which discriminate rather than fork identity.
         """
-        payload = self.model_dump(mode="json")
+        payload = {
+            key: value
+            for key, value in self.model_dump(mode="json").items()
+            if key not in EVIDENCE_IDENTITY_EXCLUDED_FIELDS
+        }
         failure = payload.get("failure")
         if isinstance(failure, dict):
             payload["failure"] = {

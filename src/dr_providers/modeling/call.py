@@ -33,14 +33,18 @@ from dr_providers.modeling.controls import (
     ReasoningEffort,
     RequestControl,
 )
+from dr_providers.modeling.local import (
+    LocalModelSpec,  # noqa: TC001 -- pydantic field
+)
 from dr_providers.modeling.route import (
     ModelRoute,
     Protocol,
+    ProviderKind,
     ProviderQuotaIdentity,
 )
 
 PROVIDER_CALL_DEFINITION_SCHEMA = "dr_providers.provider_call_definition"
-PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 5
+PROVIDER_CALL_DEFINITION_SCHEMA_VERSION = 6
 
 PROVIDER_CALL_CONFIG_SCHEMA = "dr_providers.provider_call_config"
 PROVIDER_CALL_CONFIG_SCHEMA_VERSION = 2
@@ -56,8 +60,18 @@ _PROTOCOLS_WITHOUT_WIRE_KEY: dict[
         frozenset({Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}),
         "seed_protocol_unsupported",
     ),
+    RequestControl.REASONING: (
+        frozenset({Protocol.TRANSFORMERS}),
+        "reasoning_protocol_unsupported",
+    ),
     RequestControl.VERBOSITY: (
-        frozenset({Protocol.RESPONSES, Protocol.ANTHROPIC_MESSAGES}),
+        frozenset(
+            {
+                Protocol.RESPONSES,
+                Protocol.ANTHROPIC_MESSAGES,
+                Protocol.TRANSFORMERS,
+            }
+        ),
         "verbosity_protocol_unsupported",
     ),
 }
@@ -82,11 +96,45 @@ class ProviderCallDefinition(BaseModel):
 
     definition_id: StrictStr
     route: ModelRoute
+    local: LocalModelSpec | None = None
     supported_kinds: frozenset[ProviderCallKind]
     constraints: ControlConstraints
     prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES
     required_controls: frozenset[RequestControl] = frozenset()
     extension_keys: frozenset[StrictStr] = frozenset()
+
+    @model_validator(mode="after")
+    def _validate_local_spec(self) -> ProviderCallDefinition:
+        is_local = self.route.provider is ProviderKind.HUGGINGFACE
+        if is_local and self.local is None:
+            raise ControlValidationError(
+                failure_record(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code="local_spec_required",
+                    message=(
+                        "HuggingFace definitions require a local model spec"
+                    ),
+                )
+            )
+        if not is_local and self.local is not None:
+            raise ControlValidationError(
+                failure_record(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code="local_spec_forbidden",
+                    message="HTTP definitions cannot carry a local model spec",
+                )
+            )
+        if is_local and self.extension_keys:
+            raise ControlValidationError(
+                failure_record(
+                    recoverability=RecoverabilityClass.PERMANENT,
+                    code="local_extensions_forbidden",
+                    message=(
+                        "local definitions cannot declare HTTP body extensions"
+                    ),
+                )
+            )
+        return self
 
     @field_serializer("supported_kinds", when_used="json")
     def _serialize_supported_kinds(
@@ -172,6 +220,9 @@ class ProviderCallDefinition(BaseModel):
         return {
             "definition_id": self.definition_id,
             "route": self.route.identity_payload(),
+            "local": None
+            if self.local is None
+            else self.local.identity_payload(),
             "supported_kinds": sorted(
                 kind.value for kind in self.supported_kinds
             ),

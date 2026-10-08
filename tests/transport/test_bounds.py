@@ -352,6 +352,7 @@ def test_byte_accounting_and_hint_keys_are_pinned() -> None:
         "http_request",
         "response_bytes",
         "retry_after",
+        "local_execution",
         "response",
         "failure",
     }

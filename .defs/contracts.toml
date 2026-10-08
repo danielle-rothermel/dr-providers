@@ -1,7 +1,8 @@
 [[contracts]]
 title = "Provider-call identity is layered by reference"
 statement = """
-Definition identity covers its identifier, route, prompt rendering, constraints, \
+Definition identity covers its identifier, route, optional local model spec, \
+prompt rendering, constraints, \
 required controls, supported call kinds, and extension keys; config identity references the full \
 definition hash and adds assigned controls and extensions; request identity references \
 the full config hash and adds the call kind and either the ordered transcript \
@@ -19,12 +20,15 @@ title = "Call assignments are validated before identity and wire encoding"
 statement = """
 Controls reject coercive and non-finite values; provider body extensions are \
 strict finite JSON, deeply isolated, declared by the definition, and unable \
-to replace core wire fields. Every advertised control has a usable wire \
+to replace core wire fields. Every advertised control has a declared execution \
 mapping. Missing required controls, unmappable values for supported \
 controls, and unsupported controls always fail. A definition may not \
-advertise seed or verbosity on a protocol that has no matching top-level \
-wire key (Responses, Anthropic Messages). A constructable ProviderCallConfig transports every \
-control it carries; there is no drop mode. Requests refuse kinds absent from \
+advertise seed or verbosity without a supported mapping (Responses, Anthropic \
+Messages); transformers refuses reasoning and verbosity. A constructable \
+ProviderCallConfig carries only declared supported controls. Executors must \
+apply every assigned control or refuse the invocation; there is no drop mode. \
+HuggingFace definitions require a local spec and refuse HTTP body extensions; \
+HTTP definitions refuse local specs. Requests refuse kinds absent from \
 the definition. Score requests refuse set controls and nonempty body extensions; \
 therefore scoring requires a definition with empty required controls."""
 rationale = """
@@ -39,7 +43,7 @@ title = "Quota identity is route-only"
 statement = """
 Provider quota identity is exactly the provider, protocol, and model tuple; \
 credentials, accounts, endpoint overrides, controls, and transport policy \
-never participate."""
+never participate. The identity carries no quota meaning for local routes."""
 rationale = """
 Quota accounting groups calls by executable route. Credential- or policy-\
 specific identity would fragment one route into pools the package cannot \
@@ -51,7 +55,9 @@ check = "uv run pytest -q tests/modeling/test_call.py::TestConfigPresets::test_o
 title = "Routes and transport policies bind one supported provider service"
 statement = """
 A model route admits only the supported provider-service and protocol pairs. A \
-provider transport policy binds exactly one provider service in policy identity. \
+provider transport policy binds exactly one HTTP provider service in policy \
+identity and refuses HuggingFace. HuggingFace admits only transformers, so the \
+HTTP provider never executes a local route. \
 HttpProvider rejects a request whose route provider differs from that binding \
 before payload construction, endpoint or credential resolution, HTTP request \
 evidence construction, or dispatch."""
@@ -467,3 +473,33 @@ raise at validation or evidence construction; expected failures retain the share
 failure classification and retry lifecycle."""
 date = "2026-10-06"
 check = "uv run pytest -q tests/outcomes/test_models.py tests/lifecycle/test_classification.py"
+
+[[contracts]]
+title = "Local execution conditions are identity-bearing and wall time is not"
+statement = """
+Every field of LocalExecutionEvidence bears invocation evidence identity. \
+Local execution evidence is mutually exclusive with transport-policy \
+identity or HTTP request evidence; both record kinds may be absent for \
+scripted calls. wall_time_seconds is strict, finite, nonnegative, persisted, \
+and excluded from identity. Changing only wall time preserves evidence and \
+result hashes."""
+rationale = """
+Selected realized conditions distinguish measurements while duration remains \
+incidental runtime data. The record does not promise full reproducibility."""
+date = "2026-10-08"
+check = "uv run pytest -q tests/outcomes/test_evidence.py tests/lifecycle/test_handoff.py"
+
+[[contracts]]
+title = "Local failure codes carry fixed recoverability and classification"
+statement = """
+local_out_of_memory requires resource_exhaustion recoverability and \
+classifies as resource exhaustion. local_device_unavailable, \
+local_model_not_found, and local_sequence_too_long require permanent \
+recoverability and classify as permanent provider or transport failures. \
+Contradictory recoverability is refused at the failure boundary. \
+Classification is explicitly code-mapped."""
+rationale = """
+Local backends and lifecycle consumers share one pinned interpretation of \
+these codes without changing retry behavior or adding invocation outcomes."""
+date = "2026-10-08"
+check = "uv run pytest -q tests/lifecycle/test_classification.py tests/outcomes/test_models.py"
