@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import gc
 import math
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,7 +17,11 @@ from dr_providers.local.backend import (
 )
 from dr_providers.local.provider import validate_generation_controls
 from dr_providers.modeling.controls import PromptRendering
-from dr_providers.modeling.local import LocalDevice, Quantization
+from dr_providers.modeling.local import (
+    LocalDevice,
+    Quantization,
+    is_commit_sha,
+)
 from dr_providers.modeling.route import ProviderKind
 from dr_providers.modeling.transcript import MessageRole
 from dr_providers.outcomes.evidence import LocalExecutionEvidence
@@ -59,7 +62,7 @@ def _model_revision(model_name: str, revision: str) -> tuple[str, str | None]:
     # Pin tokenizer and weights to the same snapshot, including mutable tags.
     config_path = hf_hub_download(model_name, "config.json", revision=revision)
     snapshot = Path(config_path).parent.name
-    if re.fullmatch(r"[0-9a-f]{40}", snapshot):
+    if is_commit_sha(snapshot):
         return snapshot, snapshot
     return revision, None
 

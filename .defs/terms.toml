@@ -267,7 +267,7 @@ exported_symbols = [
 [[terms]]
 name = "provider transport warning"
 definition = """
-An advisory post-response observation whose fatality belongs to the caller."""
+An advisory post-response observation whose fatality belongs to the caller. Conformance checks cover reasoning not observed, model substitution, and a local definition revision that is not a full commit SHA."""
 exported_symbols = [
   "ProviderTransportWarning",
   "WarningSeverity",
@@ -579,7 +579,10 @@ definition = """
 The identity-bearing declared conditions for a locally loaded model: \
 revision, device, dtype, float32 matmul precision, quantization, batch size, \
 maximum sequence length, continuation tokenization, and add_bos_token. \
-Revision selectors and local paths do not guarantee immutable model contents. Non-highest \
+Callers should pass a full 40-character lowercase hex commit SHA as revision \
+so declared identity matches the resolved snapshot; other selectors are \
+accepted with a conformance warning. Revision selectors and local paths do \
+not guarantee immutable model contents. Non-highest \
 matmul precision and quantization require CUDA; supported hardware remains \
 backend-validated. Continuation tokenization is lm_eval_encode_pair: move \
 trailing context whitespace to the continuation, encode context and the whole \
@@ -590,6 +593,7 @@ a leading tokenizer BOS on generation prompts and scoring context without \
 duplicating a leading BOS or adding one to continuation targets."""
 exported_symbols = [
   "LocalModelSpec",
+  "is_commit_sha",
   "LocalDevice",
   "LocalDtype",
   "Float32MatmulPrecision",

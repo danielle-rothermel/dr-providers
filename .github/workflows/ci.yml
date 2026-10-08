@@ -56,7 +56,7 @@ jobs:
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/huggingface/hub
-          key: hf-hf-internal-testing-tiny-random-gpt2-71034c5d8bde858ff824298bdedc65515b97d2b9
+          key: hf-tiny-random-gpt2-71034c5d8bde858ff824298bdedc65515b97d2b9-tiny-random-olmo-22d63f3f78574f9d7061b9d1f97ba31c1bc26200
       - run: uv sync --locked --extra cli --extra local
       - run: uv run --locked --extra cli --extra local ty check --config 'src.exclude = []'
       - run: uv run --locked --extra cli --extra local pytest -q -m local_model

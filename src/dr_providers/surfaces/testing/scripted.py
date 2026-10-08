@@ -138,12 +138,15 @@ class ScriptedProvider:
                 request=request,
                 policy=None,
                 http_request=None,
-                outcome=ProviderScoreResponse(
-                    scores=outcome.scores,
-                    usage=outcome.usage,
-                    cost=outcome.cost,
-                    warnings=outcome.warnings,
-                    model=request.config.route.model,
+                outcome=with_conformance_warnings(
+                    request,
+                    ProviderScoreResponse(
+                        scores=outcome.scores,
+                        usage=outcome.usage,
+                        cost=outcome.cost,
+                        warnings=outcome.warnings,
+                        model=request.config.route.model,
+                    ),
                 ),
             )
         response_id = f"{SCRIPTED_RESPONSE_ID_PREFIX}-{len(self.requests)}"

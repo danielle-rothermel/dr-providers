@@ -125,6 +125,15 @@ context sharing is not built; it would need evidence that scores preserve the
 recomputed reference behavior. Batched generation, assistant-prefill
 continuation, and tool-role rendering are not built.
 
+Cross-item batched scoring is a candidate. A score request batches only its
+own continuations, so a multiple-choice sweep runs one forward batch per item
+and leaves batch capacity idle when items have few choices. Packing rows from
+several requests into shared batches would need a multi-request call surface
+and per-request evidence that still matches independent scoring. The decision
+waits on throughput measured by the first downstream verification run (the
+datadec DataDecide comparison); until that shows per-item batching is the
+bottleneck, it is not built.
+
 Quantization on non-CUDA devices and dtypes beyond float32 and bfloat16 are
 not built. Stronger artifact identification for mutable local directories and
 a complete execution-environment fingerprint are not provided. Recorded Hub
