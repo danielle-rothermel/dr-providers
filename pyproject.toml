@@ -44,7 +44,8 @@ local = [
 local-cuda = [
     "accelerate>=1.15.0 ; sys_platform == 'linux'",
     "bitsandbytes>=0.50.2 ; sys_platform == 'linux'",
-    "dr-providers[local]",
+    "torch>=2.14.1",
+    "transformers>=5.19.0",
 ]
 
 [project.scripts]

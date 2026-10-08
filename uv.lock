@@ -224,12 +224,13 @@ dev = [
 requires-dist = [
     { name = "accelerate", marker = "sys_platform == 'linux' and extra == 'local-cuda'", specifier = ">=1.15.0" },
     { name = "bitsandbytes", marker = "sys_platform == 'linux' and extra == 'local-cuda'", specifier = ">=0.50.2" },
-    { name = "dr-providers", extras = ["local"], marker = "extra == 'local-cuda'", editable = "." },
     { name = "dr-serialize", specifier = ">=0.1.2,<0.2" },
     { name = "dr-wire", specifier = ">=0.1.0,<0.2" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "torch", marker = "extra == 'local'", specifier = ">=2.14.1" },
+    { name = "torch", marker = "extra == 'local-cuda'", specifier = ">=2.14.1" },
     { name = "transformers", marker = "extra == 'local'", specifier = ">=5.19.0" },
+    { name = "transformers", marker = "extra == 'local-cuda'", specifier = ">=5.19.0" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.26.7" },
 ]
 provides-extras = ["cli", "local", "local-cuda"]
