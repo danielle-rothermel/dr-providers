@@ -335,6 +335,7 @@ The following codes are module-level constants in `dr_providers.outcomes.models`
 | `local_sequence_too_long` | `permanent` | `permanent_provider_or_transport_failure` |
 | `local_chat_template_missing` | `permanent` | `permanent_provider_or_transport_failure` |
 | `local_non_finite_score` | `permanent` | `permanent_provider_or_transport_failure` |
+| `local_empty_continuation` | `permanent` | `permanent_provider_or_transport_failure` |
 
 Contradictory recoverability is refused. Out-of-memory is terminal under the
 standard policy, which never retries any invocation. This does not assert that
@@ -402,8 +403,10 @@ Scoring uses this fixed **lm-eval-derived causal encode-pair rule**:
 Every encode disables automatic special tokens. `add_bos_token=False` records
 that policy; the explicit empty-context prefix remains allowed. Token counts
 use the resulting continuation IDs; character counts use Python `len()` of
-the original caller continuation. Pairs yielding zero context or continuation
-tokens raise `ValueError` rather than changing the tokenization rule. This
+the original caller continuation. A nonempty continuation yielding zero tokens
+fails the whole request with permanent `local_empty_continuation` evidence,
+allowing a sweep to continue with the next request. Empty direct-API continuation
+strings, zero context tokens, and missing BOS/EOS IDs raise `ValueError`. This
 rule's empty-after-whitespace prefix handling is explicit; it is not a claim
 of equivalence to every lm-eval/OLMES version. Caller-side OLMES equivalence
 checks remain outside this package.

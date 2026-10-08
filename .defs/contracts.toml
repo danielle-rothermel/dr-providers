@@ -495,7 +495,7 @@ statement = """
 local_out_of_memory requires resource_exhaustion recoverability and \
 classifies as resource exhaustion. local_device_unavailable, \
 local_model_not_found, local_sequence_too_long, local_chat_template_missing, \
-and local_non_finite_score require permanent \
+local_non_finite_score, and local_empty_continuation require permanent \
 recoverability and classify as permanent provider or transport failures. \
 Contradictory recoverability is refused at the failure boundary. \
 Classification is explicitly code-mapped."""
@@ -526,8 +526,10 @@ statement = """
 Move trailing context whitespace per str.rstrip into the continuation. If context \
 is now empty, use one BOS prefix, falling back to EOS; otherwise jointly encode \
 and slice at separately encoded context length. Automatic special-token insertion \
-is disabled. Refuse zero-token pairs and over-length forward inputs without \
-truncation. Character counts retain original continuation lengths. Scoring \
+is disabled. Nonempty continuations yielding zero tokens fail the whole request \
+with permanent local_empty_continuation evidence. Refuse zero context tokens and \
+over-length forward inputs without truncation. Character counts retain original \
+continuation lengths. Scoring \
 recomputes context per row and sums finite float32 continuation log probabilities; \
 usage counts unpadded forward-input lengths, including repeated context/prefix \
 and excluding the final target. Scoring records no applied chat template."""

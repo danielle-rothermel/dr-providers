@@ -15,8 +15,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Add `local` and Linux CUDA quantization `local-cuda` extras; default imports
   and checks remain torch-free. Add a Python 3.12 `local-backend` CI job with
   a pinned tiny CPU model, full optional type checking, and Hub caching.
-- Add permanent `local_chat_template_missing` and `local_non_finite_score`
-  failures. OOM handling releases unused cache without changing retry behavior.
+- Add permanent `local_chat_template_missing`, `local_non_finite_score`, and
+  `local_empty_continuation` failures. Tokenization that leaves no continuation
+  tokens fails the request as evidence so subsequent sweep items can run. OOM
+  handling releases unused cache without changing retry behavior.
 
 - Add HuggingFace/Transformers local routes, `LocalModelSpec`, `LocalDevice`,
   `LocalDtype`, `Float32MatmulPrecision`, `Quantization`,

@@ -35,13 +35,29 @@ def test_encode_pair_slices_joint_encoding_at_context_length() -> None:
     ) == ([1], [5])
 
 
-def test_encode_pair_rejects_zero_tokens_and_missing_prefix() -> None:
-    with pytest.raises(ValueError, match="continuation tokens"):
+@pytest.mark.parametrize("context", ["a", ""])
+def test_encode_pair_records_empty_tokenized_continuation(
+    context: str,
+) -> None:
+    with pytest.raises(LocalBackendFailure) as raised:
         encode_pair(
-            context="a",
+            context=context,
             continuation="b",
-            encode={"a": [1], "ab": [2]}.__getitem__,
+            encode={"a": [1], "ab": [2], "b": []}.__getitem__,
             prefix_token=9,
+        )
+    assert raised.value.failure.code == "local_empty_continuation"
+    assert raised.value.failure.recoverability is RecoverabilityClass.PERMANENT
+
+
+def test_encode_pair_rejects_invalid_direct_usage() -> None:
+    with pytest.raises(ValueError, match="nonempty continuation"):
+        encode_pair(
+            context="a ", continuation="", encode=lambda _: [1], prefix_token=9
+        )
+    with pytest.raises(ValueError, match="context tokens"):
+        encode_pair(
+            context="a", continuation="b", encode=lambda _: [], prefix_token=9
         )
     with pytest.raises(ValueError, match="BOS or EOS"):
         encode_pair(

@@ -5,8 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from dr_providers.core.failures import ProviderFailureError
-from dr_providers.outcomes.models import LOCAL_FAILURE_RECOVERABILITY
+from dr_providers.core.failures import (
+    ProviderFailureError,
+    RecoverabilityClass,
+    failure_record,
+)
+from dr_providers.outcomes.models import (
+    LOCAL_EMPTY_CONTINUATION_CODE,
+    LOCAL_FAILURE_RECOVERABILITY,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -89,6 +96,8 @@ def encode_pair(
     ``encode`` must disable automatic special-token insertion. This function
     deliberately slices by encoded context length, even at a token merge.
     """
+    if not continuation:
+        raise ValueError("scoring requires a nonempty continuation")
     trailing = len(context) - len(context.rstrip())
     if trailing:
         continuation = context[-trailing:] + continuation
@@ -101,6 +110,14 @@ def encode_pair(
     else:
         context_ids = encode(context)
         continuation_ids = encode(context + continuation)[len(context_ids) :]
-    if not context_ids or not continuation_ids:
-        raise ValueError("scoring requires context and continuation tokens")
+    if not context_ids:
+        raise ValueError("scoring requires context tokens")
+    if not continuation_ids:
+        raise LocalBackendFailure(
+            failure_record(
+                code=LOCAL_EMPTY_CONTINUATION_CODE,
+                recoverability=RecoverabilityClass.PERMANENT,
+                message="scoring continuation has no tokens after encoding",
+            )
+        )
     return context_ids, continuation_ids

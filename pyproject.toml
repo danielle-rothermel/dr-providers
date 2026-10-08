@@ -140,6 +140,3 @@ exclude = ["src/dr_providers/local/transformers.py", "tests/local/test_transform
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-
-[tool.uv.sources]
-dr-providers = { workspace = true }

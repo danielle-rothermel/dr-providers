@@ -22,8 +22,10 @@ from dr_providers import (
     ProviderCallConfig,
     ProviderCallOutcomeKind,
     ProviderCallState,
+    ProviderInvocationOutcome,
     ProviderScoreRequest,
     ProviderStopReason,
+    RecoverabilityClass,
     StandardProviderCallRetryPolicy,
     Transcript,
     TransformersBackend,
@@ -311,6 +313,72 @@ def test_real_provider_lifecycle_and_memory_release() -> None:
     assert evidence.local_execution.revision_commit == REVISION
     assert evidence.wall_time_seconds is not None
     assert evidence.wall_time_seconds > 0
+
+
+def test_boundary_merge_records_failure_and_next_request_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config()
+    classifier = AcceptAllSemanticResponseClassifier()
+    backend = TransformersBackend(config)
+    with LocalModelProvider(config=config, backend=backend) as provider:
+        model, tokenizer = backend._loaded()
+
+        def no_forward(*args: object, **kwargs: object) -> object:
+            del args, kwargs
+            raise AssertionError(
+                "empty continuation must fail before inference"
+            )
+
+        with monkeypatch.context() as patch:
+            # First candidate is scoreable; the second merges into its context.
+            patch.setattr(
+                tokenizer,
+                "encode",
+                lambda text, **_kwargs: {"a": [1], "abc": [1, 3], "ab": [2]}[
+                    text
+                ],
+            )
+            patch.setattr(model, "forward", no_forward)
+            failed = run_local_provider_call(
+                provider=provider,
+                cancellation=Event(),
+                classifier=classifier,
+                state=ProviderCallState.initial(
+                    request=ProviderScoreRequest(
+                        config=config, context="a", continuations=("bc", "b")
+                    ),
+                    retry_policy=StandardProviderCallRetryPolicy(),
+                    classifier_identifier=classifier.identifier,
+                ),
+            )
+        assert len(failed.completed_invocations) == 1
+        assert (
+            failed.outcome.kind is ProviderCallOutcomeKind.INVOCATION_OUTCOME
+        )
+        assert failed.outcome.invocation_outcome is (
+            ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE
+        )
+        evidence = failed.completed_invocations[0].observation.evidence
+        assert evidence.score_response is None
+        assert evidence.local_execution is not None
+        assert evidence.failure is not None
+        assert evidence.failure.code == "local_empty_continuation"
+        assert evidence.failure.recoverability is RecoverabilityClass.PERMANENT
+        assert evidence.failure.traceback is None
+        accepted = run_local_provider_call(
+            provider=provider,
+            cancellation=Event(),
+            classifier=classifier,
+            state=ProviderCallState.initial(
+                request=ProviderScoreRequest(
+                    config=config, context="ctx", continuations=(" answer",)
+                ),
+                retry_policy=StandardProviderCallRetryPolicy(),
+                classifier_identifier=classifier.identifier,
+            ),
+        )
+        assert accepted.outcome.kind is ProviderCallOutcomeKind.ACCEPTED
 
 
 def test_backend_close_is_idempotent() -> None:

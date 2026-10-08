@@ -141,6 +141,7 @@ def test_score_preserves_order_original_chars_detail_and_input_usage(
         "local_sequence_too_long",
         "local_chat_template_missing",
         "local_non_finite_score",
+        "local_empty_continuation",
     ],
 )
 def test_all_local_failures_reach_lifecycle(
