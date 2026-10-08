@@ -128,7 +128,7 @@ def test_local_models_are_frozen_and_refuse_extra_fields(
     spec = local_config.definition.local
     assert spec is not None
     with pytest.raises(ValidationError):
-        spec.batch_size = 2
+        spec.batch_size = 2  # ty: ignore[invalid-assignment]
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps"])
