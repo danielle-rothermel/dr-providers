@@ -8,10 +8,10 @@ repository_root="$({
 })"
 cd -- "${repository_root}"
 
-uv sync --locked --all-extras
-uv run --locked --all-extras ruff format --check .
-uv run --locked --all-extras ruff check .
-uv run --locked --all-extras ty check
-uv run --locked --all-extras pytest
+uv sync --locked --extra cli
+uv run --locked --extra cli ruff format --check .
+uv run --locked --extra cli ruff check .
+uv run --locked --extra cli ty check
+uv run --locked --extra cli pytest
 uvx tombi@1.2.5 lint --offline .defs/terms.toml
-uv run --locked --all-extras python scripts/check_defs.py
+uv run --locked --extra cli python scripts/check_defs.py

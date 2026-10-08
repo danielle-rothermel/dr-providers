@@ -1,7 +1,7 @@
 [project]
 name = "dr-providers"
 version = "0.3.4"
-description = "Typed LLM provider-call kernel with HTTP providers, local HuggingFace route declarations, identity-bearing configs, and expected failures as values."
+description = "Typed LLM provider-call kernel with HTTP providers, local HuggingFace generation and scoring, identity-bearing configs, and expected failures as values."
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -37,6 +37,16 @@ dependencies = [
 
 [project.optional-dependencies]
 cli = ["typer>=0.26.7"]
+local = [
+    "torch>=2.14.1",
+    "transformers>=5.19.0",
+]
+local-cuda = [
+    "accelerate>=1.15.0 ; sys_platform == 'linux'",
+    "bitsandbytes>=0.50.2 ; sys_platform == 'linux'",
+    "torch>=2.14.1",
+    "transformers>=5.19.0",
+]
 
 [project.scripts]
 dr-providers = "dr_providers.surfaces.cli.entry:main"
@@ -66,9 +76,10 @@ only-include = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers -m 'not live'"
+addopts = "--strict-markers -m 'not live and not local_model'"
 markers = [
     "live: hits real provider endpoints; requires API keys",
+    "local_model: real local model execution; requires the local extra",
 ]
 
 [tool.ruff]
@@ -124,6 +135,7 @@ ignore = ["PLR1711", "S101", "TRY003"]
 
 [tool.ty.src]
 include = ["scripts", "src", "tests"]
+exclude = ["src/dr_providers/local/transformers.py", "tests/local/test_transformers.py"]
 
 [tool.pyright]
 venvPath = "."

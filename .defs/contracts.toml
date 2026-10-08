@@ -494,7 +494,8 @@ title = "Local failure codes carry fixed recoverability and classification"
 statement = """
 local_out_of_memory requires resource_exhaustion recoverability and \
 classifies as resource exhaustion. local_device_unavailable, \
-local_model_not_found, and local_sequence_too_long require permanent \
+local_model_not_found, local_sequence_too_long, local_chat_template_missing, \
+local_non_finite_score, and local_empty_continuation require permanent \
 recoverability and classify as permanent provider or transport failures. \
 Contradictory recoverability is refused at the failure boundary. \
 Classification is explicitly code-mapped."""
@@ -503,3 +504,40 @@ Local backends and lifecycle consumers share one pinned interpretation of \
 these codes without changing retry behavior or adding invocation outcomes."""
 date = "2026-10-08"
 check = "uv run pytest -q tests/lifecycle/test_classification.py tests/outcomes/test_models.py"
+
+[[contracts]]
+title = "A local model provider binds one definition and loads its weights once"
+statement = """
+LocalModelProvider eagerly constructs or accepts one backend and binds the \
+definition hash. A mismatching request, invalid local controls, tool-role \
+generation, or closed provider raises before backend work. Model work and cache \
+release are serialized; shutdown refuses new admission, drains admitted \
+offloads, waits for active work, and closes the backend once. Expected invocation \
+failures become evidence; load failures and unexpected exceptions raise."""
+rationale = """
+One canonical owner protects model lifetime without reloading per invocation \
+or releasing weights while admitted work still uses them."""
+date = "2026-10-08"
+check = "uv run pytest -q tests/local/test_local_provider.py"
+
+[[contracts]]
+title = "Local scoring implements the lm-eval encode-pair rule without truncation"
+statement = """
+Move trailing context whitespace per str.rstrip into the continuation. If context \
+is now empty, use one BOS prefix, falling back to EOS; otherwise jointly encode \
+and slice at separately encoded context length. Automatic special-token insertion \
+is disabled. add_bos_token true ensures one leading tokenizer BOS on generation \
+prompts and scoring context, retaining an existing leading BOS; continuation \
+targets are unchanged. The empty-context BOS/EOS prefix applies in both modes. \
+Nonempty continuations yielding zero tokens fail the whole request \
+with permanent local_empty_continuation evidence. Refuse zero context tokens and \
+over-length forward inputs without truncation. Character counts retain original \
+continuation lengths. Scoring \
+recomputes context per row and sums finite float32 continuation log probabilities; \
+usage counts unpadded forward-input lengths, including repeated context/prefix \
+and excluding the final target. Scoring records no applied chat template."""
+rationale = """
+A pinned lm-eval-derived rule protects the scoring boundary without claiming \
+blanket upstream equivalence or adding evaluation-library dependencies."""
+date = "2026-10-08"
+check = "uv run pytest -q tests/local/test_backend.py tests/local/test_local_provider.py"

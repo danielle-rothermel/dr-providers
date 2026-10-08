@@ -4,15 +4,26 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.4] - Unreleased
+## [0.3.4] - 2026-10-08
 
 ### Added
+
+- Add `LocalModelProvider`, `LocalBackend`, `TransformersBackend`,
+  `LocalBackendFailure`, `GenerationOutput`, `ScoredContinuation`, and
+  `FakeLocalBackend` exports. Local models load once for generation and scoring,
+  with serialized work, draining shutdown, zero provider charge, and wall time.
+- Add `local` and Linux CUDA quantization `local-cuda` extras; default imports
+  and checks remain torch-free. Add a Python 3.12 `local-backend` CI job with
+  a pinned tiny CPU model, full optional type checking, and Hub caching.
+- Add permanent `local_chat_template_missing`, `local_non_finite_score`, and
+  `local_empty_continuation` failures. Tokenization that leaves no continuation
+  tokens fails the request as evidence so subsequent sweep items can run. OOM
+  handling releases unused cache without changing retry behavior.
 
 - Add HuggingFace/Transformers local routes, `LocalModelSpec`, `LocalDevice`,
   `LocalDtype`, `Float32MatmulPrecision`, `Quantization`,
   `ContinuationTokenization`, `TokenLimitParameter.MAX_NEW_TOKENS`, and the
-  generate/score `huggingface_config` preset. No local backend or new runtime
-  dependency is shipped.
+  generate/score `huggingface_config` preset.
 - Add four module-level local failure codes with fixed recoverability and
   explicit invocation classification: `local_out_of_memory`,
   `local_device_unavailable`, `local_model_not_found`, and
@@ -33,8 +44,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Score responses classify as success without semantic classification.
 - `ScriptedOutcome.scores` and `ScriptedProvider` support scoring, including
   expected failures and the shared retry lifecycle. HTTP scoring raises before
-  admission; the CLI remains generate-only. No production scoring backend,
-  torch, transformers, or new runtime dependency is added.
+  admission; the CLI remains generate-only.
 - Add permanent validation failure codes `no_supported_kinds`,
   `unsupported_call_kind`, `score_request_rejects_controls`, and
   `score_request_rejects_extensions`.
@@ -51,6 +61,23 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   request identity through the definition and config hash references.
 
 ### Changed
+
+- Add the required identity-bearing `LocalModelSpec.add_bos_token` field, exposed
+  by `huggingface_config` with default `False`. Enabling it ensures a leading
+  tokenizer BOS for generation and scoring context, without duplicating one
+  already present or adding BOS to continuation targets. Empty-context scoring
+  retains its BOS/EOS fallback independently. Definition schema advances from 6
+  to 7; all definition and downstream hashes change, including HTTP identities.
+- Rename `ContinuationTokenization.SEPARATE_ENCODE` to `LM_EVAL_ENCODE_PAIR`.
+  This explicitly changes the persisted literal from `separate_encode` to
+  `lm_eval_encode_pair`, changing local definition and downstream hashes.
+  Scoring moves trailing
+  whitespace, jointly encodes and splits by context length, uses a BOS/EOS
+  prefix for empty-after-strip context, and refuses zero-token pairs/truncation.
+- Define local scoring usage as unpadded forward-input tokens, including repeated
+  context/prefix tokens and excluding the final target. Generation has fixed
+  sampling defaults and validates local control ranges. Runtime evidence records
+  actual chat-template use; changed process-global matmul precision is refused.
 
 - Add unconditional definition identity key `local`: required on HuggingFace
   definitions and `None` on HTTP definitions. All definition and downstream
@@ -97,7 +124,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   | Schema | Previous released | Current |
   | --- | --- | --- |
-  | Provider call definition | 3 | 6 |
+  | Provider call definition | 3 | 7 |
   | Provider call config | 1 | 2 |
   | Provider call request | 1 | Removed; replaced by kind-specific schemas |
   | Provider generate request | — | 1 |
@@ -122,8 +149,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default rendering. State records have a changed schema and embedded
   hashes, with no separate state identity hash. Existing `role_messages`
   wire bodies and the committed wire corpus are unchanged.
-- Bump the package version to 0.3.4 and refresh `uv.lock`. This version is
-  unreleased: no tag, GitHub release, or PyPI publication is created.
+- Bump the package version to 0.3.4 and refresh `uv.lock`.
 
 ## [0.3.3] - 2026-10-06
 

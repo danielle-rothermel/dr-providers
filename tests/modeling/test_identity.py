@@ -71,13 +71,13 @@ def _fixed_request() -> ProviderGenerateRequest:
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "985f3dd1739a982d3eca19ae61f533667636bb84bc37bd0c7871199489c3865a"
+    "5ffef3a412b3b28aefd64fb7345cf4f7c9614ecfaf79461475719b66f99ad9f6"
 )
 GOLDEN_CONFIG_HASH = (
-    "48ad230e67eb8f4dbd61d3a21868a76034d233bac9267500c1d6e4b49e192518"
+    "d2b783c7ba667f05c4b88d3c8efc7b526126d1fc2ffb6879d8de7b1c36c45874"
 )
 GOLDEN_REQUEST_HASH = (
-    "ebfdaa1dbd0feab7f15e0ae282f33fc6fd6e0165290b8c80fd1a517f196ee592"
+    "9033ea1a029d9cbfa65d23a16143722c84cb360f1efe19a62c55b9dd1e5dee37"
 )
 
 
@@ -96,7 +96,7 @@ class TestDefinitionSchemaVersionOwnership:
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         definition = _fixed_definition()
 
-        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 6
+        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 7
         assert "schema_version" not in ProviderCallDefinition.model_fields
         properties = ProviderCallDefinition.model_json_schema()["properties"]
         assert "schema_version" not in properties
@@ -438,14 +438,14 @@ def test_score_request_identity_payload_and_hash_are_pinned(
     assert score_request.identity_payload() == {
         "kind": "score",
         "config_hash": (
-            "dc0617f4baf451e74c69da9a59206f18f0575dd8a0fb64407b4c9d7459b9235e"
+            "2e1a9afa1bb0b49593b0e36b20f44442809341a8ae1deca2e3181d0d6633a6a5"
         ),
         "context": "context",
         "continuations": ["answer"],
         "token_logprobs": False,
     }
     assert score_request.identity_hash == (
-        "3df44af5d964cd687848054982bf8abf6f1dbf5047794f72dce0ae8f864cb531"
+        "5c19302e1742abebccfef76aa6a68aeee1e5b442ddbdcba7ff9c242d48dbdd54"
     )
     assert set(ProviderScoreRequest.model_fields) == {
         "kind",

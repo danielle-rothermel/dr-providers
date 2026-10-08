@@ -9,6 +9,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StrictStr,
     model_validator,
@@ -49,7 +50,13 @@ class Quantization(StrEnum):
 
 @verify(UNIQUE)
 class ContinuationTokenization(StrEnum):
-    SEPARATE_ENCODE = "separate_encode"
+    """Causal joint encoding split by context length after moving whitespace.
+
+    Empty-after-rstrip contexts use BOS, falling back to EOS, as a prefix.
+    Automatic special-token insertion is disabled.
+    """
+
+    LM_EVAL_ENCODE_PAIR = "lm_eval_encode_pair"
 
 
 class LocalModelSpec(BaseModel):
@@ -69,6 +76,7 @@ class LocalModelSpec(BaseModel):
     batch_size: StrictInt = Field(ge=1)
     max_sequence_length: StrictInt = Field(ge=1)
     continuation_tokenization: ContinuationTokenization
+    add_bos_token: StrictBool
 
     @model_validator(mode="after")
     def _validate_cuda_only_settings(self) -> LocalModelSpec:
@@ -104,4 +112,5 @@ class LocalModelSpec(BaseModel):
             "batch_size": self.batch_size,
             "max_sequence_length": self.max_sequence_length,
             "continuation_tokenization": self.continuation_tokenization.value,
+            "add_bos_token": self.add_bos_token,
         }

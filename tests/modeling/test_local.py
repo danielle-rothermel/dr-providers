@@ -38,7 +38,8 @@ EXPECTED_SPEC = {
     "quantization": "none",
     "batch_size": 1,
     "max_sequence_length": 1024,
-    "continuation_tokenization": "separate_encode",
+    "continuation_tokenization": "lm_eval_encode_pair",
+    "add_bos_token": False,
 }
 
 
@@ -102,6 +103,9 @@ def test_local_spec_and_definition_payloads(
         ("continuation_tokenization", "joint_encode"),
         ("float32_matmul_precision", "medium"),
         ("quantization", "int4"),
+        ("add_bos_token", 1),
+        ("add_bos_token", "true"),
+        ("add_bos_token", None),
     ],
 )
 def test_local_spec_refuses_invalid_values(field: str, value: Any) -> None:
@@ -239,6 +243,7 @@ def test_preset_admits_generate_and_score(
         ("quantization", Quantization.BITSANDBYTES_NF4),
         ("batch_size", 2),
         ("max_sequence_length", 2048),
+        ("add_bos_token", True),
     ],
 )
 def test_each_variable_local_dimension_changes_definition_identity(
@@ -258,13 +263,13 @@ def test_singleton_tokenization_is_explicit_identity(
     local_config: ProviderCallConfig,
 ) -> None:
     assert list(ContinuationTokenization) == [
-        ContinuationTokenization.SEPARATE_ENCODE
+        ContinuationTokenization.LM_EVAL_ENCODE_PAIR
     ]
     assert (
         local_config.definition.identity_payload()["local"][
             "continuation_tokenization"
         ]
-        == "separate_encode"
+        == "lm_eval_encode_pair"
     )
 
 
@@ -277,7 +282,10 @@ def test_preset_preserves_model_and_rendering() -> None:
         batch_size=3,
         max_sequence_length=512,
         prompt_rendering=PromptRendering.FLAT_TEXT,
+        add_bos_token=True,
     )
+    assert config.definition.local is not None
+    assert config.definition.local.add_bos_token is True
     assert config.route.model == "./models/../my-model"
     assert config.definition.prompt_rendering is PromptRendering.FLAT_TEXT
     assert config.quota_identity == config.route.quota_identity
@@ -292,17 +300,17 @@ def test_local_golden_hashes(local_config: ProviderCallConfig) -> None:
     )
     assert (
         local_config.definition.identity_hash
-        == "5f53b843a13aae3301aacac26043250f7bee0f193f9173b9a5a23fee1312b33f"
+        == "c6d8463419bc2d6b9fa26994f0fbf53f942bdc53823d26202d5222a6b229282b"
     )
     assert (
         local_config.identity_hash
-        == "1aa78e83e344dfddbf2c79d30801ebe85eb4010542771cbf0a6343f00cbaa94f"
+        == "9673da43540af5ee85561a29a26e3e8d3844caf1326882a96077c5fd375a3c20"
     )
     assert (
         generate.identity_hash
-        == "667b6a53d7af8e8c4c50df9adf94160f2ae4c75b1c6d33eec94916c62803de77"
+        == "9eb9943c5c402edc6ae1da9e8811b3e647ff106d5d496130285ee4eedf72e288"
     )
     assert (
         score.identity_hash
-        == "831ff01046a6616124ef30de72b93726bf17ef5612ba76d9139888831a9912e1"
+        == "55990d038f41d18c59a875e067e09515ecbccdb9c331814cdcee00f402a0b7ef"
     )
