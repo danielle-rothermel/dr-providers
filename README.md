@@ -7,20 +7,22 @@
 | --- | --- | --- |
 
 **dr-providers makes LLM provider calls through explicit, typed contracts.**
-It executes HTTP calls for OpenRouter, OpenAI, Gemini, and Anthropic and models
-local HuggingFace routes while keeping call identity, provider translation, transport policy, and outcomes separate.
+It executes HTTP calls for OpenRouter, OpenAI, Gemini, and Anthropic, and local
+HuggingFace generation and continuation scoring through Transformers. Call
+identity, model execution, transport policy, and outcomes remain separate.
 
 ## Package map
 
 | Package | Responsibility |
 | --- | --- |
 | `dr_providers.modeling` | Identity-bearing definitions, configs, requests, routes, controls, and transcripts |
+| `dr_providers.local` | Load-once causal-LM execution, serialized provider lifetime, and a torch-free backend seam |
 | `dr_providers.translation` | Pure provider request-body construction and parsed-response translation |
 | `dr_providers.transport` | Credentials, endpoints, timeout policy, and one-invocation HTTP execution over the [dr-wire](https://github.com/danielle-rothermel/dr-wire) bounded client |
 | `dr_providers.outcomes` | Typed responses, expected failures, invocation evidence, and conformance warnings |
 | `dr_providers.lifecycle` | Invocation classification, serializable retry state, deterministic transitions, and terminal call results |
 | `dr_providers.core` | Shared provider protocol and failure vocabulary |
-| `dr_providers.surfaces.testing` | Deterministic `ScriptedProvider` for network-free tests |
+| `dr_providers.surfaces.testing` | Deterministic `ScriptedProvider` and `FakeLocalBackend` for network-free tests |
 | `dr_providers.surfaces.cli` | Optional `dr-providers` one-shot CLI |
 
 The top-level `dr_providers` exports are the stable general import surface.
@@ -171,15 +173,15 @@ The evidence `build()` path checks score count, character counts, and required
 per-token detail; direct evidence construction and deserialization are trusted
 paths without request-dependent checks.
 
-`ScriptedProvider` supports scores for offline testing. No shipped production
-provider serves scores; `HttpProvider.invoke()` raises `ValueError` for them
+`LocalModelProvider` serves scores through Transformers, and `ScriptedProvider`
+supports scores for offline testing. `HttpProvider.invoke()` raises `ValueError` for them
 before admission or payload construction. Score responses classify as success
 without invoking the semantic classifier. The shared lifecycle still requires
 a classifier identifier and matching classifier object, although scoring does
 not call its `classify()` method.
 
-The request and response envelopes are intended to support a future local
-backend; backend fit will be validated when that backend is implemented.
+The local backend supplies ordered finite scores and validates correspondence
+through the same evidence build path as the scripted provider.
 
 ```python
 from threading import Event
@@ -258,7 +260,7 @@ the discriminated request automatically when restoring state or results.
 ## Local HuggingFace routes
 
 `huggingface_config` declares a HuggingFace/Transformers route for generation
-and continuation scoring. No shipped provider loads or runs a local model yet.
+and continuation scoring. `LocalModelProvider` loads and runs that model;
 `ScriptedProvider` can exercise both kinds without constructing an HTTP body.
 The CLI remains HTTP generation only.
 
@@ -287,16 +289,16 @@ through references, config and request identity:
 | `float32_matmul_precision` | `highest` (default) or `high`; `high` requires CUDA and permits reduced internal precision |
 | `quantization` | `none` (default), `bitsandbytes_int8`, or `bitsandbytes_nf4`; quantization currently requires CUDA |
 | `batch_size` | Positive declared batch size |
-| `max_sequence_length` | Positive declared sequence cap; backend validates token accounting and model capacity |
-| `continuation_tokenization` | `separate_encode`: encode context and continuation separately, then concatenate |
+| `max_sequence_length` | Positive forward-input cap; backend refuses over-length inputs |
+| `continuation_tokenization` | `lm_eval_encode_pair`: move trailing context whitespace to the continuation, jointly encode, then split at context token count |
 
 Identity covers declarations, not immutable file contents. A branch or tag can
 resolve differently later, and a local directory can change under the same
 path. Resolved Hub commits belong in execution evidence when available; local
 paths with no resolved commit do not establish artifact identity. Neither
 request identity nor this evidence record promises reproducible execution.
-The backend must validate the fit of these declarations; this modeling surface
-does not promise that implementation will require no further schema changes.
+The backend validates device availability and input lengths; model and dtype
+support also depend on the installed runtime and hardware.
 
 The preset supports temperature, top-p, token limit (`max_new_tokens`), and
 seed. It has no required controls; reasoning, verbosity, and HTTP body
@@ -305,15 +307,15 @@ For a local backend, `ROLE_MESSAGES` applies the tokenizer's chat template;
 a tokenizer without one fails at load. `FLAT_TEXT` directly tokenizes the
 separator-free concatenation of transcript contents. Scores ignore rendering
 because they carry exact context and continuations rather than a transcript.
-The first backend should implement fixed rules for assistant prefills,
-special tokens (including empty-context scoring), sampling defaults, sequence
-limits, and quantization details, adding configuration only for concrete
-needs. Those rules and backend support remain to be validated there.
+Role rendering always starts a new assistant response with
+`add_generation_prompt=True`; assistant-prefill continuation is not supported.
+Tool-role generation messages are refused with `ValueError`.
 
 `LocalExecutionEvidence` records selected realized conditions: device and GPU
 name, dtype, float32 matmul precision, quantization, resolved Hub commit when
 available, torch and transformers versions, and whether a chat template and
-BOS token were applied. Every field bears evidence identity, so a changed GPU
+automatic BOS insertion were applied to that invocation. Scoring never applies
+a chat template; its empty-context prefix is distinct from automatic BOS insertion. Every field bears evidence identity, so a changed GPU
 model or recorded library version changes that identity. This is a selected
 conditions record, not an exhaustive environment fingerprint. It is mutually
 exclusive with transport-policy identity or HTTP request evidence; neither
@@ -331,6 +333,8 @@ The following codes are module-level constants in `dr_providers.outcomes.models`
 | `local_device_unavailable` | `permanent` | `permanent_provider_or_transport_failure` |
 | `local_model_not_found` | `permanent` | `permanent_provider_or_transport_failure` |
 | `local_sequence_too_long` | `permanent` | `permanent_provider_or_transport_failure` |
+| `local_chat_template_missing` | `permanent` | `permanent_provider_or_transport_failure` |
+| `local_non_finite_score` | `permanent` | `permanent_provider_or_transport_failure` |
 
 Contradictory recoverability is refused. Out-of-memory is terminal under the
 standard policy, which never retries any invocation. This does not assert that
@@ -338,12 +342,108 @@ a later identical invocation cannot succeed after memory pressure changes;
 custom retry behavior is unchanged.
 
 Local generation reports input tokens as `prompt_tokens`, generated tokens as
-`completion_tokens`, and their sum as `total_tokens`. Local scoring reports all
-tokens processed across context and continuations as `prompt_tokens` and
-`total_tokens`, leaving `completion_tokens` unset. Local responses declare
+`completion_tokens`, and their sum as `total_tokens`. Local scoring reports the sum of unpadded forward-input lengths as
+`prompt_tokens` and `total_tokens`, leaving `completion_tokens` unset. This
+counts repeated context and any empty-context prefix for each row, excludes
+the final target token (which is predicted but not fed into the model), and
+excludes padding. It is a token-accounting convention, not a FLOP count. Local responses declare
 `CostInfo(total_cost=0.0)`, meaning zero provider charge, rather than `None`;
 this does not estimate hardware or electricity costs. Route-only quota identity
 remains available but carries no quota meaning for local routes.
+
+## Local HuggingFace backend
+
+Install `dr-providers[local]` for Torch and Transformers, or
+`dr-providers[local-cuda]` for CUDA quantization dependencies on Linux.
+Importing `dr_providers`, constructing a fake backend, and using HTTP providers
+load none of Torch, Transformers, or bitsandbytes.
+
+```python
+from dr_providers import (
+    LocalDevice, LocalDtype, LocalModelProvider, PromptRendering,
+    ProviderScoreRequest, huggingface_config,
+)
+
+config = huggingface_config(
+    model="hf-internal-testing/tiny-random-gpt2",
+    revision="71034c5d8bde858ff824298bdedc65515b97d2b9",
+    device=LocalDevice.CPU,
+    dtype=LocalDtype.FLOAT32,
+    batch_size=2,
+    max_sequence_length=512,
+    prompt_rendering=PromptRendering.FLAT_TEXT,
+)
+with LocalModelProvider(config=config) as provider:
+    evidence = provider.invoke(ProviderScoreRequest(
+        config=config, context="The answer is", continuations=(" yes", " no"),
+        token_logprobs=True,
+    ))
+    provider.release_memory()  # Release unused allocator cache between calls.
+```
+
+Construction eagerly loads one tokenizer and causal LM. Reuse the provider
+for many calls with the same definition; controls may vary without reloading.
+A different definition raises `ValueError`. Load failures raise directly;
+expected invocation failures become evidence without tracebacks. Missing
+runtime dependencies, incompatible model artifacts, authentication/network
+errors, and unexpected exceptions propagate. A tokenizer without a chat
+template fails at load for `ROLE_MESSAGES`; use `FLAT_TEXT` for base-model
+scoring. Flat rendering concatenates contents without separators.
+
+Scoring uses this fixed **lm-eval-derived causal encode-pair rule**:
+
+1. Move all trailing context whitespace, as determined by `str.rstrip`, to
+   the beginning of the continuation.
+2. If context is now empty, use one BOS token as context, falling back to EOS,
+   and encode the adjusted continuation. A tokenizer with neither ID is refused.
+3. Otherwise encode both context and context-plus-continuation, then take
+   continuation IDs by slicing the latter at the encoded context length.
+
+Every encode disables automatic special tokens. `add_bos_token=False` records
+that policy; the explicit empty-context prefix remains allowed. Token counts
+use the resulting continuation IDs; character counts use Python `len()` of
+the original caller continuation. Pairs yielding zero context or continuation
+tokens raise `ValueError` rather than changing the tokenization rule. This
+rule's empty-after-whitespace prefix handling is explicit; it is not a claim
+of equivalence to every lm-eval/OLMES version. Caller-side OLMES equivalence
+checks remain outside this package.
+
+Scoring recomputes context for each row, batches up to the declared batch size,
+right-pads with attention masks, and sums gathered float32 log probabilities.
+A non-finite gathered value or total fails the whole request. Inputs longer
+than the declared forward-input cap are refused without truncation. Generation
+reserves at least one new token and caps output at remaining sequence space.
+Empty tokenized generation prompts are refused. Recognized CUDA and MPS OOMs
+release allocator cache and become `local_out_of_memory` evidence; they never
+silently shrink batches or change retry policy.
+
+Generation uses fixed single-sequence defaults rather than inheriting model
+beam-search, penalty, or sampling settings. It is greedy unless temperature
+is positive or top-p is set. Sampling defaults to temperature 1 and top-p 1,
+with top-k filtering disabled. Thus temperature 0 plus an explicit top-p still
+samples. Temperature must be nonnegative, top-p must be in `(0, 1]`, and token
+limits must be positive; invalid local controls raise `ValueError` without
+changing HTTP validation. EOS ends with `STOP`; exhausting the output cap ends
+with `LENGTH`. Decoded text excludes the prompt and skips special tokens.
+
+A supplied seed calls `torch.manual_seed` immediately before generation and
+changes **process-global RNG state**. Without a seed, the backend does not
+reseed. Matmul precision is also process-global: construction sets it, and an
+invocation refuses a changed setting. Callers must coordinate other Torch
+users and providers in the same process; per-provider serialization does not
+isolate process-global state or guarantee reproducibility.
+
+NF4 explicitly uses the requested dtype for its compute dtype. Quantized
+weights load directly onto the selected current CUDA device; they are not moved
+with an unconditional post-load `.to()`. CUDA quantization and MPS behavior
+require hardware validation beyond the CPU integration suite.
+
+The provider owns one lazy worker for `run_local_provider_call_async`; direct
+invocations and `release_memory()` share its model-work lock. `close()` refuses
+new work, waits for admitted offloads and active model work, then releases
+weights. It is idempotent and supported through a context manager. Do not close
+from its own worker or recursively await its single-worker async entry point.
+`release_memory()` retains weights; `close()` drops them.
 
 ## CLI
 
@@ -456,13 +556,22 @@ trusted-data paths.
 
 ## Repository validation
 
-The default suite is offline: pytest excludes tests marked `live`.
+The default suite is offline and torch-free: pytest excludes `live` and
+`local_model` tests.
 
 ```bash
-uv sync --locked --all-extras
+uv sync --locked --extra cli
 uv run pre-commit install
 scripts/pre-check.sh
 uv build
+```
+
+Run the optional real CPU model suite and type-check the optional modules:
+
+```bash
+uv sync --locked --extra cli --extra local
+uv run --locked --extra cli --extra local ty check --config 'src.exclude = []'
+uv run --locked --extra cli --extra local pytest -q -m local_model
 ```
 
 Run the complete live matrix without changing the committed wire corpus:

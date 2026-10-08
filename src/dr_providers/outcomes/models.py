@@ -26,8 +26,12 @@ LOCAL_OUT_OF_MEMORY_CODE = "local_out_of_memory"
 LOCAL_DEVICE_UNAVAILABLE_CODE = "local_device_unavailable"
 LOCAL_MODEL_NOT_FOUND_CODE = "local_model_not_found"
 LOCAL_SEQUENCE_TOO_LONG_CODE = "local_sequence_too_long"
+LOCAL_CHAT_TEMPLATE_MISSING_CODE = "local_chat_template_missing"
+LOCAL_NON_FINITE_SCORE_CODE = "local_non_finite_score"
 
 LOCAL_FAILURE_RECOVERABILITY: dict[str, RecoverabilityClass] = {
+    LOCAL_CHAT_TEMPLATE_MISSING_CODE: RecoverabilityClass.PERMANENT,
+    LOCAL_NON_FINITE_SCORE_CODE: RecoverabilityClass.PERMANENT,
     LOCAL_OUT_OF_MEMORY_CODE: RecoverabilityClass.RESOURCE_EXHAUSTION,
     LOCAL_DEVICE_UNAVAILABLE_CODE: RecoverabilityClass.PERMANENT,
     LOCAL_MODEL_NOT_FOUND_CODE: RecoverabilityClass.PERMANENT,

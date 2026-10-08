@@ -49,7 +49,13 @@ class Quantization(StrEnum):
 
 @verify(UNIQUE)
 class ContinuationTokenization(StrEnum):
-    SEPARATE_ENCODE = "separate_encode"
+    """Causal joint encoding split by context length after moving whitespace.
+
+    Empty-after-rstrip contexts use BOS, falling back to EOS, as a prefix.
+    Automatic special-token insertion is disabled.
+    """
+
+    LM_EVAL_ENCODE_PAIR = "lm_eval_encode_pair"
 
 
 class LocalModelSpec(BaseModel):

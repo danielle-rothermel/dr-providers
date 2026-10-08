@@ -8,11 +8,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Add `LocalModelProvider`, `LocalBackend`, `TransformersBackend`,
+  `LocalBackendFailure`, `GenerationOutput`, `ScoredContinuation`, and
+  `FakeLocalBackend` exports. Local models load once for generation and scoring,
+  with serialized work, draining shutdown, zero provider charge, and wall time.
+- Add `local` and Linux CUDA quantization `local-cuda` extras; default imports
+  and checks remain torch-free. Add a Python 3.12 `local-backend` CI job with
+  a pinned tiny CPU model, full optional type checking, and Hub caching.
+- Add permanent `local_chat_template_missing` and `local_non_finite_score`
+  failures. OOM handling releases unused cache without changing retry behavior.
+
 - Add HuggingFace/Transformers local routes, `LocalModelSpec`, `LocalDevice`,
   `LocalDtype`, `Float32MatmulPrecision`, `Quantization`,
   `ContinuationTokenization`, `TokenLimitParameter.MAX_NEW_TOKENS`, and the
-  generate/score `huggingface_config` preset. No local backend or new runtime
-  dependency is shipped.
+  generate/score `huggingface_config` preset.
 - Add four module-level local failure codes with fixed recoverability and
   explicit invocation classification: `local_out_of_memory`,
   `local_device_unavailable`, `local_model_not_found`, and
@@ -33,8 +42,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Score responses classify as success without semantic classification.
 - `ScriptedOutcome.scores` and `ScriptedProvider` support scoring, including
   expected failures and the shared retry lifecycle. HTTP scoring raises before
-  admission; the CLI remains generate-only. No production scoring backend,
-  torch, transformers, or new runtime dependency is added.
+  admission; the CLI remains generate-only.
 - Add permanent validation failure codes `no_supported_kinds`,
   `unsupported_call_kind`, `score_request_rejects_controls`, and
   `score_request_rejects_extensions`.
@@ -51,6 +59,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   request identity through the definition and config hash references.
 
 ### Changed
+
+- Rename `ContinuationTokenization.SEPARATE_ENCODE` to `LM_EVAL_ENCODE_PAIR`.
+  This explicitly changes the persisted literal from `separate_encode` to
+  `lm_eval_encode_pair` within unreleased 0.3.4, changing local definition and
+  downstream hashes without changing schema versions. Scoring moves trailing
+  whitespace, jointly encodes and splits by context length, uses a BOS/EOS
+  prefix for empty-after-strip context, and refuses zero-token pairs/truncation.
+- Define local scoring usage as unpadded forward-input tokens, including repeated
+  context/prefix tokens and excluding the final target. Generation has fixed
+  sampling defaults and validates local control ranges. Runtime evidence records
+  actual chat-template use; changed process-global matmul precision is refused.
 
 - Add unconditional definition identity key `local`: required on HuggingFace
   definitions and `None` on HTTP definitions. All definition and downstream

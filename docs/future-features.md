@@ -21,7 +21,7 @@ The score request and response envelopes, request-kind-tagged evidence, and
 shared retry lifecycle exist for scripted testing. A future implementation
 must validate backend fit, tokenization behavior, and response correspondence;
 the envelopes are intended for reuse without claiming that a backend has
-already proven them sufficient. No local backend is shipped today.
+already proven them sufficient. Local scoring is provided by the Transformers backend.
 
 ## Native async transport
 
@@ -116,23 +116,17 @@ that would need them.
   package's own frame via httpx internals, which the frozen wire core
   deliberately avoids.
 
-## Local backend fit and additional execution settings
+## Additional local execution capabilities
 
-HuggingFace/Transformers routes, local model specs, fixed local failure codes,
-and local execution evidence can be modeled and exercised through the scripted
-provider. No local production backend is shipped. The first backend must validate
-model and hardware support and define fixed rules for rendering, assistant
-prefills, special tokens and empty-context scoring, sampling, sequence limits,
-and quantized computation. The existing schema is intended for reuse without
-claiming that backend fit or schema sufficiency has already been proven.
-Additional configuration should follow concrete needs rather than anticipate
-all backend options.
+`LocalModelProvider` and `TransformersBackend` provide load-once causal-LM
+generation and scoring. Scoring uses the documented `lm_eval_encode_pair`
+rule without truncation and recomputes context per continuation. KV-cache
+context sharing is not built; it would need evidence that scores preserve the
+recomputed reference behavior. Batched generation, assistant-prefill
+continuation, and tool-role rendering are not built.
 
 Quantization on non-CUDA devices and dtypes beyond float32 and bfloat16 are
-not built. These are current package restrictions, not claims about what
-upstream libraries or hardware can support. `ContinuationTokenization` has
-one member, `separate_encode`, by decision; joint encoding is not supported.
-Stronger artifact identification for mutable local directories and a complete
-execution-environment fingerprint are not provided. Recorded Hub commit IDs
-and selected library/device facts narrow the evidence without guaranteeing
-reproducibility.
+not built. Stronger artifact identification for mutable local directories and
+a complete execution-environment fingerprint are not provided. Recorded Hub
+commits and selected library/device facts narrow evidence without guaranteeing
+reproducibility. Process-global Torch precision and RNG remain caller-coordinated.

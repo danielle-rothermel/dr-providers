@@ -51,6 +51,14 @@ from dr_providers.lifecycle import (
     run_local_provider_call_async,
     transition_provider_call,
 )
+from dr_providers.local.backend import (
+    GenerationOutput,
+    LocalBackend,
+    LocalBackendFailure,
+    ScoredContinuation,
+)
+from dr_providers.local.provider import LocalModelProvider
+from dr_providers.local.transformers import TransformersBackend
 from dr_providers.modeling.call import (
     PROVIDER_CALL_CONFIG_SCHEMA,
     PROVIDER_CALL_CONFIG_SCHEMA_VERSION,
@@ -139,6 +147,7 @@ from dr_providers.outcomes.models import (
     is_response,
     is_score_response,
 )
+from dr_providers.surfaces.testing.fake_backend import FakeLocalBackend
 from dr_providers.surfaces.testing.scripted import (
     ScriptedOutcome,
     ScriptedProvider,
@@ -206,12 +215,17 @@ __all__ = [
     "CustomProviderCallRetryPolicy",
     "DecidedProviderInvocationRecord",
     "EventProviderRetryWait",
+    "FakeLocalBackend",
     "Float32MatmulPrecision",
     "GenerationControls",
+    "GenerationOutput",
     "HttpProvider",
+    "LocalBackend",
+    "LocalBackendFailure",
     "LocalDevice",
     "LocalDtype",
     "LocalExecutionEvidence",
+    "LocalModelProvider",
     "LocalModelSpec",
     "MessageRole",
     "ModelRoute",
@@ -258,6 +272,7 @@ __all__ = [
     "RecoverabilityClass",
     "RequestControl",
     "ResponsesDiagnostics",
+    "ScoredContinuation",
     "ScriptedOutcome",
     "ScriptedProvider",
     "SemanticResponseClassifier",
@@ -266,6 +281,7 @@ __all__ = [
     "TokenLimitParameter",
     "TokenUsage",
     "Transcript",
+    "TransformersBackend",
     "TransportTimeoutContainment",
     "Verbosity",
     "WarningSeverity",

@@ -270,18 +270,16 @@ def huggingface_config(  # noqa: PLR0913 -- explicit local model declaration
     ),
     quantization: Quantization = Quantization.NONE,
     continuation_tokenization: ContinuationTokenization = (
-        ContinuationTokenization.SEPARATE_ENCODE
+        ContinuationTokenization.LM_EVAL_ENCODE_PAIR
     ),
     controls: GenerationControls | None = None,
     prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
 ) -> ProviderCallConfig:
-    """Declare a local route; no shipped provider runs a local model yet.
+    """Declare a load-once local generation and scoring definition.
 
-    A future backend applies the tokenizer's chat template for ROLE_MESSAGES
-    and fails at load if it is absent. FLAT_TEXT directly tokenizes the
-    separator-free concatenation. Score requests ignore rendering because
-    they carry exact context and continuations rather than a transcript.
-    Backend fit and detailed tokenization rules remain to be validated.
+    ROLE_MESSAGES requires a tokenizer chat template at load. FLAT_TEXT
+    concatenates contents without separators. Scoring ignores rendering;
+    base models without chat templates should use FLAT_TEXT.
     """
     definition = ProviderCallDefinition(
         definition_id="huggingface.transformers",

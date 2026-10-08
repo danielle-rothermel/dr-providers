@@ -866,5 +866,5 @@ def test_local_score_handoff_preserves_execution_and_excludes_wall_time(
     assert (
         changed.identity_hash
         == restored_result.identity_hash
-        == "934f24d92dbe7744a045ce34ce923ab5cc02df083d75a4e7f9ded7f12bd4ab93"
+        == "d65e7460d6967ae13f9ffe98e2adc4a1de70788ef569b35f8b1aae00a708ace0"
     )

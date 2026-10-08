@@ -38,7 +38,7 @@ EXPECTED_SPEC = {
     "quantization": "none",
     "batch_size": 1,
     "max_sequence_length": 1024,
-    "continuation_tokenization": "separate_encode",
+    "continuation_tokenization": "lm_eval_encode_pair",
 }
 
 
@@ -258,13 +258,13 @@ def test_singleton_tokenization_is_explicit_identity(
     local_config: ProviderCallConfig,
 ) -> None:
     assert list(ContinuationTokenization) == [
-        ContinuationTokenization.SEPARATE_ENCODE
+        ContinuationTokenization.LM_EVAL_ENCODE_PAIR
     ]
     assert (
         local_config.definition.identity_payload()["local"][
             "continuation_tokenization"
         ]
-        == "separate_encode"
+        == "lm_eval_encode_pair"
     )
 
 
@@ -292,17 +292,17 @@ def test_local_golden_hashes(local_config: ProviderCallConfig) -> None:
     )
     assert (
         local_config.definition.identity_hash
-        == "5f53b843a13aae3301aacac26043250f7bee0f193f9173b9a5a23fee1312b33f"
+        == "f79cc57430242b9a75e18d52f09753d88ce3299cfe8f66dfaf78010f60bcc26e"
     )
     assert (
         local_config.identity_hash
-        == "1aa78e83e344dfddbf2c79d30801ebe85eb4010542771cbf0a6343f00cbaa94f"
+        == "82a1a1d5f5bd34fe7c85b108cde117f38beb31cb4649ab4fce66041c767b01ff"
     )
     assert (
         generate.identity_hash
-        == "667b6a53d7af8e8c4c50df9adf94160f2ae4c75b1c6d33eec94916c62803de77"
+        == "d07b460a67bec778f324b12464963944ab03209c08986430f6e142d437c3f2d0"
     )
     assert (
         score.identity_hash
-        == "831ff01046a6616124ef30de72b93726bf17ef5612ba76d9139888831a9912e1"
+        == "da2e287b1d04e4287c00145ad4543a5234278af7a58c7d917762bdd458e6196c"
     )

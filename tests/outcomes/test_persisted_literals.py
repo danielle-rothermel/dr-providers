@@ -540,9 +540,11 @@ def test_local_enum_and_failure_literals_are_pinned() -> None:
         Quantization,
     )
     from dr_providers.outcomes.models import (
+        LOCAL_CHAT_TEMPLATE_MISSING_CODE,
         LOCAL_DEVICE_UNAVAILABLE_CODE,
         LOCAL_FAILURE_RECOVERABILITY,
         LOCAL_MODEL_NOT_FOUND_CODE,
+        LOCAL_NON_FINITE_SCORE_CODE,
         LOCAL_OUT_OF_MEMORY_CODE,
         LOCAL_SEQUENCE_TOO_LONG_CODE,
     )
@@ -563,14 +565,18 @@ def test_local_enum_and_failure_literals_are_pinned() -> None:
     ]
     assert len(Quantization) == 3
     assert [item.value for item in ContinuationTokenization] == [
-        "separate_encode"
+        "lm_eval_encode_pair"
     ]
     assert len(ContinuationTokenization) == 1
     assert LOCAL_OUT_OF_MEMORY_CODE == "local_out_of_memory"
     assert LOCAL_DEVICE_UNAVAILABLE_CODE == "local_device_unavailable"
     assert LOCAL_MODEL_NOT_FOUND_CODE == "local_model_not_found"
     assert LOCAL_SEQUENCE_TOO_LONG_CODE == "local_sequence_too_long"
+    assert LOCAL_CHAT_TEMPLATE_MISSING_CODE == "local_chat_template_missing"
+    assert LOCAL_NON_FINITE_SCORE_CODE == "local_non_finite_score"
     assert LOCAL_FAILURE_RECOVERABILITY == {
+        "local_chat_template_missing": "permanent",
+        "local_non_finite_score": "permanent",
         "local_out_of_memory": "resource_exhaustion",
         "local_device_unavailable": "permanent",
         "local_model_not_found": "permanent",

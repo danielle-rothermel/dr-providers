@@ -4,6 +4,10 @@ import sys
 import dr_providers
 
 PURE_MODULES = (
+    "dr_providers.local.backend",
+    "dr_providers.local.provider",
+    "dr_providers.local.transformers",
+    "dr_providers.surfaces.testing.fake_backend",
     "dr_providers.core.failures",
     "dr_providers.core.frozen",
     "dr_providers.core.provider",
@@ -52,7 +56,11 @@ def test_import_root_does_not_load_httpx() -> None:
 
 def test_import_pure_modules_does_not_load_httpx() -> None:
     imports = "; ".join(f"import {module}" for module in PURE_MODULES)
-    code = f"import sys; {imports}; assert 'httpx' not in sys.modules"
+    code = (
+        f"import sys; {imports}; "
+        "assert {'httpx', 'torch', 'transformers', 'bitsandbytes'}"
+        ".isdisjoint(sys.modules)"
+    )
     subprocess.run(  # noqa: S603
         [sys.executable, "-c", code], check=True
     )
@@ -83,6 +91,13 @@ def test_score_api_exports_and_removed_request_constants() -> None:
 
 def test_local_public_surface_is_torch_free() -> None:
     expected = {
+        "LocalModelProvider",
+        "LocalBackend",
+        "TransformersBackend",
+        "LocalBackendFailure",
+        "GenerationOutput",
+        "ScoredContinuation",
+        "FakeLocalBackend",
         "LocalModelSpec",
         "LocalDevice",
         "LocalDtype",
