@@ -11,6 +11,7 @@ from dr_providers import (
     GenerationControls,
     MessageRole,
     PromptMessage,
+    ProviderCallConfig,
     ProviderGenerateRequest,
     ProviderScoreRequest,
     ProviderScoreResponse,
@@ -293,4 +294,38 @@ def test_scripted_score_without_scores_or_failure_raises(
         with pytest.raises(ValueError, match="requires scores or failure"):
             provider.invoke(score_request)
         assert provider.requests == [score_request]
+        assert provider.payloads == []
+
+
+def test_scripted_serves_local_generate_and_score_without_payloads(
+    local_config: ProviderCallConfig,
+) -> None:
+    from dr_providers import (
+        ContinuationScore,
+        ProviderGenerateRequest,
+        ProviderScoreRequest,
+        Transcript,
+    )
+
+    generate = ProviderGenerateRequest(
+        config=local_config, transcript=Transcript(messages=())
+    )
+    score = ProviderScoreRequest(
+        config=local_config, context="", continuations=("answer",)
+    )
+    with ScriptedProvider(
+        [
+            ScriptedOutcome(text="answer"),
+            ScriptedOutcome(
+                scores=(
+                    ContinuationScore(
+                        log_likelihood=-1.0, token_count=1, char_count=6
+                    ),
+                )
+            ),
+        ]
+    ) as provider:
+        assert provider.invoke(generate).response is not None
+        assert provider.invoke(score).score_response is not None
+        assert provider.requests == [generate, score]
         assert provider.payloads == []

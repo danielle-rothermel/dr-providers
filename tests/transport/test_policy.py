@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from _policy import (
@@ -317,3 +317,38 @@ class TestPolicyFor:
                     "api_key_env": "OPENAI_API_KEY",
                 }
             )
+
+
+def test_local_transport_policy_is_refused_before_default_lookup() -> None:
+    from dr_providers import ProviderTransportPolicy, policy_for
+
+    kwargs: dict[str, Any] = {
+        "timeout_seconds": 1.0,
+        "connect_timeout_seconds": 1.0,
+        "idle_timeout_seconds": 1.0,
+        "max_connections": 1,
+        "max_keepalive_connections": 1,
+        "max_request_bytes": 1024,
+        "max_response_bytes": 1024,
+    }
+    with pytest.raises(
+        ValueError, match="transport policy binds only HTTP provider services"
+    ):
+        policy_for(ProviderKind.HUGGINGFACE, **kwargs)
+    with pytest.raises(
+        ValueError, match="transport policy binds only HTTP provider services"
+    ):
+        ProviderTransportPolicy(
+            provider_kind=ProviderKind.HUGGINGFACE,
+            api_key_env="UNUSED",
+            **kwargs,
+        )
+    with pytest.raises(
+        ValueError, match="transport policy binds only HTTP provider services"
+    ):
+        policy_for(
+            ProviderKind.HUGGINGFACE,
+            api_key_env="UNUSED",
+            base_url="http://unused",
+            **kwargs,
+        )

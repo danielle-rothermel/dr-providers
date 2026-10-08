@@ -15,6 +15,7 @@ from dr_providers import (
     PromptRendering,
     Protocol,
     ProviderBodyExtensions,
+    ProviderCallConfig,
     ProviderCallDefinition,
     ProviderCallKind,
     ProviderGenerateRequest,
@@ -458,3 +459,24 @@ def test_empty_transcript_rendering_is_explicit(
     assert "system" not in payload
     assert request.transcript.messages == ()
     assert request.identity_payload()["transcript"] == []
+
+
+def test_local_route_has_no_http_translation(
+    local_config: ProviderCallConfig,
+) -> None:
+    from dr_providers import (
+        ProviderGenerateRequest,
+        Transcript,
+        parse_response,
+        protocol_path,
+    )
+
+    request = ProviderGenerateRequest(
+        config=local_config, transcript=Transcript(messages=())
+    )
+    with pytest.raises(ValueError, match="protocol has no HTTP wire body"):
+        build_payload(request)
+    with pytest.raises(ValueError, match="protocol has no HTTP wire body"):
+        protocol_path(local_config)
+    with pytest.raises(ValueError, match="protocol has no HTTP wire response"):
+        parse_response({}, config=local_config)

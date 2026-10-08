@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from dr_providers.modeling.controls import ProviderCallKind
+from dr_providers.modeling.route import WIRE_PROTOCOLS
 from dr_providers.outcomes.conformance import with_conformance_warnings
 from dr_providers.outcomes.evidence import ProviderInvocationEvidence
 from dr_providers.outcomes.models import (
@@ -113,6 +114,7 @@ class ScriptedProvider:
         payload = (
             build_payload(request)
             if request.kind == ProviderCallKind.GENERATE
+            and request.config.route.protocol in WIRE_PROTOCOLS
             else None
         )
         self.requests.append(request)

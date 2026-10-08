@@ -723,3 +723,28 @@ def test_score_refusal_precedes_admission_payload_and_client_creation(
         ):
             provider.invoke(score_request)
     assert attempted == []
+
+
+def test_http_refuses_local_generate_before_payload_construction(
+    local_config: ProviderCallConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dr_providers import Transcript
+
+    def forbidden(*_args: Any, **_kwargs: Any) -> Any:
+        pytest.fail("local route reached HTTP request work")
+
+    monkeypatch.setattr(transport_http, "build_payload", forbidden)
+    monkeypatch.setattr(HttpProvider, "_headers", forbidden)
+    with (
+        mock_provider(forbidden) as provider,
+        pytest.raises(
+            ValueError,
+            match="request route provider does not match transport policy",
+        ),
+    ):
+        provider.invoke(
+            ProviderGenerateRequest(
+                config=local_config, transcript=Transcript(messages=())
+            )
+        )

@@ -8,7 +8,7 @@ from dr_providers.modeling.controls import (
     PromptRendering,
     ReasoningRequestShape,
 )
-from dr_providers.modeling.route import Protocol
+from dr_providers.modeling.route import WIRE_PROTOCOLS, Protocol
 from dr_providers.modeling.transcript import MessageRole, PromptMessage
 
 if TYPE_CHECKING:
@@ -27,6 +27,8 @@ PROTOCOL_PATHS: dict[Protocol, str] = {
 
 
 def protocol_path(config: ProviderCallConfig) -> str:
+    if config.route.protocol not in WIRE_PROTOCOLS:
+        raise ValueError("protocol has no HTTP wire body")
     return PROTOCOL_PATHS[config.route.protocol]
 
 
@@ -43,6 +45,8 @@ def build_payload(request: ProviderGenerateRequest) -> dict[str, Any]:
     """
     config = request.config
     protocol = config.route.protocol
+    if protocol not in WIRE_PROTOCOLS:
+        raise ValueError("protocol has no HTTP wire body")
     messages = request.transcript.messages
     if config.definition.prompt_rendering is PromptRendering.FLAT_TEXT:
         messages = (

@@ -60,7 +60,8 @@ part_of = ["model route"]
 [[terms]]
 name = "provider service"
 definition = """
-An external service family exposing one or more model-serving protocols."""
+A model-serving family: OpenRouter, OpenAI, Gemini, and Anthropic expose \
+HTTP protocols; HuggingFace names local execution through transformers."""
 part_of = ["model route"]
 
 [[terms]]
@@ -108,8 +109,9 @@ is_a = ["provider"]
 [[terms]]
 name = "model route"
 definition = """
-The executable provider-service, protocol, and model tuple for a provider \
-call."""
+The declared provider-service, protocol, and model tuple for a provider \
+call. HuggingFace admits only transformers; its model is a verbatim Hub repo \
+ID or local path. Declaration does not guarantee an available executor."""
 exported_symbols = ["ModelRoute", "ProviderKind", "Protocol"]
 part_of = ["provider call definition"]
 
@@ -117,17 +119,20 @@ part_of = ["provider call definition"]
 name = "provider quota identity"
 definition = """
 A route-granularity quota identity equal to the exact provider, protocol, \
-and model tuple."""
+and model tuple. It carries no quota meaning for local routes."""
 exported_symbols = ["ProviderQuotaIdentity"]
 
 [[terms]]
 name = "provider call definition"
 definition = """
 A variable-bearing definition declaring a model route, supported call kinds, \
-supported and required controls, usable wire mappings for advertised controls, extension \
-keys, and identity effects. PromptRendering selects role-preserving messages \
-or separator-free flat text sent as one user message. Scoring requires empty \
-required controls; capability declarations do not guarantee executor support."""
+supported and required controls, control mappings, HTTP extension keys, and \
+identity effects. A local model spec is required exactly for HuggingFace; \
+local definitions refuse HTTP extension keys. PromptRendering selects \
+role-preserving messages or separator-free flat text. A local backend uses \
+the tokenizer chat template for role messages; HTTP carries flat text as one \
+user message. Scoring requires empty required controls and ignores rendering; \
+capability declarations do not guarantee executor support."""
 exported_symbols = [
   "ProviderCallDefinition",
   "PromptRendering",
@@ -156,6 +161,7 @@ exported_symbols = [
   "ProviderBodyExtensions",
   "anthropic_messages_config",
   "gemini_chat_config",
+  "huggingface_config",
   "openai_chat_config",
   "openai_responses_config",
   "openrouter_chat_config",
@@ -175,7 +181,7 @@ exported_symbols = [
 [[terms]]
 name = "provider transport policy"
 definition = """
-An identity-bearing declaration binding one provider service to its credentials \
+An identity-bearing declaration binding one HTTP provider service to its credentials \
 location, endpoint, native connect, write/pool, and response-read idle timeouts, \
 connection-pool limits, and request and response byte limits. The connect and \
 idle timeouts are clamped down to the general timeout at construction, before \
@@ -292,7 +298,9 @@ definition = """
 A versioned serializable record binding request identity, optional transport-\
 policy identity and provider HTTP request evidence, optional byte accounting \
 and normalized rate-limit hint, the request kind, and exactly one generate response, score response, or \
-failure. HTTP evidence is bounded by its declared transport policy."""
+failure. Local execution evidence is mutually exclusive with policy identity \
+and HTTP request evidence. Wall time is persisted but excluded from identity. \
+HTTP evidence is bounded by its declared transport policy."""
 exported_symbols = [
   "ProviderInvocationEvidence",
   "ProviderRetryAfterHint",
@@ -564,3 +572,42 @@ in token order. Context tokens are excluded; tokenization is backend-owned. \
 Every field bears evidence identity."""
 exported_symbols = ["ContinuationScore"]
 part_of = ["provider score response"]
+
+[[terms]]
+name = "local model spec"
+definition = """
+The identity-bearing declared conditions for a locally loaded model: \
+revision, device, dtype, float32 matmul precision, quantization, batch size, \
+maximum sequence length, and continuation tokenization. Revision selectors \
+and local paths do not guarantee immutable model contents. Non-highest \
+matmul precision and quantization require CUDA; supported hardware remains \
+backend-validated."""
+exported_symbols = [
+  "LocalModelSpec",
+  "LocalDevice",
+  "LocalDtype",
+  "Float32MatmulPrecision",
+  "Quantization",
+  "ContinuationTokenization",
+]
+part_of = ["provider call definition"]
+
+[[terms]]
+name = "local execution evidence"
+definition = """
+Selected realized local execution conditions: device and name, dtype, matmul \
+precision, quantization, resolved Hub revision when available, torch and \
+transformers versions, chat-template application, and BOS insertion. Every \
+field bears identity; the record is not a complete environment fingerprint."""
+exported_symbols = ["LocalExecutionEvidence"]
+part_of = ["provider invocation evidence"]
+
+[[terms]]
+name = "local usage convention"
+definition = """
+Local generation records input tokens as prompt_tokens, generated tokens as \
+completion_tokens, and their sum as total_tokens. Local scoring records all \
+tokens processed across context and continuations as prompt_tokens and \
+total_tokens, leaving completion_tokens unset. Local responses declare \
+CostInfo(total_cost=0.0), meaning zero provider charge, rather than absent \
+cost."""

@@ -63,6 +63,7 @@ class TokenLimitParameter(StrEnum):
     MAX_TOKENS = "max_tokens"
     MAX_COMPLETION_TOKENS = "max_completion_tokens"
     MAX_OUTPUT_TOKENS = "max_output_tokens"
+    MAX_NEW_TOKENS = "max_new_tokens"
 
 
 class ReasoningEffort(StrEnum):

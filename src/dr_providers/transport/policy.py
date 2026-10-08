@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from dr_providers.modeling.route import ProviderKind
+from dr_providers.modeling.route import HTTP_PROVIDER_KINDS, ProviderKind
 
 
 class ApiKeyEnv(StrEnum):
@@ -93,6 +93,15 @@ class ProviderTransportPolicy(BaseModel):
     )
     """Maximum decompressed response-body bytes retained and decoded."""
 
+    @field_validator("provider_kind")
+    @classmethod
+    def _require_http_provider(cls, value: ProviderKind) -> ProviderKind:
+        if value not in HTTP_PROVIDER_KINDS:
+            raise ValueError(
+                "transport policy binds only HTTP provider services"
+            )
+        return value
+
     @field_validator("base_url")
     @classmethod
     def _reject_url_userinfo(cls, value: str | None) -> str | None:
@@ -151,6 +160,8 @@ def policy_for(  # noqa: PLR0913 -- one explicit transport policy surface
     max_request_bytes: int,
     max_response_bytes: int,
 ) -> ProviderTransportPolicy:
+    if kind not in HTTP_PROVIDER_KINDS:
+        raise ValueError("transport policy binds only HTTP provider services")
     resolved_key_env = (
         DEFAULT_API_KEY_ENVS[kind] if api_key_env is None else api_key_env
     )

@@ -71,13 +71,13 @@ def _fixed_request() -> ProviderGenerateRequest:
 
 # Regenerate pinned hashes only after an identity-contract decision.
 GOLDEN_DEFINITION_HASH = (
-    "41f14f577a2c36db23777a12f5ee936cba2588f0f697f85fa6eeb5c508ffff27"
+    "985f3dd1739a982d3eca19ae61f533667636bb84bc37bd0c7871199489c3865a"
 )
 GOLDEN_CONFIG_HASH = (
-    "c9dd4c376d72980dc42e24925672602dc8da9a35bece4fcee08320527f1c02ed"
+    "48ad230e67eb8f4dbd61d3a21868a76034d233bac9267500c1d6e4b49e192518"
 )
 GOLDEN_REQUEST_HASH = (
-    "f3fe0677a98004ec18fee3bed7d91df702b820f8382cea3ec16196329fef62d0"
+    "ebfdaa1dbd0feab7f15e0ae282f33fc6fd6e0165290b8c80fd1a517f196ee592"
 )
 
 
@@ -96,7 +96,7 @@ class TestDefinitionSchemaVersionOwnership:
     def test_schema_version_exists_only_on_identity_document(self) -> None:
         definition = _fixed_definition()
 
-        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 5
+        assert PROVIDER_CALL_DEFINITION_SCHEMA_VERSION == 6
         assert "schema_version" not in ProviderCallDefinition.model_fields
         properties = ProviderCallDefinition.model_json_schema()["properties"]
         assert "schema_version" not in properties
@@ -438,14 +438,14 @@ def test_score_request_identity_payload_and_hash_are_pinned(
     assert score_request.identity_payload() == {
         "kind": "score",
         "config_hash": (
-            "96094a19a792d17add4051bc45e575fd025e4e4c4036d9be22aaa9f736c603ad"
+            "dc0617f4baf451e74c69da9a59206f18f0575dd8a0fb64407b4c9d7459b9235e"
         ),
         "context": "context",
         "continuations": ["answer"],
         "token_logprobs": False,
     }
     assert score_request.identity_hash == (
-        "6c7a5f6d7f9e89c6b1fce6ed42afc5b7e7985be84db6eecc1f375ef2cd5dc571"
+        "3df44af5d964cd687848054982bf8abf6f1dbf5047794f72dce0ae8f864cb531"
     )
     assert set(ProviderScoreRequest.model_fields) == {
         "kind",
@@ -483,3 +483,8 @@ def test_score_continuation_order_is_identity_bearing(
         config=score_request.config, context="", continuations=("b", "a")
     )
     assert forward.identity_hash != reverse.identity_hash
+
+
+def test_http_definition_pins_absent_local_spec() -> None:
+    assert _fixed_definition().identity_payload()["local"] is None
+    assert _fixed_definition().model_dump(mode="json")["local"] is None

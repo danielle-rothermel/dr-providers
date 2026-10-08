@@ -254,3 +254,51 @@ def test_score_observation_requires_success(
     else:
         with pytest.raises(ValidationError, match="requires success"):
             CompletedProviderInvocationObservation.model_validate(values)
+
+
+@pytest.mark.parametrize(
+    ("code", "recoverability", "expected"),
+    [
+        (
+            "local_out_of_memory",
+            RecoverabilityClass.RESOURCE_EXHAUSTION,
+            ProviderInvocationOutcome.RESOURCE_EXHAUSTION,
+        ),
+        (
+            "local_device_unavailable",
+            RecoverabilityClass.PERMANENT,
+            ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE,
+        ),
+        (
+            "local_model_not_found",
+            RecoverabilityClass.PERMANENT,
+            ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE,
+        ),
+        (
+            "local_sequence_too_long",
+            RecoverabilityClass.PERMANENT,
+            ProviderInvocationOutcome.PERMANENT_PROVIDER_OR_TRANSPORT_FAILURE,
+        ),
+    ],
+)
+def test_local_failures_have_explicit_classification(
+    code: str,
+    recoverability: RecoverabilityClass,
+    expected: ProviderInvocationOutcome,
+) -> None:
+    from dr_providers.lifecycle.classifier import CODE_TO_OUTCOME
+
+    assert CODE_TO_OUTCOME[code] is expected
+    evidence = ProviderInvocationEvidence(
+        request_hash="1" * 64,
+        kind=ProviderCallKind.GENERATE,
+        failure=ProviderTransportFailure(
+            code=code, recoverability=recoverability, message="local failure"
+        ),
+    )
+    assert (
+        classify_provider_invocation(
+            evidence, AcceptAllSemanticResponseClassifier()
+        )
+        is expected
+    )

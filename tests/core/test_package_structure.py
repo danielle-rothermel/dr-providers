@@ -61,3 +61,11 @@ def test_inner_areas_do_not_depend_on_surfaces() -> None:
             assert not surface_imports, (
                 f"{path.relative_to(REPO_ROOT)} imports {surface_imports}"
             )
+
+
+def test_local_models_stay_in_modeling_without_backend_imports() -> None:
+    path = PACKAGE_ROOT / "modeling" / "local.py"
+    assert path.is_file()
+    assert {"torch", "transformers", "bitsandbytes"}.isdisjoint(
+        _absolute_imports(path)
+    )

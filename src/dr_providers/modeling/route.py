@@ -10,12 +10,31 @@ class ProviderKind(StrEnum):
     OPENAI = "openai"
     GEMINI = "gemini"
     ANTHROPIC = "anthropic"
+    HUGGINGFACE = "huggingface"
 
 
 class Protocol(StrEnum):
     CHAT_COMPLETIONS = "chat_completions"
     RESPONSES = "responses"
     ANTHROPIC_MESSAGES = "anthropic_messages"
+    TRANSFORMERS = "transformers"
+
+
+HTTP_PROVIDER_KINDS: frozenset[ProviderKind] = frozenset(
+    {
+        ProviderKind.OPENROUTER,
+        ProviderKind.OPENAI,
+        ProviderKind.GEMINI,
+        ProviderKind.ANTHROPIC,
+    }
+)
+WIRE_PROTOCOLS: frozenset[Protocol] = frozenset(
+    {
+        Protocol.CHAT_COMPLETIONS,
+        Protocol.RESPONSES,
+        Protocol.ANTHROPIC_MESSAGES,
+    }
+)
 
 
 _SUPPORTED_PROTOCOLS_BY_PROVIDER: dict[ProviderKind, frozenset[Protocol]] = {
@@ -25,6 +44,7 @@ _SUPPORTED_PROTOCOLS_BY_PROVIDER: dict[ProviderKind, frozenset[Protocol]] = {
     ),
     ProviderKind.GEMINI: frozenset({Protocol.CHAT_COMPLETIONS}),
     ProviderKind.ANTHROPIC: frozenset({Protocol.ANTHROPIC_MESSAGES}),
+    ProviderKind.HUGGINGFACE: frozenset({Protocol.TRANSFORMERS}),
 }
 
 
@@ -67,7 +87,7 @@ class ModelRoute(BaseModel):
 
 
 class ProviderQuotaIdentity(BaseModel):
-    """Quota identity excludes credentials, accounts, and overrides."""
+    """Route-only identity; it carries no quota meaning for local routes."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 

@@ -115,3 +115,24 @@ that would need them.
   recovering the complete body there requires decoding raw chunks in this
   package's own frame via httpx internals, which the frozen wire core
   deliberately avoids.
+
+## Local backend fit and additional execution settings
+
+HuggingFace/Transformers routes, local model specs, fixed local failure codes,
+and local execution evidence can be modeled and exercised through the scripted
+provider. No local production backend is shipped. The first backend must validate
+model and hardware support and define fixed rules for rendering, assistant
+prefills, special tokens and empty-context scoring, sampling, sequence limits,
+and quantized computation. The existing schema is intended for reuse without
+claiming that backend fit or schema sufficiency has already been proven.
+Additional configuration should follow concrete needs rather than anticipate
+all backend options.
+
+Quantization on non-CUDA devices and dtypes beyond float32 and bfloat16 are
+not built. These are current package restrictions, not claims about what
+upstream libraries or hardware can support. `ContinuationTokenization` has
+one member, `separate_encode`, by decision; joint encoding is not supported.
+Stronger artifact identification for mutable local directories and a complete
+execution-environment fingerprint are not provided. Recorded Hub commit IDs
+and selected library/device facts narrow the evidence without guaranteeing
+reproducibility.
