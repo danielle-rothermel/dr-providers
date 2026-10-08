@@ -22,6 +22,7 @@ from dr_providers import (
     ProviderCallConfig,
     ProviderCallOutcomeKind,
     ProviderCallState,
+    ProviderGenerateRequest,
     ProviderInvocationOutcome,
     ProviderScoreRequest,
     ProviderStopReason,
@@ -45,6 +46,7 @@ def _config(
     *,
     maximum: int = 512,
     rendering: PromptRendering = PromptRendering.FLAT_TEXT,
+    add_bos_token: bool = False,
 ) -> ProviderCallConfig:
     return huggingface_config(
         model=MODEL,
@@ -54,6 +56,7 @@ def _config(
         batch_size=2,
         max_sequence_length=maximum,
         prompt_rendering=rendering,
+        add_bos_token=add_bos_token,
     )
 
 
@@ -86,15 +89,24 @@ def test_load_and_execution_record(backend: TransformersBackend) -> None:
     assert execution.transformers_version == transformers.__version__
 
 
+@pytest.mark.parametrize("add_bos_token", [False, True])
 @pytest.mark.parametrize(
     "context", ["The answer is", "The answer is ", "", " \t"]
 )
 def test_batched_scores_match_independent_unbatched_reference(
     backend: TransformersBackend,
     context: str,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    add_bos_token: bool,
 ) -> None:
     import torch
 
+    monkeypatch.setattr(
+        backend,
+        "_spec",
+        backend._spec.model_copy(update={"add_bos_token": add_bos_token}),
+    )
     model, tokenizer = backend._loaded()
     continuations = (" yes", " no", " maybe")
     scores = backend.score(
@@ -125,6 +137,8 @@ def test_batched_scores_match_independent_unbatched_reference(
             targets = tokenizer.encode(
                 adjusted_continuation, add_special_tokens=False
             )
+        if add_bos_token and context_ids[0] != tokenizer.bos_token_id:
+            context_ids = [tokenizer.bos_token_id, *context_ids]
         tokens = context_ids + targets
         with torch.inference_mode():
             logits = (
@@ -472,3 +486,132 @@ def test_eos_stop_and_unset_seed(
     assert result.stop_reason is ProviderStopReason.STOP
     assert result.completion_tokens == 1
     assert result.text == "�"
+
+
+@pytest.mark.parametrize(
+    "rendering", [PromptRendering.FLAT_TEXT, PromptRendering.ROLE_MESSAGES]
+)
+@pytest.mark.parametrize("existing_bos", [False, True])
+def test_bos_generation_inputs_usage_and_evidence(
+    backend: TransformersBackend,
+    monkeypatch: pytest.MonkeyPatch,
+    rendering: PromptRendering,
+    *,
+    existing_bos: bool,
+) -> None:
+    import torch
+    from transformers import AutoTokenizer
+
+    _, tokenizer = backend._loaded()
+    prefix = tokenizer.bos_token if existing_bos else ""
+    assert isinstance(prefix, str)
+    monkeypatch.setattr(
+        tokenizer,
+        "chat_template",
+        prefix
+        + "{% for message in messages %}{{ message['content'] }}{% endfor %}",
+    )
+    monkeypatch.setattr(
+        AutoTokenizer, "from_pretrained", lambda *_args, **_kwargs: tokenizer
+    )
+    config = _config(
+        rendering=rendering, add_bos_token=True
+    ).definition.materialize(controls=GenerationControls(token_limit=2))
+    loaded = TransformersBackend(config)
+    with LocalModelProvider(config=config, backend=loaded) as provider:
+        model, _ = loaded._loaded()
+        original = model.generate
+        captured: list[list[int]] = []
+
+        def capture(**kwargs: object) -> object:
+            input_ids = kwargs["input_ids"]
+            assert isinstance(input_ids, torch.Tensor)
+            captured.extend(input_ids.tolist())
+            return original(**kwargs)
+
+        monkeypatch.setattr(model, "generate", capture)
+        evidence = provider.invoke(
+            ProviderGenerateRequest(
+                config=config,
+                transcript=Transcript(
+                    messages=(
+                        PromptMessage(
+                            role=MessageRole.USER,
+                            content=(
+                                prefix
+                                if rendering is PromptRendering.FLAT_TEXT
+                                else ""
+                            )
+                            + "Hello",
+                        ),
+                    )
+                ),
+            )
+        )
+        expected = [
+            tokenizer.bos_token_id,
+            *tokenizer.encode("Hello", add_special_tokens=False),
+        ]
+        assert captured == [expected]
+        assert evidence.local_execution is not None
+        assert evidence.local_execution.add_bos_token is True
+        assert evidence.local_execution.chat_template_applied is (
+            rendering is PromptRendering.ROLE_MESSAGES
+        )
+        assert evidence.response is not None
+        assert evidence.response.usage is not None
+        assert evidence.response.usage.prompt_tokens == len(expected)
+
+
+def test_bos_requires_tokenizer_id_before_model_load(
+    backend: TransformersBackend,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    _, tokenizer = backend._loaded()
+    monkeypatch.setattr(tokenizer, "bos_token_id", None)
+    monkeypatch.setattr(
+        AutoTokenizer, "from_pretrained", lambda *_args, **_kwargs: tokenizer
+    )
+
+    def no_load(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise AssertionError("missing BOS must fail before loading weights")
+
+    monkeypatch.setattr(AutoModelForCausalLM, "from_pretrained", no_load)
+    with pytest.raises(ValueError, match="tokenizer BOS id"):
+        TransformersBackend(_config(add_bos_token=True))
+
+
+def test_bos_counts_toward_generation_and_scoring_limits(
+    backend: TransformersBackend,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model, _ = backend._loaded()
+    monkeypatch.setattr(
+        backend,
+        "_spec",
+        backend._spec.model_copy(
+            update={"add_bos_token": True, "max_sequence_length": 1}
+        ),
+    )
+
+    def no_inference(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise AssertionError("BOS must count toward the input cap")
+
+    monkeypatch.setattr(model, "generate", no_inference)
+    monkeypatch.setattr(model, "forward", no_inference)
+    with pytest.raises(LocalBackendFailure) as raised:
+        backend.generate(
+            transcript=Transcript(
+                messages=(PromptMessage(role=MessageRole.USER, content="a"),)
+            ),
+            rendering=PromptRendering.FLAT_TEXT,
+            controls=GenerationControls(token_limit=1),
+        )
+    assert raised.value.failure.code == "local_sequence_too_long"
+    with pytest.raises(LocalBackendFailure) as raised:
+        backend.score(context="a", continuations=(" b",), token_logprobs=False)
+    assert raised.value.failure.code == "local_sequence_too_long"

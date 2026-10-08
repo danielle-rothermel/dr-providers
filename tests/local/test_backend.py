@@ -87,3 +87,26 @@ def test_local_failure_rejects_nonlocal_code_and_wrong_recoverability() -> (
                 message="failure",
             )
         )
+
+
+@pytest.mark.parametrize(
+    ("context", "expected_context", "expected_targets"),
+    [
+        ("a", [94, 97], [98]),
+        ("", [94], [98]),
+        (" ", [94], [32, 98]),
+        ("^a", [94, 97], [98]),
+    ],
+)
+def test_encode_pair_bos_only_prefixes_context_once(
+    context: str, expected_context: list[int], expected_targets: list[int]
+) -> None:
+    context_ids, targets = encode_pair(
+        context=context,
+        continuation="b",
+        encode=lambda text: [ord(char) for char in text],
+        prefix_token=94,
+        add_bos_token=True,
+    )
+    assert context_ids == expected_context
+    assert targets == expected_targets

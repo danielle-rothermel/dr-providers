@@ -526,7 +526,10 @@ statement = """
 Move trailing context whitespace per str.rstrip into the continuation. If context \
 is now empty, use one BOS prefix, falling back to EOS; otherwise jointly encode \
 and slice at separately encoded context length. Automatic special-token insertion \
-is disabled. Nonempty continuations yielding zero tokens fail the whole request \
+is disabled. add_bos_token true ensures one leading tokenizer BOS on generation \
+prompts and scoring context, retaining an existing leading BOS; continuation \
+targets are unchanged. The empty-context BOS/EOS prefix applies in both modes. \
+Nonempty continuations yielding zero tokens fail the whole request \
 with permanent local_empty_continuation evidence. Refuse zero context tokens and \
 over-length forward inputs without truncation. Character counts retain original \
 continuation lengths. Scoring \

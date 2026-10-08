@@ -9,6 +9,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StrictStr,
     model_validator,
@@ -75,6 +76,7 @@ class LocalModelSpec(BaseModel):
     batch_size: StrictInt = Field(ge=1)
     max_sequence_length: StrictInt = Field(ge=1)
     continuation_tokenization: ContinuationTokenization
+    add_bos_token: StrictBool
 
     @model_validator(mode="after")
     def _validate_cuda_only_settings(self) -> LocalModelSpec:
@@ -110,4 +112,5 @@ class LocalModelSpec(BaseModel):
             "batch_size": self.batch_size,
             "max_sequence_length": self.max_sequence_length,
             "continuation_tokenization": self.continuation_tokenization.value,
+            "add_bos_token": self.add_bos_token,
         }

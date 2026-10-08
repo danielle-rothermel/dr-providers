@@ -49,29 +49,29 @@ from dr_providers.lifecycle import (
 )
 
 REQUEST_HASH = (
-    "f1126dd81456e326657fd588a56cb830bacaf2fb2a1162d04d541b98c0d97a41"
+    "1b74ea11e5bbf266c3d281b11c0e1ea506d881f58f25e826c6f9aa59c681e5db"
 )
 RETRY_POLICY_HASH = (
     "a465bcf528ec87cfacd1fe842849ee13880bc236f3693268caf6555aeba7c4cc"
 )
-CALL_HASH = "76461eccb9fef6d51d7c63e9529994838c651c208cc5587e2ab7ec64a336fe32"
+CALL_HASH = "06c15ee09d7ecc51ad5964b70885c2dab998c7d6732b87773bcd9d4100691504"
 FIRST_EVIDENCE_HASH = (
-    "422c7aa8dab93fd126ac2343b23c87189220642eff295849faae34bec5179919"
+    "cfe4262873cd893a715c308709a7db7191c5d94d9f8009949500cd4a280363e2"
 )
 FIRST_OBSERVATION_IDENTITY_HASH = (
-    "498c10cd5c3d7309add6ddebb7488a15c1a6a0fd3d8acb5381e62b92cff2cf55"
+    "1a88bb66e58b6c267cae98582f88362957b0dacf3b664c4ddf16c43067221d96"
 )
 FIRST_RECORD_IDENTITY_HASH = (
-    "8e10098ec546005f1e31fb91eaddf90ba1facbf0f9eabb8b1004f6105765361d"
+    "78751c3f39e94e705cfae82a6144c6c67eea7382cef43b322541f3abe033a49d"
 )
 SECOND_RECORD_IDENTITY_HASH = (
-    "98c71ba6b0ed13b37c21dd313bf89a5f7dd2fe89246c133f28b3a7d69c54e24f"
+    "574a4c724b0b37405f81c923cc251da919b59ca18930a79398e63835eb71365b"
 )
 RESULT_IDENTITY_HASH = (
-    "df3fad70b62ee4c502d6c39445a535d0aba40cf1c694acf79689becce6859e9b"
+    "d6d5b98c279d8cd5d326d232d906bc87872b0d97dae71eee4d6f9a992b8eb4f1"
 )
 CANCELLATION_IDENTITY_HASH = (
-    "0e4a406dbbe61624d4cb063c02a203a4dd2563ef33e8f5c22da455122aec84f5"
+    "b48781399233d5e5e81ff48d527010e74680110173de2ab710ee0b1a8478e8da"
 )
 
 
@@ -578,22 +578,22 @@ def test_score_handoff_wire_dictionaries_match_local_driver(
 
     # Handwritten payloads and independent hashes pin the wire shape.
     request_hash = (
-        "58cc303978dad9a34d90419d22b565c8fe28c8d1ac42112475cc14ed32a42fe0"
+        "49898c77be48c16f4917f26cd65995d892ddb42931cf549177e2cdbf3f921a56"
     )
     call_hash = (
-        "d00ebc34ff0155fe043d24d2d8584db1137a8dc480607a386f11b75915eb502f"
+        "0c85a9266a700c712f42497940b7ce3d2686bad2b65ba6da5809720e53c39a62"
     )
     first_evidence_hash = (
-        "415ff4f6bc2433c04d0b40d35483160859ba8dd9faa2bd52c5d2c4017364440b"
+        "faf73ba322b20270dfe6b9b8072518329d81722467ef97a718a451be838fca22"
     )
     first_record_hash = (
-        "5d782d4d4ee0b4313cf9266a8e3ee04a7d8e10b4b3e8e509191d9e5b668983db"
+        "44d330abef6bb7568e7e4694ac21e37bff30efec16da1a342249f5c40610469a"
     )
     second_evidence_hash = (
-        "4193ff9ffb278b1cfd230d4da366013660385a458889720612ecf50ada2d4562"
+        "041dde943dbbcb72a5e9fdc2096f040dd1ab30d88f8758451d3ca9b075856560"
     )
     second_record_hash = (
-        "5a10dc7e3029c9024a252ee213dc4c324ba68cd5650d08327ec2acee033c5e2e"
+        "9de11de64a1b6e00a271f8978180149b0078edd02b56dd14eaee188116649292"
     )
     request_payload = {
         "kind": "score",
@@ -754,7 +754,7 @@ def test_score_handoff_wire_dictionaries_match_local_driver(
         "outcome": {"kind": "accepted", "invocation_outcome": "success"},
     }
     assert restored_result.identity_hash == (
-        "376ed52401ebf982feba86091d6e06f871a3d4f67c3c48802f80f20dfba70830"
+        "38bacd16e1200e76c41e475816db2d31d6ea80220d34705735afb673fa3a369e"
     )
 
 
@@ -866,5 +866,5 @@ def test_local_score_handoff_preserves_execution_and_excludes_wall_time(
     assert (
         changed.identity_hash
         == restored_result.identity_hash
-        == "d65e7460d6967ae13f9ffe98e2adc4a1de70788ef569b35f8b1aae00a708ace0"
+        == "6ae8ddef40f217eb7c913ba71b44084df6ca0250ec12b2c49ce98e817a5419a1"
     )

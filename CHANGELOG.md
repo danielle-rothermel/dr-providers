@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.4] - Unreleased
+## [0.3.4] - 2026-10-08
 
 ### Added
 
@@ -62,10 +62,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Add the required identity-bearing `LocalModelSpec.add_bos_token` field, exposed
+  by `huggingface_config` with default `False`. Enabling it ensures a leading
+  tokenizer BOS for generation and scoring context, without duplicating one
+  already present or adding BOS to continuation targets. Empty-context scoring
+  retains its BOS/EOS fallback independently. Definition schema advances from 6
+  to 7; all definition and downstream hashes change, including HTTP identities.
 - Rename `ContinuationTokenization.SEPARATE_ENCODE` to `LM_EVAL_ENCODE_PAIR`.
   This explicitly changes the persisted literal from `separate_encode` to
-  `lm_eval_encode_pair` within unreleased 0.3.4, changing local definition and
-  downstream hashes without changing schema versions. Scoring moves trailing
+  `lm_eval_encode_pair`, changing local definition and downstream hashes.
+  Scoring moves trailing
   whitespace, jointly encodes and splits by context length, uses a BOS/EOS
   prefix for empty-after-strip context, and refuses zero-token pairs/truncation.
 - Define local scoring usage as unpadded forward-input tokens, including repeated
@@ -118,7 +124,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   | Schema | Previous released | Current |
   | --- | --- | --- |
-  | Provider call definition | 3 | 6 |
+  | Provider call definition | 3 | 7 |
   | Provider call config | 1 | 2 |
   | Provider call request | 1 | Removed; replaced by kind-specific schemas |
   | Provider generate request | — | 1 |
@@ -143,8 +149,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   default rendering. State records have a changed schema and embedded
   hashes, with no separate state identity hash. Existing `role_messages`
   wire bodies and the committed wire corpus are unchanged.
-- Bump the package version to 0.3.4 and refresh `uv.lock`. This version is
-  unreleased: no tag, GitHub release, or PyPI publication is created.
+- Bump the package version to 0.3.4 and refresh `uv.lock`.
 
 ## [0.3.3] - 2026-10-06
 

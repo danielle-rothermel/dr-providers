@@ -39,6 +39,7 @@ EXPECTED_SPEC = {
     "batch_size": 1,
     "max_sequence_length": 1024,
     "continuation_tokenization": "lm_eval_encode_pair",
+    "add_bos_token": False,
 }
 
 
@@ -102,6 +103,9 @@ def test_local_spec_and_definition_payloads(
         ("continuation_tokenization", "joint_encode"),
         ("float32_matmul_precision", "medium"),
         ("quantization", "int4"),
+        ("add_bos_token", 1),
+        ("add_bos_token", "true"),
+        ("add_bos_token", None),
     ],
 )
 def test_local_spec_refuses_invalid_values(field: str, value: Any) -> None:
@@ -239,6 +243,7 @@ def test_preset_admits_generate_and_score(
         ("quantization", Quantization.BITSANDBYTES_NF4),
         ("batch_size", 2),
         ("max_sequence_length", 2048),
+        ("add_bos_token", True),
     ],
 )
 def test_each_variable_local_dimension_changes_definition_identity(
@@ -277,7 +282,10 @@ def test_preset_preserves_model_and_rendering() -> None:
         batch_size=3,
         max_sequence_length=512,
         prompt_rendering=PromptRendering.FLAT_TEXT,
+        add_bos_token=True,
     )
+    assert config.definition.local is not None
+    assert config.definition.local.add_bos_token is True
     assert config.route.model == "./models/../my-model"
     assert config.definition.prompt_rendering is PromptRendering.FLAT_TEXT
     assert config.quota_identity == config.route.quota_identity
@@ -292,17 +300,17 @@ def test_local_golden_hashes(local_config: ProviderCallConfig) -> None:
     )
     assert (
         local_config.definition.identity_hash
-        == "f79cc57430242b9a75e18d52f09753d88ce3299cfe8f66dfaf78010f60bcc26e"
+        == "c6d8463419bc2d6b9fa26994f0fbf53f942bdc53823d26202d5222a6b229282b"
     )
     assert (
         local_config.identity_hash
-        == "82a1a1d5f5bd34fe7c85b108cde117f38beb31cb4649ab4fce66041c767b01ff"
+        == "9673da43540af5ee85561a29a26e3e8d3844caf1326882a96077c5fd375a3c20"
     )
     assert (
         generate.identity_hash
-        == "d07b460a67bec778f324b12464963944ab03209c08986430f6e142d437c3f2d0"
+        == "9eb9943c5c402edc6ae1da9e8811b3e647ff106d5d496130285ee4eedf72e288"
     )
     assert (
         score.identity_hash
-        == "da2e287b1d04e4287c00145ad4543a5234278af7a58c7d917762bdd458e6196c"
+        == "55990d038f41d18c59a875e067e09515ecbccdb9c331814cdcee00f402a0b7ef"
     )

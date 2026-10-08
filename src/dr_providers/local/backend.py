@@ -90,11 +90,14 @@ def encode_pair(
     continuation: str,
     encode: Callable[[str], list[int]],
     prefix_token: int | None,
+    add_bos_token: bool = False,
 ) -> tuple[list[int], list[int]]:
     """lm-eval-derived causal encoding, with an empty-after-rstrip prefix.
 
     ``encode`` must disable automatic special-token insertion. This function
     deliberately slices by encoded context length, even at a token merge.
+    When add_bos_token is true, prefix_token must be the tokenizer BOS ID;
+    insert it only into context, after splitting continuation targets.
     """
     if not continuation:
         raise ValueError("scoring requires a nonempty continuation")
@@ -120,4 +123,13 @@ def encode_pair(
                 message="scoring continuation has no tokens after encoding",
             )
         )
+    if add_bos_token:
+        context_ids = prepend_bos(context_ids, prefix_token)
     return context_ids, continuation_ids
+
+
+def prepend_bos(ids: list[int], bos_token: int | None) -> list[int]:
+    """Ensure a leading BOS without duplicating a template-supplied token."""
+    if bos_token is None:
+        raise ValueError("add_bos_token requires a tokenizer BOS id")
+    return ids if ids and ids[0] == bos_token else [bos_token, *ids]

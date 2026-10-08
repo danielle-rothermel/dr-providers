@@ -578,14 +578,16 @@ name = "local model spec"
 definition = """
 The identity-bearing declared conditions for a locally loaded model: \
 revision, device, dtype, float32 matmul precision, quantization, batch size, \
-maximum sequence length, and continuation tokenization. Revision selectors \
-and local paths do not guarantee immutable model contents. Non-highest \
+maximum sequence length, continuation tokenization, and add_bos_token. \
+Revision selectors and local paths do not guarantee immutable model contents. Non-highest \
 matmul precision and quantization require CUDA; supported hardware remains \
 backend-validated. Continuation tokenization is lm_eval_encode_pair: move \
 trailing context whitespace to the continuation, encode context and the whole \
 pair without automatic special tokens, and slice whole IDs at context length. \
 Empty-after-rstrip context uses a BOS prefix, falling back to EOS; zero-token \
-pairs are refused."""
+pairs are refused. add_bos_token defaults to false in the preset; true ensures \
+a leading tokenizer BOS on generation prompts and scoring context without \
+duplicating a leading BOS or adding one to continuation targets."""
 exported_symbols = [
   "LocalModelSpec",
   "LocalDevice",
@@ -601,9 +603,9 @@ name = "local execution evidence"
 definition = """
 Selected realized local execution conditions: device and name, dtype, matmul \
 precision, quantization, resolved Hub revision when available, torch and \
-transformers versions, chat-template application, and automatic BOS insertion. The explicit empty-context scoring prefix \
-is distinct from automatic BOS insertion; scoring records no chat-template use. Every \
-field bears identity; the record is not a complete environment fingerprint."""
+transformers versions, chat-template application, and configured BOS policy. \
+The explicit empty-context scoring prefix is independent of that policy; \
+scoring records no chat-template use. Every field bears identity; the record is not a complete environment fingerprint."""
 exported_symbols = ["LocalExecutionEvidence"]
 part_of = ["provider invocation evidence"]
 

@@ -290,6 +290,7 @@ through references, config and request identity:
 | `quantization` | `none` (default), `bitsandbytes_int8`, or `bitsandbytes_nf4`; quantization currently requires CUDA |
 | `batch_size` | Positive declared batch size |
 | `max_sequence_length` | Positive forward-input cap; backend refuses over-length inputs |
+| `add_bos_token` | Strict boolean; preset defaults to `False`. When `True`, ensure one leading tokenizer BOS on generation prompts and scoring context |
 | `continuation_tokenization` | `lm_eval_encode_pair`: move trailing context whitespace to the continuation, jointly encode, then split at context token count |
 
 Identity covers declarations, not immutable file contents. A branch or tag can
@@ -313,9 +314,10 @@ Tool-role generation messages are refused with `ValueError`.
 
 `LocalExecutionEvidence` records selected realized conditions: device and GPU
 name, dtype, float32 matmul precision, quantization, resolved Hub commit when
-available, torch and transformers versions, and whether a chat template and
-automatic BOS insertion were applied to that invocation. Scoring never applies
-a chat template; its empty-context prefix is distinct from automatic BOS insertion. Every field bears evidence identity, so a changed GPU
+available, torch and transformers versions, chat-template application, and the
+configured `add_bos_token` policy. Scoring never applies a chat template; its
+empty-context prefix applies independently of that policy. Every field bears
+evidence identity, so a changed GPU
 model or recorded library version changes that identity. This is a selected
 conditions record, not an exhaustive environment fingerprint. It is mutually
 exclusive with transport-policy identity or HTTP request evidence; neither
@@ -400,8 +402,13 @@ Scoring uses this fixed **lm-eval-derived causal encode-pair rule**:
 3. Otherwise encode both context and context-plus-continuation, then take
    continuation IDs by slicing the latter at the encoded context length.
 
-Every encode disables automatic special tokens. `add_bos_token=False` records
-that policy; the explicit empty-context prefix remains allowed. Token counts
+Every encode disables automatic special tokens. `add_bos_token=False` is the
+preset default. Set `add_bos_token=True` to ensure one leading tokenizer BOS
+on generation prompts and scoring context; an existing leading BOS, including
+one supplied by a chat template, is retained without duplication. A tokenizer
+without a BOS ID is refused at load in this mode. Continuation targets receive
+no extra BOS. The explicit empty-context BOS/EOS prefix remains allowed in both
+modes. The configured policy is recorded in execution evidence. Token counts
 use the resulting continuation IDs; character counts use Python `len()` of
 the original caller continuation. A nonempty continuation yielding zero tokens
 fails the whole request with permanent `local_empty_continuation` evidence,
@@ -416,7 +423,8 @@ right-pads with attention masks, and sums gathered float32 log probabilities.
 A non-finite gathered value or total fails the whole request. Inputs longer
 than the declared forward-input cap are refused without truncation. Generation
 reserves at least one new token and caps output at remaining sequence space.
-Empty tokenized generation prompts are refused. Recognized CUDA and MPS OOMs
+With BOS insertion disabled, empty tokenized generation prompts are refused;
+with it enabled, a BOS-only prompt is allowed. Recognized CUDA and MPS OOMs
 release allocator cache and become `local_out_of_memory` evidence; they never
 silently shrink batches or change retry policy.
 

@@ -272,6 +272,7 @@ def huggingface_config(  # noqa: PLR0913 -- explicit local model declaration
     continuation_tokenization: ContinuationTokenization = (
         ContinuationTokenization.LM_EVAL_ENCODE_PAIR
     ),
+    add_bos_token: bool = False,
     controls: GenerationControls | None = None,
     prompt_rendering: PromptRendering = PromptRendering.ROLE_MESSAGES,
 ) -> ProviderCallConfig:
@@ -279,7 +280,8 @@ def huggingface_config(  # noqa: PLR0913 -- explicit local model declaration
 
     ROLE_MESSAGES requires a tokenizer chat template at load. FLAT_TEXT
     concatenates contents without separators. Scoring ignores rendering;
-    base models without chat templates should use FLAT_TEXT.
+    base models without chat templates should use FLAT_TEXT. add_bos_token
+    ensures a leading tokenizer BOS without duplicating one already present.
     """
     definition = ProviderCallDefinition(
         definition_id="huggingface.transformers",
@@ -297,6 +299,7 @@ def huggingface_config(  # noqa: PLR0913 -- explicit local model declaration
             batch_size=batch_size,
             max_sequence_length=max_sequence_length,
             continuation_tokenization=continuation_tokenization,
+            add_bos_token=add_bos_token,
         ),
         supported_kinds=frozenset(
             {ProviderCallKind.GENERATE, ProviderCallKind.SCORE}

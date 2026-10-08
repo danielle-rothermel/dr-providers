@@ -14,6 +14,7 @@ from dr_providers.local.backend import (
     LocalBackendFailure,
     ScoredContinuation,
     encode_pair,
+    prepend_bos,
 )
 from dr_providers.local.provider import validate_generation_controls
 from dr_providers.modeling.controls import PromptRendering
@@ -123,6 +124,8 @@ class TransformersBackend:
             tokenizer = AutoTokenizer.from_pretrained(
                 model_name, revision=revision
             )
+            if spec.add_bos_token and tokenizer.bos_token_id is None:
+                raise ValueError("add_bos_token requires a tokenizer BOS id")
             if (
                 self._rendering is PromptRendering.ROLE_MESSAGES
                 and not tokenizer.chat_template
@@ -202,7 +205,7 @@ class TransformersBackend:
             torch_version=str(torch.__version__),
             transformers_version=transformers.__version__,
             chat_template_applied=False,
-            add_bos_token=False,
+            add_bos_token=spec.add_bos_token,
         )
 
     def execution(self) -> LocalExecutionEvidence:
@@ -252,6 +255,8 @@ class TransformersBackend:
         else:
             prompt = "".join(m.content for m in transcript.messages)
         ids = tokenizer.encode(prompt, add_special_tokens=False)
+        if self._spec.add_bos_token:
+            ids = prepend_bos(ids, tokenizer.bos_token_id)
         if not ids:
             raise ValueError(
                 "local generation requires a nonempty tokenized prompt"
@@ -343,6 +348,7 @@ class TransformersBackend:
                     text, add_special_tokens=False
                 ),
                 prefix_token=prefix,
+                add_bos_token=self._spec.add_bos_token,
             )
             inputs = (context_ids + continuation_ids)[:-1]
             if len(inputs) > self._spec.max_sequence_length:
