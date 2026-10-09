@@ -26,12 +26,6 @@ _COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 def is_commit_sha(revision: str) -> bool:
-    """Whether ``revision`` is a full 40-character lowercase hex commit ID.
-
-    Hub snapshots are named by such IDs, so only this form makes a declared
-    revision equal to the resolved commit. Branches, tags, and abbreviated
-    IDs are valid selectors but can resolve differently over time.
-    """
     return _COMMIT_SHA.fullmatch(revision) is not None
 
 

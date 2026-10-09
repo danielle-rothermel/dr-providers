@@ -1,5 +1,3 @@
-"""Opt-in native-architecture loading and MPS-versus-CPU scoring parity."""
-
 from __future__ import annotations
 
 import math
@@ -25,8 +23,6 @@ GPT2 = (
     "hf-internal-testing/tiny-random-gpt2",
     "71034c5d8bde858ff824298bdedc65515b97d2b9",
 )
-# Native transformers ``olmo`` model type: the class converted DataDecide
-# checkpoints load as, with no custom code or registration.
 OLMO = (
     "hf-internal-testing/tiny-random-OlmoForCausalLM",
     "22d63f3f78574f9d7061b9d1f97ba31c1bc26200",
@@ -35,9 +31,7 @@ MODELS = pytest.mark.parametrize(
     ("model", "revision"), [GPT2, OLMO], ids=["gpt2", "olmo"]
 )
 CONTEXT = "Question: What is the capital of France?\nAnswer:"
-# Different lengths force right padding inside one batch.
 CONTINUATIONS = (" Paris", " Lyon, Marseille, and Toulouse")
-# Absolute natural-log tolerance between MPS and CPU float32 kernels.
 TOLERANCE = 1e-3
 
 
@@ -106,8 +100,6 @@ def test_mps_scores_match_cpu(model: str, revision: str) -> None:
             cpu_score.token_logprobs, abs=TOLERANCE
         )
     cpu_gap = cpu[0].log_likelihood - cpu[1].log_likelihood
-    # Ordering is only meaningful when CPU separates the candidates by more
-    # than the combined device tolerance.
     if abs(cpu_gap) > 2 * TOLERANCE:
         mps_gap = mps[0].log_likelihood - mps[1].log_likelihood
         assert (mps_gap > 0) == (cpu_gap > 0)
