@@ -984,4 +984,4 @@ def test_local_execution_fields_are_required_and_frozen(
                 {key: value for key, value in data.items() if key != field}
             )
     with pytest.raises(ValidationError):
-        local_execution.torch_version = "other"
+        local_execution.torch_version = "other"  # ty: ignore[invalid-assignment]

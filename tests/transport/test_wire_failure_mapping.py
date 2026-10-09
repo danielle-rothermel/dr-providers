@@ -112,8 +112,10 @@ EXPECTED_EVIDENCE_SHAPE: dict[WireFailureKind, tuple[str, set[str]]] = {
         TIMEOUT_METADATA_KEYS,
     ),
     WireFailureKind.INVALID_URL: (
-        "transport policy base_url does not form a dispatchable http or "
-        "https URL",
+        (
+            "transport policy base_url does not form a dispatchable http or "
+            "https URL"
+        ),
         TRANSPORT_ERROR_METADATA_KEYS,
     ),
     WireFailureKind.CONNECT_ERROR: (

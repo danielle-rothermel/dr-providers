@@ -80,7 +80,7 @@ app = typer.Typer(help="dr-providers CLI: one-shot provider calls.")
 
 
 @app.command()
-def query(  # noqa: PLR0913
+def query(  # noqa: PLR0913, PLR0917
     provider: Annotated[ProviderChoice, PROVIDER_OPTION],
     model: Annotated[str, MODEL_OPTION],
     message: Annotated[str, MESSAGE_OPTION],

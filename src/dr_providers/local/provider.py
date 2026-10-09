@@ -157,13 +157,16 @@ class LocalModelProvider:
                 )
             )
             processed = sum(result.input_tokens for result in results)
-            return ProviderScoreResponse(
-                scores=scores,
-                usage=TokenUsage(
-                    prompt_tokens=processed, total_tokens=processed
+            return with_conformance_warnings(
+                request,
+                ProviderScoreResponse(
+                    scores=scores,
+                    usage=TokenUsage(
+                        prompt_tokens=processed, total_tokens=processed
+                    ),
+                    cost=CostInfo(total_cost=0.0),
+                    model=request.config.route.model,
                 ),
-                cost=CostInfo(total_cost=0.0),
-                model=request.config.route.model,
             )
         result = self._backend.generate(
             transcript=request.transcript,

@@ -3,21 +3,43 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from dr_providers.modeling.controls import ReasoningEffort
+from dr_providers.modeling.local import is_commit_sha
 from dr_providers.outcomes.models import (
+    ProviderScoreResponse,
     ProviderTransportResponse,
     ProviderTransportWarning,
 )
 
 if TYPE_CHECKING:
-    from dr_providers.modeling.request import ProviderGenerateRequest
+    from dr_providers.modeling.call import ProviderCallConfig
+    from dr_providers.modeling.request import ProviderCallRequest
 
 REASONING_NOT_OBSERVED_CODE = "reasoning_not_observed"
 MODEL_SUBSTITUTION_CODE = "model_substitution"
+REVISION_NOT_COMMIT_SHA_CODE = "revision_not_commit_sha"
+
+
+def _revision_warnings(
+    config: ProviderCallConfig,
+) -> list[ProviderTransportWarning]:
+    local = config.definition.local
+    if local is None or is_commit_sha(local.revision):
+        return []
+    return [
+        ProviderTransportWarning(
+            code=REVISION_NOT_COMMIT_SHA_CODE,
+            message=(
+                f"declared revision {local.revision!r} is not a full commit "
+                "SHA; declared identity does not pin the loaded snapshot"
+            ),
+            metadata={"revision": local.revision},
+        )
+    ]
 
 
 def conformance_warnings(
-    request: ProviderGenerateRequest,
-    response: ProviderTransportResponse,
+    request: ProviderCallRequest,
+    response: ProviderTransportResponse | ProviderScoreResponse,
 ) -> tuple[ProviderTransportWarning, ...]:
     warnings: list[ProviderTransportWarning] = []
     usage = response.usage
@@ -56,13 +78,16 @@ def conformance_warnings(
                 },
             )
         )
+    warnings.extend(_revision_warnings(request.config))
     return tuple(warnings)
 
 
-def with_conformance_warnings(
-    request: ProviderGenerateRequest,
-    response: ProviderTransportResponse,
-) -> ProviderTransportResponse:
+def with_conformance_warnings[
+    ResponseT: (ProviderTransportResponse, ProviderScoreResponse)
+](
+    request: ProviderCallRequest,
+    response: ResponseT,
+) -> ResponseT:
     warnings = conformance_warnings(request, response)
     if not warnings:
         return response

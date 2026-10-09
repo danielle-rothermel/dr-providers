@@ -27,6 +27,7 @@ from dr_providers import (
     Transcript,
     Verbosity,
     huggingface_config,
+    is_commit_sha,
     openai_chat_config,
 )
 
@@ -128,7 +129,7 @@ def test_local_models_are_frozen_and_refuse_extra_fields(
     spec = local_config.definition.local
     assert spec is not None
     with pytest.raises(ValidationError):
-        spec.batch_size = 2
+        spec.batch_size = 2  # ty: ignore[invalid-assignment]
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps"])
@@ -314,3 +315,33 @@ def test_local_golden_hashes(local_config: ProviderCallConfig) -> None:
         score.identity_hash
         == "55990d038f41d18c59a875e067e09515ecbccdb9c331814cdcee00f402a0b7ef"
     )
+
+
+def test_is_commit_sha_accepts_only_full_lowercase_hex() -> None:
+    assert is_commit_sha("0123456789abcdef0123456789abcdef01234567")
+    for revision in (
+        "main",
+        "step1000-seed0",
+        "v1.0",
+        "0123456",
+        "0123456789ABCDEF0123456789ABCDEF01234567",
+        "0123456789abcdef0123456789abcdef012345678",
+        "0123456789abcdef0123456789abcdef0123456",
+        "0123456789abcdef0123456789abcdef0123456g",
+        " 0123456789abcdef0123456789abcdef01234567",
+        "0123456789abcdef0123456789abcdef01234567\n",
+    ):
+        assert not is_commit_sha(revision), revision
+
+
+def test_non_sha_revision_is_accepted_as_a_selector() -> None:
+    config = huggingface_config(
+        model="example/model",
+        revision="main",
+        device=LocalDevice.CPU,
+        dtype=LocalDtype.FLOAT32,
+        batch_size=1,
+        max_sequence_length=16,
+    )
+    assert config.definition.local is not None
+    assert config.definition.local.revision == "main"

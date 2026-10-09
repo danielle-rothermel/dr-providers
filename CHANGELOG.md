@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-10-08
+
+### Added
+
+- Add `is_commit_sha()`, which recognises a full 40-character lowercase hex
+  commit ID. Pass one as `LocalModelSpec.revision` so declared identity names
+  the loaded snapshot.
+- Add the advisory `revision_not_commit_sha` conformance warning
+  (`REVISION_NOT_COMMIT_SHA_CODE`). Generate and score responses for a local
+  definition whose revision is not a full commit SHA carry it; such revisions
+  remain accepted. Evidence hashes for those responses change accordingly.
+- Add opt-in `local_model` tests that load a tiny native `olmo` checkpoint
+  without remote code and, when MPS is available, check MPS scores and
+  ordering against CPU within an absolute tolerance of `1e-3`.
+
+### Changed
+
+- `conformance_warnings()` and `with_conformance_warnings()` accept score as
+  well as generate requests and responses. `LocalModelProvider` and
+  `ScriptedProvider` apply them to score responses.
+- Declare `huggingface-hub` in the `local` and `local-cuda` extras, since the
+  Transformers backend imports it directly, and add major-version ceilings to
+  local runtime dependencies. `huggingface-hub` resolves to 1.x because
+  `tokenizers` 0.23 caps it below 2.
+- Raise minimums to pydantic 2.14 and typer 0.27, and refresh development
+  tools (ruff 0.16, ty 0.0.85, pre-commit 4.6.2) and the lockfile.
+
 ## [0.3.4] - 2026-10-08
 
 ### Added

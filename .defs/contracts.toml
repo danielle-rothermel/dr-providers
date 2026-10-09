@@ -401,15 +401,18 @@ check = "uv run pytest -q tests/lifecycle/test_handoff.py::test_serialized_two_i
 [[contracts]]
 title = "Conformance warnings are advisory"
 statement = """
-Reasoning-not-observed and model-substitution checks add warnings without \
-reclassifying a successful transport response; callers decide fatality. \
+Reasoning-not-observed, model-substitution, and revision-not-commit-SHA \
+checks add warnings to generate and score responses without reclassifying a \
+successful response; callers decide fatality. A local definition whose \
+revision is not a full 40-character lowercase hex commit SHA is accepted and \
+warned, never refused. \
 Token-limit truncation is expressed by ``ProviderStopReason`` on the transport \
 response, not by conformance warnings."""
 rationale = """
 The transport can report a mismatch against requested controls but does not \
 own application acceptance policy. Reclassifying transport success would \
 collapse those separate decisions."""
-date = "2026-08-05"
+date = "2026-10-08"
 check = "uv run pytest -q tests/outcomes/test_conformance.py"
 
 [[contracts]]

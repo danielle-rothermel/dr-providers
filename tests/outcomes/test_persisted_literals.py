@@ -94,6 +94,7 @@ from dr_providers.modeling.transcript import MessageRole
 from dr_providers.outcomes.conformance import (
     MODEL_SUBSTITUTION_CODE,
     REASONING_NOT_OBSERVED_CODE,
+    REVISION_NOT_COMMIT_SHA_CODE,
 )
 from dr_providers.outcomes.evidence import (
     PROVIDER_INVOCATION_EVIDENCE_SCHEMA,
@@ -344,6 +345,7 @@ def test_protocol_failure_codes_are_pinned() -> None:
 def test_conformance_warning_codes_are_pinned() -> None:
     assert REASONING_NOT_OBSERVED_CODE == "reasoning_not_observed"
     assert MODEL_SUBSTITUTION_CODE == "model_substitution"
+    assert REVISION_NOT_COMMIT_SHA_CODE == "revision_not_commit_sha"
 
 
 def test_http_status_code_format_is_pinned() -> None:

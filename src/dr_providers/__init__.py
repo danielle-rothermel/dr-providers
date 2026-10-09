@@ -86,6 +86,7 @@ from dr_providers.modeling.local import (
     LocalDtype,
     LocalModelSpec,
     Quantization,
+    is_commit_sha,
 )
 from dr_providers.modeling.presets import (
     anthropic_messages_config,
@@ -296,6 +297,7 @@ __all__ = [
     "failure_record",
     "gemini_chat_config",
     "huggingface_config",
+    "is_commit_sha",
     "is_failure",
     "is_response",
     "is_score_response",

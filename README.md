@@ -283,7 +283,7 @@ through references, config and request identity:
 
 | Field | Declared meaning |
 | --- | --- |
-| `revision` | Nonempty revision selector; use a Hub commit ID to pin a snapshot |
+| `revision` | Nonempty revision selector; pass a full 40-character Hub commit SHA to pin a snapshot |
 | `device` | `cuda`, `mps`, or `cpu`; hardware availability is checked by the backend |
 | `dtype` | `float32` or `bfloat16`; exact quantized compute rules need backend validation |
 | `float32_matmul_precision` | `highest` (default) or `high`; `high` requires CUDA and permits reduced internal precision |
@@ -292,6 +292,13 @@ through references, config and request identity:
 | `max_sequence_length` | Positive forward-input cap; backend refuses over-length inputs |
 | `add_bos_token` | Strict boolean; preset defaults to `False`. When `True`, ensure one leading tokenizer BOS on generation prompts and scoring context |
 | `continuation_tokenization` | `lm_eval_encode_pair`: move trailing context whitespace to the continuation, jointly encode, then split at context token count |
+
+Pass a full commit SHA as `revision` so the declared identity names the
+snapshot that is loaded. `is_commit_sha()` recognises the 40-character
+lowercase hex form. Branch and tag selectors remain accepted, but every
+generate and score response for a local definition whose revision is not a
+full commit SHA carries an advisory `revision_not_commit_sha` conformance
+warning (`REVISION_NOT_COMMIT_SHA_CODE` in `dr_providers.outcomes.conformance`).
 
 Identity covers declarations, not immutable file contents. A branch or tag can
 resolve differently later, and a local directory can change under the same
@@ -446,8 +453,12 @@ isolate process-global state or guarantee reproducibility.
 
 NF4 explicitly uses the requested dtype for its compute dtype. Quantized
 weights load directly onto the selected current CUDA device; they are not moved
-with an unconditional post-load `.to()`. CUDA quantization and MPS behavior
-require hardware validation beyond the CPU integration suite.
+with an unconditional post-load `.to()`. CUDA quantization requires hardware validation beyond
+the CPU integration suite. The opt-in `local_model` suite also loads a tiny
+native `olmo` checkpoint and, when MPS is available, checks MPS scores against
+CPU within an absolute tolerance of `1e-3`. Models load through
+`AutoModelForCausalLM` without remote code, so architectures must be native to
+the installed Transformers.
 
 The provider owns one lazy worker for `run_local_provider_call_async`; direct
 invocations and `release_memory()` share its model-work lock. `close()` refuses
@@ -577,7 +588,8 @@ scripts/pre-check.sh
 uv build
 ```
 
-Run the optional real CPU model suite and type-check the optional modules:
+Run the optional real-model suite (CPU, plus MPS parity when MPS is available)
+and type-check the optional modules:
 
 ```bash
 uv sync --locked --extra cli --extra local

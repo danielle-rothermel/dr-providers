@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import UNIQUE, StrEnum, verify
 from typing import Any
 
@@ -20,6 +21,12 @@ from dr_providers.core.failures import (
     RecoverabilityClass,
     failure_record,
 )
+
+_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def is_commit_sha(revision: str) -> bool:
+    return _COMMIT_SHA.fullmatch(revision) is not None
 
 
 @verify(UNIQUE)
@@ -62,8 +69,12 @@ class ContinuationTokenization(StrEnum):
 class LocalModelSpec(BaseModel):
     """Identity-bearing declared conditions, not proof of backend support.
 
-    A revision selector or local path does not identify immutable contents.
-    A backend must validate its supported models and hardware when loading.
+    Pass a full Hub commit SHA as ``revision`` so the declared identity names
+    the snapshot that is loaded. Branch and tag selectors are accepted but can
+    resolve differently over time; responses for them carry a
+    ``revision_not_commit_sha`` conformance warning. A local path does not
+    identify immutable contents whatever its revision. A backend must validate
+    its supported models and hardware when loading.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
